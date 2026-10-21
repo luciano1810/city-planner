@@ -120,3 +120,27 @@
 .signal-dot{width:8px;height:8px;border-radius:50%;background:#d57f69;box-shadow:0 0 0 4px #d57f6914}.signal-dot.green,.signal-dot.pedestrian{background:#5d9c70;box-shadow:0 0 0 4px #5d9c7017}.signal-dot.yellow{background:#d1a945;box-shadow:0 0 0 4px #d1a94517}
 .signal-hud-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.signal-hud-stats div{display:flex;flex-direction:column;gap:5px}.signal-hud-stats span{font-size:10px;color:#71826d}.signal-hud-stats b{font-size:25px;font-weight:500;font-variant-numeric:tabular-nums}.signal-hud p{font-size:10px;color:#78856e;margin:13px 0 0;line-height:1.6}
 .signal-speed-control{margin:16px 0 12px}.signal-speed-control label{display:flex;justify-content:space-between;align-items:center;color:#62755e;font-size:11px;margin-bottom:9px}.signal-speed-control output{color:#355b41;font-weight:600;font-variant-numeric:tabular-nums}.signal-speed-control input{display:block;width:100%;height:5px;accent-color:#63815a;cursor:pointer}.signal-speed-labels{display:flex;justify-content:space-between;font-size:10px;color:#85907d;margin-top:8px}
+
+/* Shared cartographic controls remain accessible above the canvas. */
+.map-view-switch{position:absolute;left:14px;top:62px;display:flex;gap:3px;align-items:center;background:#ffffffed;padding:4px;border:1px solid #d8dde3;border-radius:10px;box-shadow:0 2px 12px #29374512;backdrop-filter:blur(12px);z-index:2}
+.map-view-switch button{border:0;border-radius:7px;padding:8px 12px;background:transparent;color:#65717d;font:500 12px sans-serif;cursor:pointer}
+.map-view-switch button.active{color:#087af5;background:#eaf3ff}
+.map-view-switch span{font-size:10px;color:#77818d;padding:0 8px}
+body[data-map-view="map"] .map-frame{background:#a9d7f2;border-color:#d9dfe5}
+body[data-map-view="map"] .map-label,body[data-map-view="map"] .map-tools,body[data-map-view="map"] .zoom-control{background:#fffffff0;color:#4e5968;border-color:#e0e4e9;border-radius:9px;box-shadow:0 2px 12px #31405212}
+body[data-map-view="map"] .map-scale{color:#515c68;text-shadow:0 1px 2px #fff}
+body[data-map-view="map"] #scale-bar{border-color:#66717d;filter:none}
+body[data-map-view="map"] .signal-hud{display:none}
+body[data-map-view="map"] .compass{color:#647283}
+@media(max-width:1100px){.map-view-switch span{display:none}}
+@media(max-width:700px){.map-view-switch{top:12px;left:10px}.map-view-switch button{padding:8px;font-size:11px}}
+
+/* Neutral map chrome keeps the coloured cartographic symbols prominent. */
+body[data-map-view="map"] .map-scale,
+body[data-map-view="map"] .zoom-control,
+body[data-map-view="map"] .city-hint{background:#fffffff0;border-color:#e0e3e5;color:#646b70;box-shadow:0 2px 10px #2834400a}
+body[data-map-view="map"] .map-scale{color:#656d72}
+body[data-map-view="map"] .compass{width:58px;height:66px;right:20px;top:76px;border-radius:32px;background:#ffffffed;box-shadow:0 2px 10px #2834400b;display:flex;align-items:center;justify-content:center;gap:3px;padding:8px}
+body[data-map-view="map"] .compass svg{width:20px;height:28px}
+body[data-map-view="map"] .compass svg path:last-child{fill:#dc6c63}
+body[data-map-view="map"] .compass svg path:first-child{stroke:#899198}

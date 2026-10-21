@@ -173,13 +173,15 @@ def reserve(city):
 def place(city, cmd):
     f = propose(city, cmd)
     f.update(id=city.uid('f'), created=city.s['month'])
+    from .naming import name_object
+    name_object(city,'facilities',f)
     if f['kind'] == 'train_station':
         # Reuse an existing passenger stop instead of duplicating service calls.
         stop = next((s for s in city.s['stops'] if s['mode'] == 'train' and s.get('role', 'passenger') == 'passenger'
                      and not s.get('facility') and math.dist(s['point'], f['stopPoint']) < 20), None)
         f['ownsStop'] = stop is None
         if stop is None:
-            stop = dict(id=city.uid('s'), name=f['name'], mode='train', point=f['stopPoint'], enabled=True,
+            stop = dict(id=city.uid('s'), name=f['name'], nameSource='generated', mode='train', point=f['stopPoint'], enabled=True,
                         role='passenger', external=False, constructionCost=0)
             city.s['stops'].append(stop)
         f['stop'] = stop['id']
@@ -331,6 +333,8 @@ def grow_parking(city):
                  capacity=0, created=city.s['month'], cost=cost, maintenance=round(cost*.002))
         city.spend(cost, '停车设施')
         p['openSpace'] = fid
+        from .naming import name_object
+        name_object(city,'facilities',f)
         p['reason'] = '街区自动配套：'+f['name']
         city.s['facilities'].append(f)
         city.event('配套', f['name']+'建成，提供 '+str(f['parkingSpaces'])+' 个车位', f['point'])

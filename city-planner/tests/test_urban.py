@@ -209,7 +209,8 @@ class AutonomousCityTests(unittest.TestCase):
         city.s['month']=3;clustered_districts(city)
         centers=[d for d in city.s['districts'] if d['kind']=='CBD']
         self.assertGreaterEqual(len(centers),2)
-        self.assertTrue(any(d.get('name','').startswith('城市副中心') for d in centers))
+        self.assertTrue(any(d.get('centerRank',0)>1 for d in centers))
+        self.assertEqual(len({d['name'] for d in centers}),len(centers))
         for p in city.s['parcels']:
             if p.get('building'): p['building'].update(use='residential',positions=0,floors=30)
         for month in (4,5,6):

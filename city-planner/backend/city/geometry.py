@@ -195,6 +195,22 @@ def road_contacts(road, other, shape=None, other_shape=None, tolerance=.05):
     shape = shape if shape is not None else LineString(road['points'])
     other_shape = other_shape if other_shape is not None else LineString(other['points'])
 
+    def compatible(a, b, point):
+        if road['level'] == other['level']:
+            return True
+        # Old saves retain their endpoint links. New roads must name the
+        # magnetic target explicitly; a geometric crossing is not a ramp.
+        if 'connections' not in road and 'connections' not in other:
+            return min(a, shape.length-a, b, other_shape.length-b) < tolerance
+        for source, target, distance, length in ((road, other, a, shape.length),
+                                                  (other, road, b, other_shape.length)):
+            if min(distance, length-distance) > tolerance:
+                continue
+            if any(c['road'] == target['id'] and Point(c['point']).distance(point) <= tolerance
+                   for c in source.get('connections', [])):
+                return True
+        return False
+
     def points(geometry):
         if geometry.is_empty:
             return
@@ -209,7 +225,7 @@ def road_contacts(road, other, shape=None, other_shape=None, tolerance=.05):
 
     for point in points(shape.intersection(other_shape)):
         a, b = shape.project(point), other_shape.project(point)
-        if road['level'] == other['level'] or min(a, shape.length-a, b, other_shape.length-b) < tolerance:
+        if compatible(a, b, point):
             yield a, b, point
     for source, target, reverse in ((shape, other_shape, False), (other_shape, shape, True)):
         for distance in (0., source.length):
@@ -217,7 +233,9 @@ def road_contacts(road, other, shape=None, other_shape=None, tolerance=.05):
             projected = target.project(endpoint)
             point = target.interpolate(projected)
             if endpoint.distance(point) <= tolerance:
-                yield (projected, distance, point) if reverse else (distance, projected, point)
+                a, b = (projected, distance) if reverse else (distance, projected)
+                if compatible(a, b, point):
+                    yield a, b, point
 
 
 def road_junctions(roads, shapes, nodes, edges):
@@ -236,9 +254,12 @@ def road_junctions(roads, shapes, nodes, edges):
         approaches = []
         for edge, direction in entries:
             road = road_map[edge['road']]
-            shape = shapes[road['id']]
-            distance = shape.project(Point(point))
-            sample = shape.interpolate(max(0, min(shape.length, distance + direction*8)))
+            distance = edge['startDistance'] if direction == 1 else edge['endDistance']
+            # Use this edge's endpoint, not project(), which picks the first
+            # occurrence of a closed road's shared start/end coordinate.
+            segment = LineString(edge['points'])
+            sample = segment.interpolate(min(8, segment.length/2) if direction == 1
+                                         else max(segment.length/2, segment.length-8))
             dx, dy = sample.x-point[0], sample.y-point[1]
             length = math.hypot(dx, dy)
             if length < .01:
@@ -265,6 +286,11 @@ def make_network(roads, stops, terrain, parcels=()):
     shapes = {r['id']: LineString(r['points']) for r in roads}
     road_map = {r['id']: r for r in roads}
     cuts = {r['id']: {0., shapes[r['id']].length} for r in roads}
+    for rid, shape in shapes.items():
+        if shape.is_ring:
+            # A ring needs two graph edges; equal endpoint IDs do not mean
+            # the entire road has zero length.
+            cuts[rid].add(shape.length/2)
     # All incident roads share one coordinate, including multi-way contacts.
     anchors, parents, anchor_points = {}, [], []
 
@@ -293,6 +319,9 @@ def make_network(roads, stops, terrain, parcels=()):
             anchor_points.append((round(point.x, 2), round(point.y, 2)))
         for key in keys:
             anchors[key] = index
+    for rid, shape in shapes.items():
+        if shape.is_ring:
+            connect(rid, 0., rid, shape.length, Point(shape.coords[0]))
     for parcel in parcels:
         shape=shapes.get(parcel['road'])
         if shape is not None and shape.distance(Point(parcel['frontage']))<3:
@@ -334,12 +363,11 @@ def make_network(roads, stops, terrain, parcels=()):
                 cuts[rr['id']].add(dd)
                 access = (rr['id'], dd, q)
         stop_projection[stop['id']] = (r['id'], d, p, access)
-    # A node at a ramp's endpoint joins ground. Mid-span crossings stay separated.
-    ramps = defaultdict(set)
-    for r in roads:
-        if r['level']:
-            for p in (r['points'][0], r['points'][-1]):
-                ramps[group(r)].add((round(p[0], 2), round(p[1], 2)))
+    # A confirmed contact must have one layer ID even when its snapped
+    # coordinate differs from the original ramp endpoint by centimetres.
+    contact_levels = defaultdict(set)
+    for (rid, _), anchor in anchors.items():
+        contact_levels[root(anchor)].add(road_map[rid]['level'])
     nodes, edges, positions = {}, [], {}
     for road in roads:
         shape = shapes[road['id']]
@@ -349,7 +377,10 @@ def make_network(roads, stops, terrain, parcels=()):
             p = shape.interpolate(d)
             anchor = anchors.get((road['id'], d))
             xy = anchor_points[root(anchor)] if anchor is not None else (round(p.x, 2), round(p.y, 2))
-            level = 0 if xy in ramps[group(road)] else road['level']
+            level = road['level']
+            if anchor is not None:
+                levels = contact_levels[root(anchor)]
+                level = next(iter(levels)) if len(levels) == 1 else 0
             nid = f'{group(road)}:{level}:{xy[0]}:{xy[1]}'
             nodes[nid] = list(xy)
             positions[(road['id'], round(d, 3))] = nid
@@ -364,7 +395,7 @@ def make_network(roads, stops, terrain, parcels=()):
             edge_points[0], edge_points[-1] = nodes[ids[i]], nodes[ids[i+1]]
             profile=terrain.profile(edge_shape,road['kind'],road['level'])
             edges.append(dict(id=f"{road['id']}:{i}", road=road['id'], a=ids[i], b=ids[i+1],
-                              length=b-a, points=edge_points,
+                              length=b-a, points=edge_points, startDistance=a, endDistance=b,
                               kind=road['kind'], level=road['level'], oneway=road['oneway'],
                               traffic=0., ratio=0., time=profile['freeTime'], **profile))
     attachments = {}

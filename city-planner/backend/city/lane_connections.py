@@ -18,7 +18,7 @@ def connect_lane_entrances(city):
     index = STRtree(shapes)
     changed = False
     for lane in roads:
-        if lane['kind'] != 'lane':
+        if lane['kind'] != 'lane' or lane.get('exactPlacement'):
             continue
         for end in (0, -1):
             points = lane['points']

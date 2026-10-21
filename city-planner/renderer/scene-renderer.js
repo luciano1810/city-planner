@@ -3,6 +3,7 @@
 (function(root){
   'use strict';
   const settings={quality:'high',labels:false};
+  let effectiveQuality='map';
   let clockSeconds=9*3600;
   const tiles=new Map(),patterns=new WeakMap(),sprites=new Map(),layouts=new WeakMap(),boundsCache=new WeakMap(),lampCache=new WeakMap(),streetTreeCache=new WeakMap(),treeShadows=new Map();
   const materialCatalog=typeof module!=='undefined'&&module.exports?require('./material-catalog.js'):root.SceneMaterials;
@@ -21,9 +22,17 @@
   function seed(value){let n=2166136261;for(const c of String(value)){n^=c.charCodeAt(0);n=Math.imul(n,16777619);}return n>>>0;}
   function random(value){let n=seed(value);return ()=>{n+=0x6d2b79f5;let t=Math.imul(n^n>>>15,1|n);t^=t+Math.imul(t^t>>>7,61|t);return ((t^t>>>14)>>>0)/4294967296;};}
   function configure(next={}){
-    if(['high','balanced','map'].includes(next.quality))settings.quality=next.quality;
+    if(['high','balanced','map'].includes(next.quality))settings.quality=next.quality==='map'?'map':'high';
     if(typeof next.labels==='boolean')settings.labels=next.labels;
     return {...settings};
+  }
+  // CSS pixels per metre, independent of raster resolution and display density.
+  // Separate entry/exit thresholds prevent flickering near the boundary.
+  function resolveQuality(scale){
+    if(settings.quality==='map')effectiveQuality='map';
+    else if(scale<.42)effectiveQuality='map';
+    else if(scale>=.58)effectiveQuality='high';
+    return effectiveQuality;
   }
   function smooth(a,b,x){const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);}
   function lightingAt(seconds){
@@ -140,13 +149,13 @@
   }
   function polygonMaterial(ctx,points,name,variant=0){path(ctx,points);ctx.fillStyle=material(ctx,name,variant);ctx.fill();}
   function ground(ctx,g,terrain,vectorLayers){
-    if(!root.CityApp?.active||settings.quality==='map')return;
+    if(!root.CityApp?.active||effectiveQuality==='map')return;
     const worldPerPixel=terrain.grid.widthMeters/terrain.width,worldPerPixelY=terrain.grid.heightMeters/terrain.height;
     ctx.save();ctx.clip(vectorLayers.land,'evenodd');ctx.scale(1/worldPerPixel,1/worldPerPixelY);
     ctx.globalAlpha=.8;ctx.fillStyle=material(ctx,'grass');ctx.fillRect(0,0,terrain.grid.widthMeters,terrain.grid.heightMeters);ctx.restore();
   }
   function water(ctx,terrain,vectorLayers){
-    if(!root.CityApp?.active||settings.quality==='map')return;
+    if(!root.CityApp?.active||effectiveQuality==='map')return;
     const rivers=new Path2D();for(const river of vectorLayers.rivers)rivers.addPath(river);
     for(const [shape,variant] of [[vectorLayers.ocean,2],[vectorLayers.lakes,0],[rivers,1]]){
       ctx.save();if(shape===rivers)ctx.clip(vectorLayers.riverClip,'evenodd');ctx.clip(shape,'evenodd');
@@ -467,6 +476,6 @@
     root.RoadRenderer.paintSignals(ctx,root.RoadRenderer.buildPlan(state.roads,state.network,state.meta.roadTypes),{scale,visible,traffic,night});
     ctx.restore();
   }
-  const api={materialMeters,configure,get settings(){return {...settings};},get time(){return clockSeconds;},get assetsReady(){return Object.keys(canopyAtlases).length===2&&Object.keys(atlases).length===4;},get materialInventory(){return Object.fromEntries(Object.keys(materialCatalog.catalog).map(n=>[n,materialCatalog.count(n)]));},get treeSpecies(){return materialCatalog.treeSpecies;},lightingAt,setTime,shadowOffset,seed,random,inside,edgeDistance,treesFor,streetTreesFor,material,texture,treeSprite,lampsFor,ground,water,parcel,castShadow,buildingShadow,buildingShadows,facadeFaces,facadeWindows,building,vegetation,facilityGround,roadSurfaces,vehicle,atmosphere};
+  const api={materialMeters,configure,resolveQuality,get effectiveQuality(){return effectiveQuality;},get settings(){return {...settings};},get time(){return clockSeconds;},get assetsReady(){return Object.keys(canopyAtlases).length===2&&Object.keys(atlases).length===4;},get materialInventory(){return Object.fromEntries(Object.keys(materialCatalog.catalog).map(n=>[n,materialCatalog.count(n)]));},get treeSpecies(){return materialCatalog.treeSpecies;},lightingAt,setTime,shadowOffset,seed,random,inside,edgeDistance,treesFor,streetTreesFor,material,texture,treeSprite,lampsFor,ground,water,parcel,castShadow,buildingShadow,buildingShadows,facadeFaces,facadeWindows,building,vegetation,facilityGround,roadSurfaces,vehicle,atmosphere};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityScene=api;
 })(typeof window==='undefined'?{}:window);

@@ -12,11 +12,11 @@ const presets = {
   tundra: { name: '寂静冻原', elevation: 62, sea: 44, roughness: 65, moisture: 32 }
 };
 for (const [key, preset] of Object.entries(presets)) Object.assign(preset, { flatness: 0, riverDensity: key === 'desert' ? 0 : key === 'bay' ? 70 : 55, riverWidth: 90, lakeCount: key === 'desert' ? 1 : 3, lakeSize: 2, delta: 65 });
-let selected = 'bay', view = 'vector', contour = true, grid = false;
+let selected = 'bay', view = 'vector', contour = false, grid = false;
 let terrain = null, heightData = null, wetData = null, waterData = null, sedimentData = null, busy = false, generation = 0;
 let seaLevelMeters = 0;
 let vectorLayers = null, oceanMask = null, lakeMask = null, measuring = false, measurePoints = [], measureHover = null;
-let zoom = 1, panX = 0, panY = 0, drag = null, debounce;
+let zoom = 1, panX = 0, panY = 0, drag = null, debounce, lastViewport=null;
 let toastTimer, requestVersion = 0, queued = false;
 let terrainDirty = true;
 const terrainStateChanged = () => window.dispatchEvent(new CustomEvent('terrain-state'));
@@ -256,7 +256,7 @@ function renderTerrain() {
   updateLegend(); draw();
 }
 function updateLegend() {
-  const entries = view === 'vector' ? [['#91bec6','海洋'],['#65a1af','河湖'],['#e7eddb','陆地'],['#abc0a1','高地'],['#819a77',`等高线 · ${vectorLayers?.interval || 0} m`]] : view === 'height' ? [['#386874','海洋'],['#528e72','低地'],['#b4c07c','中地'],['#d9c681','高地'],['#c19670','山地'],['#f5efda','高峰']] :
+  const entries = window.CityScene?.effectiveQuality==='map' ? [[window.CityMapRenderer.palette.water,'水域'],[window.CityMapRenderer.palette.land,'陆地'],[window.CityMapRenderer.palette.park,'公园绿地']] : view === 'vector' ? [['#91bec6','海洋'],['#65a1af','河湖'],['#e7eddb','陆地'],['#abc0a1','高地'],['#819a77',`等高线 · ${vectorLayers?.interval || 0} m`]] : view === 'height' ? [['#386874','海洋'],['#528e72','低地'],['#b4c07c','中地'],['#d9c681','高地'],['#c19670','山地'],['#f5efda','高峰']] :
     [['#386874','深海'],['#8ebeb0','浅海'],['#d7d2a2','沙滩'],[terrain?.config.preset === 'desert' ? '#d2ad6d' : '#678452',terrain?.config.preset === 'desert' ? '沙丘' : '植被'],['#a8a58c','山岩'],['#93cbd0','河湖']];
   $('legend').replaceChildren();
   const title = document.createElement('span'); title.className = 'legend-title'; title.textContent = view === 'height' ? '相对高程' : '地貌图例'; $('legend').append(title);
@@ -310,21 +310,24 @@ function buildVectorLayers() {
   return { ocean, water, waterStroke, lakes, rivers, riverClip, land, levels, interval };
 }
 function paintMap(context, g) {
+  const scale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
+  const quality=window.CityScene?.resolveQuality(scale)||'map',flat=quality==='map';
+  syncDisplayControls(quality);
   context.save();
   context.translate(g.left,g.top); context.scale(g.scale,g.scale);
   context.beginPath(); context.rect(0,0,source.width,source.height); context.clip();
   if (view === 'vector') {
-    context.fillStyle = '#e7eddb'; context.fillRect(0,0,source.width,source.height);
-    for (const level of vectorLayers.levels) {
-      context.fillStyle = '#63875713'; context.fill(level.path,'evenodd');
+    context.fillStyle = flat?window.CityMapRenderer.palette.land:'#e7eddb'; context.fillRect(0,0,source.width,source.height);
+    for (const level of flat?[]:vectorLayers.levels) {
+      context.fillStyle = flat?'#a9cba20b':'#63875713'; context.fill(level.path,'evenodd');
     }
-    context.fillStyle = '#91bec6'; context.fill(vectorLayers.ocean,'evenodd');
+    context.fillStyle = flat?window.CityMapRenderer.palette.water:'#91bec6'; context.fill(vectorLayers.ocean,'evenodd');
   } else {
     context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
     context.drawImage(source,0,0);
   }
-  if(view!=='height')window.CityScene?.ground(context,g,terrain,vectorLayers);
-  if (view === 'height' || contour) {
+  if(!flat&&view!=='height')window.CityScene?.ground(context,g,terrain,vectorLayers);
+  if (!flat && (view === 'height' || contour)) {
     context.save(); context.clip(vectorLayers.land,'evenodd');
     context.strokeStyle = view === 'vector' ? '#70856570' : '#42583b66';
     context.lineWidth = .65/g.scale;
@@ -334,13 +337,13 @@ function paintMap(context, g) {
   // One smooth ribbon per shared reach. A receiving-sea clip prevents coloured
   // channel extensions floating beyond their mouths.
   context.save(); context.clip(vectorLayers.riverClip,'evenodd');
-  context.fillStyle = view === 'vector' ? '#65a1af' : '#4b929e';
+  context.fillStyle = flat?window.CityMapRenderer.palette.water:view === 'vector' ? '#65a1af' : '#4b929e';
   for (const river of vectorLayers.rivers) context.fill(river);
   context.restore();
-  context.fillStyle = view === 'vector' ? '#65a1af' : '#4b929e';
+  context.fillStyle = flat?window.CityMapRenderer.palette.water:view === 'vector' ? '#65a1af' : '#4b929e';
   context.fill(vectorLayers.lakes,'evenodd');
-  if(view!=='height')window.CityScene?.water(context,terrain,vectorLayers);
-  context.strokeStyle = view === 'vector' ? '#426f765e' : '#375e5838';
+  if(!flat&&view!=='height')window.CityScene?.water(context,terrain,vectorLayers);
+  context.strokeStyle = flat?window.CityMapRenderer.palette.shore:view === 'vector' ? '#426f765e' : '#375e5838';
   context.lineWidth = .6/g.scale; context.stroke(vectorLayers.waterStroke);
   if (grid) {
     context.strokeStyle = view === 'vector' ? '#617b6b55' : '#eef5de65';
@@ -396,6 +399,14 @@ function draw() {
   if (map.width !== Math.round(width * dpr) || map.height !== Math.round(height * dpr)) { map.width = Math.round(width * dpr); map.height = Math.round(height * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
   if (!terrain) return;
+  if(width<=0||height<=0)return;
+  if(lastViewport?.terrain===terrain&&(lastViewport.width!==width||lastViewport.height!==height)){
+    // Pan is stored in CSS pixels. Rebase it with the fitted map scale so the
+    // same world coordinate stays centred on fullscreen/inspector/window resize.
+    const ratio=Math.min(width/source.width,height/source.height)/Math.min(lastViewport.width/source.width,lastViewport.height/source.height);
+    panX*=ratio;panY*=ratio;
+  }
+  lastViewport={terrain,width,height};
   clampPan(); const g = geometry();
   paintMap(ctx,g); paintMeasurement(ctx,g);
   $('zoom-value').textContent = `${Math.round(zoom * 100)}%`;
@@ -406,7 +417,7 @@ function draw() {
   $('scale-mid').textContent = MapGeometry.formatDistance(ruler.meters/2);
   $('map-scale').title = `标尺长度 ${ruler.pixels.toFixed(1)} 屏幕像素 = ${MapGeometry.formatDistance(ruler.meters)}`;
 }
-function fit() { zoom = 1; panX = 0; panY = 0; draw(); }
+function fit() { lastViewport=null; zoom = 1; panX = 0; panY = 0; draw(); }
 function setZoom(next, anchorX = map.clientWidth / 2, anchorY = map.clientHeight / 2) {
   if (!terrain) return;
   next = Math.max(1, Math.min(512, next));
@@ -460,11 +471,29 @@ function thumbnails() {
 
 for (const key of settings) $(key).addEventListener('input', () => { updateRanges(); scheduleGenerate(); });
 document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => selectPreset(button.dataset.preset)));
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
-  view = button.dataset.view;
-  document.querySelectorAll('[data-view]').forEach(b => { b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button)); });
-  if (view === 'vector') { updateLegend(); draw(); } else renderTerrain();
-}));
+// The same two modes are available while preparing terrain and planning a city.
+$('map-frame').insertAdjacentHTML('beforeend','<div class="map-view-switch" role="group" aria-label="显示模式"><button data-view="high" aria-pressed="false">精细视图</button><button data-view="map" aria-pressed="true">地图视图</button><span id="map-view-auto">缩放自动切换</span></div>');
+function syncDisplayControls(quality){
+  const automatic=quality==='map'&&window.CityScene?.settings.quality!=='map';
+  if(document.body.dataset.mapView!==quality){document.body.dataset.mapView=quality;updateLegend();window.CityApp?.refreshLegend();}
+  document.querySelectorAll('[data-view]').forEach(b=>{
+    const chosen=b.dataset.view===quality;
+    if(b.classList.contains('active')!==chosen){b.classList.toggle('active',chosen);b.setAttribute('aria-pressed',String(chosen));}
+  });
+  const field=$('city-render-quality');if(field&&field.value!==quality)field.value=quality;
+  const note=automatic?'已自动切换 · 放大恢复精细视图':quality==='map'?'地图视图 · 点击精细视图查看细节':'精细视图 · 缩小自动切换地图';
+  for(const id of ['map-view-auto','city-view-note'])if($(id)&&$(id).textContent!==note)$(id).textContent=note;
+}
+function setDisplayMode(quality,{focus=true}={}){
+  window.CityScene?.configure({quality});
+  try{localStorage.setItem('shanhai-scene-v1',JSON.stringify(window.CityScene.settings));}catch{}
+  if(terrain&&quality==='high'&&focus){
+    const g=geometry(),scale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
+    if(scale<.62){setZoom(zoom*.65/Math.max(.000001,scale));return;}
+  }
+  draw();
+}
+document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setDisplayMode(button.dataset.view)));
 $('reset').addEventListener('click', () => { selectPreset(selected); toast('已恢复当前地貌的默认参数'); });
 $('resolution').addEventListener('change', scheduleGenerate);
 for (const key of ['widthKm', 'heightKm']) {
@@ -522,7 +551,7 @@ restore(); thumbnails();
 window.MapWorkspace = {
   get terrain() { return terrain; }, get busy() { return busy; },
   get canConfirm() { return Boolean(terrain) && !busy && !terrainDirty; },
-  get geometry() { return geometry(); }, draw, toast, fit, installTerrain:installCityTerrain,
+  get geometry() { return geometry(); }, draw, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
   cancelGeneration() {
     requestVersion++; queued=false; clearTimeout(debounce);
     $('loading').hidden=true;
@@ -541,8 +570,7 @@ window.MapWorkspace = {
     terrainStateChanged();
   },
   applyDisplay(preferences) {
-    const button=document.querySelector(`[data-view="${preferences.view}"]`);
-    if(button)button.click();
+    setDisplayMode(preferences.view==='map'?'map':'high',{focus:false});
     if(contour!==preferences.contours)$('contours').click();
     if(grid!==preferences.grid)$('grid').click();
   },
@@ -552,7 +580,7 @@ window.MapWorkspace = {
     return p ? [p[0]*terrain.grid.widthMeters,p[1]*terrain.grid.heightMeters] : null;
   },
   focus(point, scale=4) {
-    zoom=scale; const g=geometry();
+    lastViewport=null;zoom=scale; const g=geometry();
     panX=(.5-point[0]/terrain.grid.widthMeters)*source.width*g.scale;
     panY=(.5-point[1]/terrain.grid.heightMeters)*source.height*g.scale; draw();
   },

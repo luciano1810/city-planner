@@ -1,0 +1,50 @@
+{
+  "automaticSwitching": true,
+  "hysteresis": true,
+  "manualMapPersists": true,
+  "mapDayNightIdentical": true,
+  "detailCallsInMap": 0,
+  "speedResults": [
+    {
+      "rate": 1,
+      "light": 0.8100999999987835,
+      "calendar": 0.8101000000014906
+    },
+    {
+      "rate": 2,
+      "light": 0.9232000000047265,
+      "calendar": 0.9232000000029785
+    },
+    {
+      "rate": 3,
+      "light": 1.0229999999974098,
+      "calendar": 1.0229999999999961
+    },
+    {
+      "rate": 5,
+      "light": 1.1384999999754655,
+      "calendar": 1.138499999977654
+    },
+    {
+      "rate": 3600,
+      "light": 2.160000005365873,
+      "calendar": 2.1600000053644166
+    },
+    {
+      "rate": 86400,
+      "light": 0.7958000000035099,
+      "calendar": 68757.12000038623
+    },
+    {
+      "rate": 2592000,
+      "light": 0.7026000000041677,
+      "calendar": 1821139.2000038624
+    },
+    {
+      "rate": 1,
+      "light": 0.7960999999959313,
+      "calendar": 0.7960999999195337
+    }
+  ],
+  "errors": []
+}

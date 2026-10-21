@@ -39,7 +39,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {'status': 'ok', 'engine': 'Python / NumPy'})
         # Renderer assets are exposed only for local browser preview.
         allowed = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/height-format.js': 'height-format.js', '/map-geometry.js': 'map-geometry.js', '/style.css': 'style.css',
-                   '/city.js': 'city.js', '/city-geometry.js': 'city-geometry.js', '/road-renderer.js': 'road-renderer.js', '/scene-renderer.js': 'scene-renderer.js', '/city.css': 'city.css',
+                   '/map-icons.js': 'map-icons.js', '/map-renderer.js': 'map-renderer.js', '/city.js': 'city.js', '/city-geometry.js': 'city-geometry.js', '/road-renderer.js': 'road-renderer.js', '/scene-renderer.js': 'scene-renderer.js', '/city.css': 'city.css',
                    '/assets/tree-canopies.png': 'assets/tree-canopies.png',
                    '/assets/tree-species.png': 'assets/tree-species.png',
                    '/assets/vehicles.png': 'assets/vehicles.png',

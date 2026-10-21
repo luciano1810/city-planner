@@ -292,7 +292,7 @@
     }
   }
 
-  function paint(ctx,state,{scale,selected,inView=()=>true,visible=()=>true,traffic=null,stage='all',vehicles=true,signals=true}){
+  function paint(ctx,state,{scale,selected,inView=()=>true,visible=()=>true,traffic=null,stage='all',vehicles=true,signals=true,levels=[-1,0,1]}){
     const {roads,network,roadTypes}=state,plan=buildPlan(roads,network,roadTypes);
     const path=points=>{ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));};
     const local=(item,draw)=>{ctx.save();ctx.translate(...item.point);ctx.rotate(Math.atan2(item.tangent[1],item.tangent[0]));draw();ctx.restore();};
@@ -302,7 +302,7 @@
       for(const polygon of arrowPolygons(item.turns,item.laneWidth)){path(polygon);ctx.closePath();ctx.fill();}ctx.restore();
     };
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
-    for(const level of [-1,0,1]){
+    for(const level of levels){
       const visibleRoads=roads.filter(r=>r.level===level&&inView(r.points));
       // Outline every road first, then fill the connected surface. A later
       // road's casing must never draw a barrier across an at-grade junction.

@@ -160,7 +160,33 @@
     }
     const result={podium,volumes,type};buildingLayouts.set(b,result);return result;
   }
-  const api={curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
+  // Distances and projection are measured in CSS pixels, including tilted maps.
+  function roadSnap(point,roads,junctions,{kind='street',level=0,sx=1,sy=sx,radius=14,exclude=null}={}){
+    if(!point||!(sx>0&&sy>0))return null;
+    const family=k=>['lane','street','avenue','highway','motorway','path'].includes(k)?'road':k;
+    const eligible=roads.filter(r=>r.id!==exclude&&family(r.kind)===family(kind));
+    const ids=new Set(eligible.map(r=>r.id));let best=null;
+    function offer(p,type,priority,road){
+      const distance=Math.hypot((p[0]-point[0])*sx,(p[1]-point[1])*sy);
+      if(distance>radius)return;
+      if(!best||priority<best.priority||priority===best.priority&&distance<best.distance)
+        best={point:[...p],type,priority,distance,road};
+    }
+    for(const j of junctions||[])if(j.approaches.length&&j.approaches.every(a=>a.level===level&&ids.has(a.road)))offer(j.point,'交叉口',0,null);
+    for(const r of eligible){
+      offer(r.points[0],'道路端点',1,r.id);offer(r.points.at(-1),'道路端点',1,r.id);
+      // A bridge endpoint may land on a ground road; a ground endpoint
+      // cannot jump into the middle of an elevated span.
+      if(r.level!==level&&!(level===1&&r.level===0))continue;
+      for(let i=1;i<r.points.length;i++){
+        const a=r.points[i-1],b=r.points[i],dx=(b[0]-a[0])*sx,dy=(b[1]-a[1])*sy;
+        const t=Math.max(0,Math.min(1,((point[0]-a[0])*sx*dx+(point[1]-a[1])*sy*dy)/(dx*dx+dy*dy||1)));
+        offer([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])],'道路中段',2,r.id);
+      }
+    }
+    return best;
+  }
+  const api={roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.CityGeometry=api;
 })(typeof window==='undefined'?{}:window);

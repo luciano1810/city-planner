@@ -349,8 +349,10 @@ def clustered_districts(city):
             city.event('城市',f"办公和商业活动形成中心，提供 {s['jobs']} 个岗位",s['center'])
         result.append(s)
     for i,d in enumerate(sorted([d for d in result if d['kind']=='CBD'],key=lambda d:-d['jobs'])):
-        d['name']='CBD · 城市主中心' if i==0 else f'城市副中心 {i}'
+        d['centerRank']=i+1
     city.s['districts']=result
+    from .naming import name_districts
+    name_districts(city,old_districts)
 
 
 def detailed_metrics(city):

@@ -229,6 +229,8 @@ def grow(city):
             f['chargingSpaces'] = (int(f['width']*.8/3)+1)*2
         facility_architecture.ensure(f)
         city.spend(f['cost'], '自动城市设施')
+        from .naming import name_object
+        name_object(city,'facilities',f)
         city.s['facilities'].append(f)
         from .special_buildings import reserve
         reserve(city)

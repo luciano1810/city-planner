@@ -1,10 +1,10 @@
-"""One calendar for street activity, daylight and monthly city settlement."""
+"""Accelerated city calendar with an independently persisted sun and bounded fast-forward lighting."""
 import calendar
 import copy
 import math
 
 DAY = 86400
-SPEEDS = (1, 5, 15, 60, 300, 3600, 21600, 86400, 604800, 2592000)
+SPEEDS = (1, 2, 3, 5, 15, 60, 300, 3600, 21600, 86400, 604800, 2592000)
 MAX_STEP = 31 * DAY
 
 
@@ -39,10 +39,10 @@ def shift_month(city, previous_month):
     state['monthSeconds'] = after
     state['elapsedSeconds'] += elapsed
     state['sampled'] = True
-    city.s['sceneTimeSeconds'] += elapsed
+    # Discrete monthly steps do not change the viewing illumination.
 
 
-def advance(city, seconds, speed=None, mode='observed', reset=False):
+def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_seconds=None):
     from .signals import LiveTraffic
     if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 <= seconds <= MAX_STEP:
         raise ValueError('每次模拟推进须为 0–31 天')
@@ -51,6 +51,11 @@ def advance(city, seconds, speed=None, mode='observed', reset=False):
     if mode not in ('observed', 'test') or type(reset) is not bool:
         raise ValueError('无效的交通设置')
     state = city.s['simulation']
+    if daylight_seconds is None:
+        rate = speed if speed is not None else state['speed']
+        daylight_seconds = seconds if rate < DAY else seconds / rate
+    if type(daylight_seconds) not in (int, float) or not math.isfinite(daylight_seconds) or not 0 <= daylight_seconds <= MAX_STEP:
+        raise ValueError('无效的光照推进时长')
     crosses_month = state['monthSeconds']+seconds >= month_days(city.s['month'])*DAY
     before = (copy.deepcopy(city.s), city.rng.getstate(), city.runtime(),
               copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_month else None
@@ -64,7 +69,7 @@ def advance(city, seconds, speed=None, mode='observed', reset=False):
             chunk = min(remaining, duration-state['monthSeconds'])
             state['monthSeconds'] += chunk
             state['elapsedSeconds'] += chunk
-            city.s['sceneTimeSeconds'] += chunk
+            city.s['sceneTimeSeconds'] += daylight_seconds * chunk / seconds
             remaining = max(0., remaining-chunk)
             if state['monthSeconds'] >= duration-1e-8:
                 state['monthSeconds'] = 0.

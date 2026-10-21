@@ -2,16 +2,17 @@
  * already committed by the backend; changing cities invalidates that response. */
 (function(root){
   'use strict';
-  const speeds=[1,5,15,60,300,3600,21600,86400,604800,2592000];
-  const labels=['1× · 实时','5×','15×','60× · 1 分钟/秒','5 分钟/秒','1 小时/秒','6 小时/秒','1 天/秒','7 天/秒','30 天/秒'];
+  const speeds=[1,2,3,5,15,60,300,3600,21600,86400,604800,2592000];
+  const labels=['1× · 实时','2×','3×','5×','15×','60× · 1 分钟/秒','5 分钟/秒','1 小时/秒','6 小时/秒','1 天/秒','7 天/秒','30 天/秒'];
+  const daylightRate=speed=>speed>=86400?1:speed;
   class Driver{
     constructor({request,apply,onState=()=>{},onError=()=>{},now=()=>performance.now(),schedule=(...args)=>setTimeout(...args),cancel=id=>clearTimeout(id)}){
       Object.assign(this,{request,apply,onState,onError,now,schedule,cancel});
-      this.running=false;this.speed=1;this.timer=null;this.last=0;this.carry=0;this.epoch=0;this.ticking=false;this.queue=Promise.resolve();
+      this.running=false;this.speed=1;this.timer=null;this.last=0;this.carry=0;this.daylightCarry=0;this.epoch=0;this.ticking=false;this.queue=Promise.resolve();
     }
-    accrue(){if(this.running){const current=this.now();this.carry+=Math.max(0,current-this.last)/1000*this.speed;this.last=current;}}
+    accrue(){if(this.running){const current=this.now(),realSeconds=Math.max(0,current-this.last)/1000;this.carry+=realSeconds*this.speed;this.daylightCarry+=realSeconds*daylightRate(this.speed);this.last=current;}}
     start(){if(this.running)return;this.running=true;this.last=this.now();this.onState();if(!this.ticking)this.plan(0);}
-    pause(){this.running=false;this.cancel(this.timer);this.timer=null;this.carry=0;this.onState();return this.queue;}
+    pause(){this.running=false;this.cancel(this.timer);this.timer=null;this.carry=0;this.daylightCarry=0;this.onState();return this.queue;}
     invalidate(){this.epoch++;return this.pause();}
     plan(delay=100){this.cancel(this.timer);if(this.running)this.timer=this.schedule(()=>this.tick(),delay);}
     send(seconds,extra={}){
@@ -27,8 +28,10 @@
     }
     async tick(){
       if(!this.running||this.ticking)return;
-      this.ticking=true;this.accrue();const seconds=Math.min(31*86400,this.carry);this.carry-=seconds;
-      try{await this.send(seconds);}catch{}finally{this.ticking=false;this.plan();}
+      this.ticking=true;this.accrue();const seconds=Math.min(31*86400,this.carry);
+      const daylightSeconds=this.carry>0?this.daylightCarry*seconds/this.carry:0;
+      this.carry-=seconds;this.daylightCarry-=daylightSeconds;
+      try{await this.send(seconds,{daylightSeconds});}catch{}finally{this.ticking=false;this.plan();}
     }
     setSpeed(speed,{persist=true}={}){
       if(!speeds.includes(speed))throw new Error('未知模拟速度');
@@ -38,5 +41,5 @@
     async reset(){const resume=this.running;await this.pause();await this.send(0,{reset:true});if(resume)this.start();}
     async settle(){await this.pause();}
   }
-  const api={Driver,speeds,labels};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CitySimulation=api;
+  const api={Driver,speeds,labels,daylightRate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CitySimulation=api;
 })(typeof window==='undefined'?{}:window);

@@ -24,6 +24,7 @@ from .planning import plan_streets
 from .regional import rebuild_regional, assign_regional_passengers, assign_freight
 from .blocks import prepare_blocks, grow_block_commons
 
+from . import naming
 from . import renewal
 from . import signals
 from . import simulation
@@ -89,6 +90,7 @@ class City:
         self.s['events'] = self.s['events'][-250:]
 
     def snapshot(self):
+        naming.ensure_names(self)
         return dict(format=1, model=MODEL_VERSION, terrain=self.terrain.data, calibration=calibration_catalog(self.s['policy']),
                     state=copy.deepcopy(self.s), random=copy.deepcopy(self.rng.getstate()),
                     runtime=self.runtime())
@@ -121,6 +123,9 @@ class City:
             (data.get('runtime',{}).get('liveTraffic') or {}).get('seconds',0.)))
         simulation.validate(s['simulation'],s['month'])
         old_model=s.get('version')
+        registry=s.setdefault('placeNames',{})
+        if not isinstance(registry,dict) or any(not isinstance(k,str) or not isinstance(v,str) or not v.strip() or len(v)>60 for k,v in registry.items()):
+            raise ValueError('存档地名记录无效')
         for key in ('firms','localPaths','growthAttempts','districtCells','policy','annual','accessibilityGroups','migrationFlows','streetPlans','plannedBlocks','regionalServices','regionalFlows','growthCenters','blockLayouts','renewals'):
             s.setdefault(key,copy.deepcopy(city.s[key]))
         for key in ('autoGrow','autoRenew','accessBudget'):
@@ -609,7 +614,7 @@ class City:
                 point=self.point(cmd['point']);role=cmd.get('role','passenger');external=bool(cmd.get('external',False))
                 if role not in ('passenger','freight') or (role=='freight' or external) and mode!='train':raise ValueError('区域门户和货场必须设在铁路上')
                 if external and min(point[0],point[1],self.terrain.width-point[0],self.terrain.height-point[1])>self.s['policy']['regionalBoundaryMeters']:raise ValueError('区域门户必须位于地图边界附近')
-                self.s['stops'].append(dict(id=self.uid('s'),name=text(cmd.get('name','新站')),mode=mode,point=point,enabled=True,role=role,external=external))
+                self.s['stops'].append(dict(id=self.uid('s'),name=text(cmd.get('name') or '新站'),mode=mode,point=point,enabled=True,role=role,external=external))
                 self.rebuild()
                 stop=self.s['stops'][-1]
                 if not self.network['stops'].get(stop['id']):
@@ -640,7 +645,7 @@ class City:
                         line[k]=number(cmd[k],lo,hi,k)
                 if 'enabled' in cmd:
                     line['enabled']=bool(cmd['enabled'])
-                if 'name' in cmd: line['name']=text(cmd['name'])
+                if 'name' in cmd: line.update(name=text(cmd['name']),nameSource='custom')
                 if 'color' in cmd:
                     import re
                     if not re.fullmatch(r'#[0-9a-fA-F]{6}',str(cmd['color'])): raise ValueError('线路颜色格式错误')
@@ -658,7 +663,7 @@ class City:
             elif op=='stop_update':
                 stop=next((s for s in self.s['stops'] if s['id']==cmd.get('id')),None)
                 if not stop: raise ValueError('站点不存在')
-                if 'name' in cmd: stop['name']=text(cmd['name'])
+                if 'name' in cmd: stop.update(name=text(cmd['name']),nameSource='custom')
                 if 'enabled' in cmd: stop['enabled']=bool(cmd['enabled'])
                 self.rebuild()
             elif op=='delete':
@@ -810,7 +815,7 @@ class City:
         if shape_mode not in ('polyline','curve'):
             raise ValueError('未知路线形状')
         # Snap within a metric tolerance; precision is independent of zoom.
-        for i in (0,len(pts)-1):
+        for i in ((0,len(pts)-1) if cmd.get('snap', True) else ()):
             candidates=[]
             for road in self.s['roads']:
                 if group(road)!=('road' if kind in ROAD_KINDS else kind):
@@ -866,13 +871,29 @@ class City:
                     raise RoadConflict('道路与公共空间或保护用地冲突',occupied.intersection(Polygon(parcel['points'])).representative_point().coords[0])
         if len(self.s['roads'])>=2000:
             raise ValueError('已达到本版本 2000 条道路上限')
+        connections=[]
+        for contact in cmd.get('connections', []):
+            target=next((r for r in self.s['roads'] if r['id']==contact.get('road')), None)
+            point=self.point(contact.get('point'))
+            if target is None or group(target)!=('road' if kind in ROAD_KINDS else kind):
+                raise ValueError('吸附目标道路不存在或类型不兼容，请重新吸附')
+            if min(math.dist(point, pts[0]), math.dist(point, pts[-1])) > .05:
+                raise ValueError('跨层接入口必须位于所绘道路的端点')
+            if LineString(target['points']).distance(Point(point)) > .05:
+                raise ValueError('吸附目标已移动，请重新吸附')
+            if level==0 and target['level']!=0 and min(math.dist(point,target['points'][0]),math.dist(point,target['points'][-1])) > .05:
+                raise ValueError('地面道路只能接入高架或隧道端点')
+            connections.append(dict(road=target['id'],point=point))
         profile=self.terrain.profile(shape,kind,level)
         cost=shape.length*ROAD_TYPES[kind]['cost']*profile['costFactor']
         self.spend(cost,'轨道工程' if kind in ('metro','train','tram') else '道路工程')
         self.s['roads'].append(dict(id=self.uid('r'),kind=kind,level=level,points=pts,
                                    controls=controls,shape=shape_mode,terrainAdjusted=adjusted,profile=profile,constructionCost=round(cost),
-                                   oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name',ROAD_TYPES[kind]['name'])),
+                                   exactPlacement=cmd.get('snap') is False,
+                                   connections=connections,
+                                   oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name') or ROAD_TYPES[kind]['name']),
                                    length=shape.length))
+        naming.name_object(self,'roads',self.s['roads'][-1])
 
     def preview_road(self,cmd):
         state=self.s
@@ -914,13 +935,14 @@ class City:
         stops=cmd.get('stops',[])
         if mode not in TRANSIT_TYPES or not isinstance(stops,list) or not 2<=len(stops)<=80 or len(stops)!=len(set(stops)):
             raise ValueError('线路需要至少两个不重复的兼容站点')
-        line=dict(id=self.uid('l'),name=text(cmd.get('name',TRANSIT_TYPES[mode]['name']+'线')),mode=mode,
+        line=dict(id=self.uid('l'),name=text(cmd.get('name') or TRANSIT_TYPES[mode]['name']+'线'),mode=mode,
                   stops=stops,headway=number(cmd.get('headway',10),2,120,'发车间隔'),
                   capacity=number(cmd.get('capacity',TRANSIT_TYPES[mode]['capacity']),10,2000,'容量'),
                   hours=number(cmd.get('hours',16),4,24,'运营小时'),enabled=True,mixed=bool(cmd.get('mixed',False)),
                   startHour=number(cmd.get('startHour',6),0,23,'首班小时'),dwell=number(cmd.get('dwell',.6),.1,10,'停站分钟'),
                   speed=number(cmd.get('speed',TRANSIT_TYPES[mode]['speed']),5,180,'车辆限速'),oneway=bool(cmd.get('oneway',False)),
                   boardings=0,load=0, color=['#387e8c','#b67848','#7869a2','#b75b67'][len(self.s['lines'])%4])
+        naming.name_object(self,'lines',line)
         self.s['lines'].append(line)
         self.rebuild()
         if not line['valid']:
@@ -1346,6 +1368,7 @@ class City:
         self.s['treasury']+=self.s['revenue']-self.s['maintenance']
 
     def summarize(self):
+        naming.ensure_names(self)
         pop=sum(h['size'] for h in self.s['households'])
         buildings=[p for p in self.s['parcels'] if p.get('building')]
         ready=[p for p in buildings if p['building']['status']!='construction']
@@ -1392,6 +1415,7 @@ class City:
         self.s['accessibilityGroups']=accessibility_by_group(self)
 
     def view(self):
+        naming.ensure_names(self)
         # Household details remain authoritative server state; maps receive aggregates.
         residents=Counter()
         for h in self.s['households']:
@@ -1402,7 +1426,7 @@ class City:
             b=p.get('building')
             if b and 'footprintArea' not in b:
                 b['footprintArea']=round(Polygon(b['footprint']).area,1)
-        state={k:v for k,v in self.s.items() if k not in ('households','commands')}
+        state={k:v for k,v in self.s.items() if k not in ('households','commands','placeNames')}
         state['parcels']=parcels
         migration=Counter()
         for flow in self.s['migrationFlows']:

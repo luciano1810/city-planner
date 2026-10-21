@@ -25,7 +25,7 @@ class UnifiedSimulationTests(unittest.TestCase):
 
     def test_live_seconds_advance_walkers_lamps_and_daylight_together(self):
         first = self.call(seconds=0)
-        second = self.call(seconds=8, speed=5)
+        second = self.call(seconds=8, speed=1)
         self.assertEqual(second['traffic']['seconds'], 8)
         self.assertEqual(second['sceneTimeSeconds'], 32408)
         self.assertEqual(second['simulation']['monthSeconds'], 32408)
@@ -39,11 +39,33 @@ class UnifiedSimulationTests(unittest.TestCase):
 
     def test_midnight_changes_day_without_monthly_settlement(self):
         self.service.handle('clock', dict(id='sim', minute=1439))
+        self.city.s['simulation']['monthSeconds'] = DAY-60
         result = self.call(seconds=120, speed=3600)
         self.assertEqual(result['simulation']['monthSeconds'], DAY+60)
         self.assertEqual(result['sceneTimeSeconds'], DAY+60)
         self.assertEqual(result['monthsAdvanced'], 0)
         self.assertEqual(self.city.s['history'], [])
+
+    def test_sun_follows_speed_below_one_day_per_second_and_real_time_above(self):
+        from city.simulation import SPEEDS
+        for speed in SPEEDS:
+            before = self.city.s['sceneTimeSeconds']
+            elapsed = self.city.s['simulation']['elapsedSeconds']
+            result = self.call(seconds=speed, speed=speed)
+            self.assertAlmostEqual(result['sceneTimeSeconds']-before, speed if speed < DAY else 1.)
+            self.assertEqual(result['simulation']['elapsedSeconds']-elapsed, speed)
+
+    def test_explicit_daylight_handles_mixed_speed_ticks_and_scrubbing_only_changes_light(self):
+        result = self.call(seconds=61, speed=60, daylightSeconds=2)
+        self.assertEqual(result['sceneTimeSeconds'], 32402)
+        clock = copy.deepcopy(result['simulation'])
+        self.service.handle('clock', dict(id='sim', minute=21*60))
+        self.assertEqual(self.city.s['simulation'], clock)
+        self.assertEqual(self.city.s['sceneTimeSeconds'], 21*3600)
+        before = self.city.snapshot()
+        for value in (-1, True, float('nan'), 32*DAY):
+            with self.assertRaises(ValueError): self.call(seconds=1, daylightSeconds=value)
+            self.assertEqual(self.city.snapshot(), before)
 
     def test_month_boundary_settles_once_and_keeps_the_remainder(self):
         self.city.s['simulation']['monthSeconds'] = 31*DAY-5
@@ -108,7 +130,7 @@ class UnifiedSimulationTests(unittest.TestCase):
         self.call(seconds=0)
         before = self.city.snapshot()
         for payload in [dict(seconds=-1), dict(seconds=32*DAY), dict(seconds=True),
-                        dict(seconds=float('nan')), dict(speed=2), dict(speed=True), dict(reset=1)]:
+                        dict(seconds=float('nan')), dict(speed=4), dict(speed=True), dict(reset=1)]:
             with self.assertRaises(ValueError): self.call(**payload)
             self.assertEqual(self.city.snapshot(), before)
         for value in [-1, 31*DAY, float('nan')]:
@@ -134,7 +156,7 @@ class UnifiedSimulationTests(unittest.TestCase):
     def test_legacy_month_step_uses_the_calendar_without_resetting_clock(self):
         self.call(seconds=4)
         self.city.step(1)
-        self.assertEqual(self.city.s['sceneTimeSeconds'],31*DAY+32404)
+        self.assertEqual(self.city.s['sceneTimeSeconds'],32404)
         self.assertEqual(self.city.s['simulation']['elapsedSeconds'],31*DAY+4)
         result=self.call(seconds=1)
         self.assertEqual(result['traffic']['seconds'],31*DAY+5)

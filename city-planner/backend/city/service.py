@@ -143,12 +143,12 @@ class CityService:
                 minute=number(payload.get('minute'),0,1439,'模拟时刻',True)
                 city.s['sceneTimeSeconds']=math.floor(city.s['sceneTimeSeconds']/86400)*86400+minute*60.
                 clock=city.s['simulation']
-                clock['monthSeconds']=math.floor(clock['monthSeconds']/86400)*86400+minute*60.
+                # Scrubbing the sun changes presentation, never economic time.
                 return dict(sceneTimeSeconds=city.s['sceneTimeSeconds'],simulation=copy.deepcopy(clock))
             if action == 'simulate':
                 from .simulation import advance
                 result=advance(city,payload.get('seconds',0),payload.get('speed'),
-                               payload.get('mode','observed'),payload.get('reset',False))
+                               payload.get('mode','observed'),payload.get('reset',False),payload.get('daylightSeconds'))
                 if result['monthsAdvanced']:
                     try:self.autosave(city)
                     except OSError as exc:result['saveWarning']='自动保存失败，请检查磁盘空间：'+str(exc)
