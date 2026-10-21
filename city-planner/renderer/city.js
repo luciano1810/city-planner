@@ -22,10 +22,10 @@
   let currentSave=null;
   let trafficState=null,scenePreviewMinute=null;
   let mapHitLabels=[];
-  let snapTarget=null, pointerPosition=null;
+  let snapTarget=null, pointerPosition=null,dragOrigin=null;
   const snappedPoints=new WeakMap();
   function cloneDraftPoint(p){const q=p.slice();if(snappedPoints.has(p))snappedPoints.set(q,snappedPoints.get(p));return q;}
-  function roadConnections(){return [draft[0],draft.at(-1)].filter(Boolean).flatMap(p=>{const r=snappedPoints.get(p);return r?[{road:r.road,point:p.slice()}]:[];});}
+  function roadConnections(){return [draft[0],draft.at(-1)].filter(Boolean).flatMap(p=>{const r=snappedPoints.get(p);return r?[{road:r.road,point:p.slice(),...(r.junction?{junction:r.junction}:{})}]:[];});}
   let tool='select', layer='use', selected=null, hover=null, draft=[], lineStops=[], panel='build';
   let editingLine=null,editingRoad=null,dragControl=null,preview=null,previewTimer=null,previewTicket=0,queryResult=null,comparison=null;
   let baseline=null, sourceParcel=null, inspectedRoute=null, space=false;
@@ -437,7 +437,7 @@
         box.innerHTML=`<h2>${escape(road.name)}${close}</h2>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 币`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
         ${roadKinds.includes(road.kind)?`${details([['道路等级',cfg.name],['道路宽度',cfg.width+' m'],['基准容量',cfg.capacity?fmt(cfg.capacity)+' 辆/h':'仅步行'],['沿街开发',['street','avenue','lane'].includes(road.kind)?'允许':'不直接开发']])}<div class="city-fields"><label>道路等级<select class="city-field" id="road-kind">${roadKinds.map(k=>`<option value="${k}">${state.meta.roadTypes[k].name}</option>`).join('')}</select></label><label><span><input type="checkbox" id="road-oneway"> 单向</span></label></div><button class="city-btn" id="road-update">更新道路</button><p>升级需有足够宽度；改为快速路或高速公路会取消原有临街直接接入。高架交叉不会自动形成路口，需绘制连接路。</p>`:''}
         <button class="city-btn" id="road-edit-shape">调整道路控制点</button><p>拆除可能使建筑失去接入，或中断运营线路。</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
-        el('road-edit-shape').onclick=()=>{showPanel('build');setTool(road.kind);editingRoad=road.id;draft=(road.controls||road.points).map(p=>p.slice());for(const p of [draft[0],draft.at(-1)]){const c=road.connections?.find(c=>Math.hypot(c.point[0]-p[0],c.point[1]-p[1])<.05);if(c)snappedPoints.set(p,{road:c.road});}el('city-shape').value=road.shape||'polyline';el('city-level').value=road.level;el('city-oneway').checked=road.oneway;document.body.classList.remove('show-inspector');schedulePreview();updateHint();workspace.draw();};
+        el('road-edit-shape').onclick=()=>{showPanel('build');setTool(road.kind);editingRoad=road.id;draft=(road.controls||road.points).map(p=>p.slice());for(const p of [draft[0],draft.at(-1)]){const c=road.connections?.find(c=>Math.hypot(c.point[0]-p[0],c.point[1]-p[1])<.05);if(c)snappedPoints.set(p,{road:c.road,junction:c.junction});}el('city-shape').value=road.shape||'polyline';el('city-level').value=road.level;el('city-oneway').checked=road.oneway;document.body.classList.remove('show-inspector');schedulePreview();updateHint();workspace.draw();};
         if(el('road-kind')){el('road-kind').value=road.kind;el('road-oneway').checked=road.oneway;el('road-update').onclick=()=>command({type:'road_update',id:road.id,kind:el('road-kind').value,oneway:el('road-oneway').checked});}
       } else if(facility) {
         const transport=window.CitySpecialBuildings.names[facility.kind];
@@ -535,7 +535,7 @@
     if(snapTarget?.road){
       const target=state.roads.find(r=>r.id===snapTarget.road);
       if(target&&target.level!==Number(el('city-level').value)){
-        snapTarget.type='跨层接入口';snappedPoints.set(snapTarget.point,{road:target.id});
+        snapTarget.type='跨层 · 点击选择接入或平行';snappedPoints.set(snapTarget.point,{road:target.id,junction:'branch'});
       }
     }
     return snapTarget?.point||point;
@@ -591,6 +591,15 @@
     if(ok){clearTimeout(previewTimer);previewTicket++;draft=[];editingRoad=null;preview=null;toolDrafts.delete(tool);}
     updateHint();workspace.draw();
   }
+  function chooseLayerConnection(point,accept,cancel=()=>{}){
+    if(!snappedPoints.has(point)){accept(point);return;}
+    const contact=snappedPoints.get(point),target=state.roads.find(r=>r.id===contact.road);
+    let decided=false;
+    dialog(`<h2>选择跨层道路关系</h2><p>与${escape(target?.name||'目标道路')}平行修建，或在此接入。平行方向接入会生成平滑分叉，橙色预览显示实际路线。</p><div class="city-row"><button class="city-btn" id="road-keep-parallel">平行修建</button><button class="city-btn primary" id="road-connect-level">接入普通路</button></div>`);
+    el('city-dialog').addEventListener('close',()=>{if(!decided)cancel();},{once:true});
+    el('road-keep-parallel').onclick=()=>{decided=true;snappedPoints.delete(point);el('city-dialog').close();accept(point);status('保持分层独立，不建立接入口');};
+    el('road-connect-level').onclick=()=>{decided=true;el('city-dialog').close();accept(point);};
+  }
   function handlePoint(point,event=null){
     if(specialTools.includes(tool)){const cmd=specialCommand(point);command(cmd).then(ok=>{if(ok){specialPreview=null;scheduleSpecialPreview();}});return;}
     if(tool==='renewal'){const p=pick(point,'parcel');if(p){renewalSelection=renewalSelection.includes(p.id)?renewalSelection.filter(id=>id!==p.id):[...renewalSelection,p.id];renewalPreview=null;renderRenewals();workspace.draw();}return;}
@@ -599,10 +608,13 @@
       if(event){
         const g=workspace.geometry,t=workspace.terrain;
         const index=window.CityGeometry.roadControlAt(draft,point,t.width*g.scale/state.meta.width,t.height*g.scale/state.meta.height);
-        if(index>=0){dragControl=index;canvas.setPointerCapture(event.pointerId);return;}
+        if(index>=0){dragOrigin=draft[index];dragControl=index;canvas.setPointerCapture(event.pointerId);return;}
       }
       point=magneticPoint(point);hover=point;
-      const replace=event?0:Number(el('city-coordinate-index').value);if(replace>0&&replace<=draft.length)draft[replace-1]=point;else draft.push(point);schedulePreview();updateHint();workspace.draw();return;
+      const replace=event?0:Number(el('city-coordinate-index').value);
+      const accept=p=>{if(replace>0&&replace<=draft.length)draft[replace-1]=p;else draft.push(p);schedulePreview();updateHint();workspace.draw();};
+      chooseLayerConnection(point,accept);
+      return;
     }
     if(tool==='stop'){command({type:'stop',mode:el('city-mode').value,name:el('city-stop-name').value,point,role:el('city-mode').value==='train'?el('city-station-role').value:'passenger',external:el('city-mode').value==='train'&&el('city-station-external').checked});return;}
     if(['school','park','plaza','clinic'].includes(tool)){command({type:'facility',kind:tool,point});return;}
@@ -642,7 +654,12 @@
     if(draft.length||state.meta.roadTypes[tool])workspace.draw();
   });
   canvas.addEventListener('pointerleave',()=>{pointerPosition=null;snapTarget=null;hover=null;workspace.draw();});
-  canvas.addEventListener('pointerup',()=>{dragControl=null;});
+  canvas.addEventListener('pointerup',()=>{
+    if(dragControl===null)return;
+    const index=dragControl,origin=dragOrigin,point=draft[index];dragControl=null;dragOrigin=null;
+    const apply=p=>{draft[index]=p;schedulePreview();updateHint();workspace.draw();};
+    chooseLayerConnection(point,apply,()=>apply(origin));
+  });
   canvas.addEventListener('pointercancel',()=>{dragControl=null;});
   canvas.addEventListener('dblclick',event=>{
     if(active&&state?.meta.roadTypes[tool]){event.preventDefault();finish();}
@@ -806,7 +823,8 @@
     }
     for(const walkway of rich||cartographic?[]:state.localPaths||[]){if(!walkway.block||scale<.22||!walkway.points.some(visible))continue;path(walkway.points);ctx.strokeStyle='#eee6d1';ctx.lineWidth=Math.max(walkway.width,1/scale);ctx.stroke();}
     if(!mapView&&!solid)window.CityPedestrians?.paint(ctx,trafficState?.pedestrians,{scale,visible});
-    if(rich)window.RoadRenderer.paint(ctx,roadState,{scale,selected,inView,visible,traffic:trafficState,levels:[1]});
+    if(rich)window.RoadRenderer.paint(ctx,roadState,{scale,selected,inView,visible,traffic:trafficState,levels:[1],vehicles:!solid});
+    if(rich&&solid)window.CityScene3D.renderUpperTraffic(ctx,state,trafficState);
     if(rich)window.CityScene.atmosphere(ctx,state,{scale,visible,traffic:trafficState,solid});
     if(rich)for(const f of state.facilities)if(window.CitySpecialBuildings.names[f.kind]&&inView(f.points))window.CitySpecialBuildings.night(ctx,f,scale,window.CityScene.time);
     if(state.gateway){ctx.strokeStyle='#9d763f';ctx.lineWidth=2/scale;ctx.strokeRect(state.gateway[0]-6/scale,state.gateway[1]-6/scale,12/scale,12/scale);label('区域门户',[state.gateway[0]+10/scale,state.gateway[1]+4/scale],11,'#785b33',35);}

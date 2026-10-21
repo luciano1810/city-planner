@@ -25,3 +25,7 @@ test('layers and transport modes exclude incompatible interiors; bridge endpoint
  assert.equal(roadSnap([50,2],[base],[],{kind:'path'}).type,'道路中段');
  assert.equal(roadSnap([50,2],[base],[],{exclude:'a'}),null);
 });
+test('underground roads offer the same explicit ground-midspan choice as bridges',()=>{
+ assert.equal(roadSnap([50,2],[base],[],{level:-1}).road,'a');
+ assert.equal(roadSnap([50,2],[{...base,level:-1}],[],{level:0}),null);
+});

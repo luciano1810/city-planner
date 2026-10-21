@@ -832,6 +832,14 @@ class City:
                     pts[i]=list(point)
         controls=copy.deepcopy(pts)
         pts=curve_points(controls,shape_mode=='curve')
+        # The explicit UI choice owns connectivity and the branch preview.
+        for contact in cmd.get('connections', []):
+            if contact.get('junction') != 'branch' or level == 0:
+                continue
+            target = next((r for r in self.s['roads'] if r['id'] == contact.get('road')), None)
+            if target and target['level'] == 0 and kind in ROAD_KINDS and target['kind'] in ROAD_KINDS:
+                from .ramp_alignment import branch_alignment
+                pts = branch_alignment(pts, target, self.point(contact.get('point')), kind)
         shape=LineString(pts)
         if not shape.is_simple or shape.length<20:
             raise ValueError('路线过短或自相交')
@@ -883,7 +891,7 @@ class City:
                 raise ValueError('吸附目标已移动，请重新吸附')
             if level==0 and target['level']!=0 and min(math.dist(point,target['points'][0]),math.dist(point,target['points'][-1])) > .05:
                 raise ValueError('地面道路只能接入高架或隧道端点')
-            connections.append(dict(road=target['id'],point=point))
+            connections.append(dict(road=target['id'],point=point,**({'junction':'branch'} if contact.get('junction')=='branch' else {})))
         profile=self.terrain.profile(shape,kind,level)
         cost=shape.length*ROAD_TYPES[kind]['cost']*profile['costFactor']
         self.spend(cost,'轨道工程' if kind in ('metro','train','tram') else '道路工程')

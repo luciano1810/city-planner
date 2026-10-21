@@ -226,7 +226,8 @@
   }
   function streetscape(batch,state,near){
     const curb=material('curb',2),grass=material('grass',0),roads=state.roads.filter(r=>r.level===0&&['street','avenue','lane'].includes(r.kind));
-    const corners=root.RoadRenderer.junctionCorners(state.network);
+    const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes);
+    const corners=root.RoadRenderer.junctionCorners({junctions:[...state.network.junctions.filter(j=>!layout.joins.some(c=>c.id===j.id)),...layout.joins.map(j=>({...j,approaches:j.approaches.map(a=>({...a,level:0}))}))]});
     for(const c of corners)if(near(c.corner)){
       const at=t=>c.from.map((v,i)=>(1-t)*(1-t)*v+2*t*(1-t)*c.corner[i]+t*t*c.to[i]);
       for(let i=0;i<12;i++){const a=at(i/12),b=at((i+1)/12),d=Math.hypot(b[0]-a[0],b[1]-a[1]);batch.box((a[0]+b[0])/2,(a[1]+b[1])/2,.01,d+.02,.3,.18,Math.atan2(b[1]-a[1],b[0]-a[0]),curb);}
@@ -238,6 +239,7 @@
         for(const side of [-1,1]){
           const q=[at.point[0]-at.tangent[1]*(width/2+.22)*side,at.point[1]+at.tangent[0]*(width/2+.22)*side];
           if(corners.some(c=>Math.hypot(q[0]-c.corner[0],q[1]-c.corner[1])<c.radius+1.6))continue;
+          if(layout.joins.some(j=>Math.hypot(q[0]-j.point[0],q[1]-j.point[1])<j.extent))continue;
           if(roads.some(other=>other!==r&&S.edgeDistance(q,other.points)<state.meta.roadTypes[other.kind].width/2+.7))continue;
           batch.box(...q,.01,3.12,.32,.18,angle,curb);
         }
@@ -323,8 +325,8 @@
       }
     }
     for(const lamp of S.lampsFor(state))if(near(lamp.point)){
-      const [x,y]=lamp.point,[dx,dy]=lamp.arm,h=lamp.height||5.2;
-      batch.box(x,y,0,.14,.14,h,0,solid(0x5c6562,.5,.4));batch.box(x+dx/2,y+dy/2,h-.08,Math.hypot(dx,dy)+.3,.12,.12,Math.atan2(dy,dx),solid(0x77837d,.5,.4));batch.box(x+dx,y+dy,h-.15,lamp.height?.35:.8,.34,.16,Math.atan2(dy,dx),solid(0xc8cfc5));
+      const [x,y]=lamp.point,[dx,dy]=lamp.arm,h=lamp.height||5.2,z=lamp.base||0;
+      batch.box(x,y,z,.14,.14,h,0,solid(0x5c6562,.5,.4));batch.box(x+dx/2,y+dy/2,z+h-.08,Math.hypot(dx,dy)+.3,.12,.12,Math.atan2(dy,dx),solid(0x77837d,.5,.4));batch.box(x+dx,y+dy,z+h-.15,lamp.height?.35:.8,.34,.16,Math.atan2(dy,dx),solid(0xc8cfc5));
     }
     batch.flush(staticGroup);lastNetwork=state.network;lastParcels=state.parcels;
   }
@@ -343,7 +345,8 @@
     sun.castShadow=light.elevation>0;ground.material.opacity=light.elevation>0?.43:0;
     const radius=Math.min(1800,Math.max(width/sx,height/sy)*.75+100);Object.assign(sun.shadow.camera,{left:-radius,right:radius,top:radius,bottom:-radius,near:1,far:2500});sun.shadow.camera.updateProjectionMatrix();
     clear(carsGroup);const batch=new Batch(),near=p=>p[0]>region[0]-20&&p[0]<region[2]+20&&p[1]>region[1]-20&&p[1]<region[3]+20;
-    for(const v of traffic?.vehicles||[])if(v.level<=0&&near(v.point))car(batch,v);
+    const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes);
+    for(const v of traffic?.vehicles||[])if(!root.RoadRenderer.upperVehicle(v,layout)&&!root.RoadRenderer.undergroundCovered(v,layout,state.meta.roadTypes)&&near(v.point))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
     let pedestrians=0;for(const p of traffic?.pedestrians||[])if(near(p.point)){root.CityPedestrians.build3D(batch,p,{solid,cloth});pedestrians++;}
     batch.flush(carsGroup);
     renderer.render(scene,camera);const beautyCalls=renderer.info.render.calls,beautyTriangles=renderer.info.render.triangles;
@@ -356,8 +359,20 @@
     }
     stats={engine:'WebGL / Three.js r180',ambientOcclusion:sx>1,vehicleAtlas:!!carAtlas,pedestrianAtlas:root.CityPedestrians.ready,pedestrians,calls:beautyCalls,triangles:beautyTriangles,meshes:staticGroup.children.length,windows:windows.length};return true;
   }
+  function renderUpperTraffic(ctx,state,traffic){
+    if(!renderer)return;
+    const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes),batch=new Batch();
+    clear(carsGroup);
+    for(const v of traffic?.vehicles||[])if(root.RoadRenderer.upperVehicle(v,layout)&&!root.RoadRenderer.undergroundCovered(v,layout,state.meta.roadTypes))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
+    batch.flush(carsGroup);
+    const staticVisible=staticGroup.visible,groundVisible=ground.visible;
+    staticGroup.visible=false;ground.visible=false;
+    renderer.render(scene,camera);
+    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(renderer.domElement,0,0);ctx.restore();
+    staticGroup.visible=staticVisible;ground.visible=groundVisible;
+  }
   function nightWindows(ctx,night){
     for(const win of windows){ctx.beginPath();win.points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fillStyle=win.warm?`rgba(255,218,144,${.76*night})`:`rgba(183,216,232,${.55*night})`;ctx.fill();}
   }
-  root.CityScene3D={render,nightWindows,projection,parkingFor,get available(){return start();},get stats(){return {...stats,failure};},get tilt(){return TILT;},invalidate(){lastNetwork=null;lastRegion='';}};
+  root.CityScene3D={render,renderUpperTraffic,nightWindows,projection,parkingFor,get available(){return start();},get stats(){return {...stats,failure};},get tilt(){return TILT;},invalidate(){lastNetwork=null;lastRegion='';}};
 })(window);

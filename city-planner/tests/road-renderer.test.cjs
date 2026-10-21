@@ -208,3 +208,108 @@ test('enlarged vehicle and pedestrian housings stay separate after pole-height p
     }
   }
 });
+
+test('upper-layer pass paints bridge surface and traffic after the ground composite',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),events=[];
+ const root={CityScene:{roadSurfaces(ctx,roads,types,scale,level){events.push('surface:'+level);},vehicle(ctx,v){events.push('vehicle:'+v.level);}}};
+ vm.runInNewContext(fs.readFileSync(require.resolve('../renderer/road-renderer.js'),'utf8'),{window:root});
+ const ctx=new Proxy({}, {get:(target,key)=>target[key]||(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+ const roads=[{id:'ground',points:[[-100,0],[100,0]],kind:'street',level:0},
+              {id:'bridge',points:[[0,-100],[0,100]],kind:'street',level:1}];
+ const state={roads,network:{junctions:[]},roadTypes},traffic={vehicles:[{point:[0,0],level:0},{point:[0,0],level:1}]};
+ root.RoadRenderer.paint(ctx,state,{scale:.1,traffic,levels:[-1,0]});
+ events.push('3d-composite');
+ root.RoadRenderer.paint(ctx,state,{scale:.1,traffic,levels:[1]});
+ assert.deepEqual(events.slice(-3),['3d-composite','surface:1','vehicle:1']);
+ assert(events.indexOf('vehicle:0')<events.indexOf('surface:1'));
+});
+
+function bridgeFixture({curve=false,width='street',length=300,unconnected=false,bothEnds=false,reverse=false}={}){
+  const bridge={id:'b',kind:width,level:1,points:curve?[[0,0],[50,15],[100,100],[100,200]]:[[0,0],[length,0]]};
+  if(reverse)bridge.points.reverse();
+  const ground={id:'g',kind:'street',level:0,points:[[-200,0],[0,0]]};
+  const roads=[ground,bridge],end=bridge.points.at(-1),start=bridge.points[0];
+  const total=bridge.points.slice(1).reduce((n,p,i)=>n+Math.hypot(p[0]-bridge.points[i][0],p[1]-bridge.points[i][1]),0);
+  const join=reverse?'b-end':'b-start';
+  const network={junctions:[],nodes:{'g-start':[-200,0],'g-end':[0,0],'b-start':start,'b-end':end},edges:[
+    {road:'g',a:'g-start',b:unconnected?'g-end':join,startDistance:0,endDistance:200},
+    {road:'b',a:'b-start',b:'b-end',startDistance:0,endDistance:total}]};
+  if(bothEnds){const g2={id:'g2',kind:'street',level:0,points:[end,[end[0]+200,end[1]]]};roads.push(g2);network.nodes['g2-end']=g2.points[1];network.edges.push({road:'g2',a:'b-end',b:'g2-end',startDistance:0,endDistance:200});}
+  const api=require('../renderer/road-renderer.js'),layout=api.connections(roads,network,roadTypes);
+  return {api,roads,network,bridge,layout,total};
+}
+
+test('degree-two bridge joins are open at either endpoint and survive reversed drawing order',()=>{
+  for(const reverse of [false,true])for(const width of ['street','avenue','highway']){
+    const {api,bridge,layout,total}=bridgeFixture({reverse,width});
+    assert.equal(layout.joins.length,1);assert.equal(layout.joins[0].approaches.length,2);
+    assert.equal(api.roadHeight(bridge,reverse?total:0,layout),0);
+    assert.equal(api.roadHeight(bridge,reverse?0:total,layout),6);
+    const points=api.surfaceRoad(bridge,layout).points;
+    const endpoint=reverse?points.at(-1):points[0];assert.deepEqual(endpoint,[0,0]);
+  }
+});
+
+test('bridge curves use arc length for pavement, markings, shadows and vehicle elevation',()=>{
+  const {api,bridge,layout,total}=bridgeFixture({curve:true});
+  const surface=api.surfaceRoad(bridge,layout);assert(surface.points.length>bridge.points.length);
+  assert.deepEqual(surface.points[0],bridge.points[0]);
+  for(let d=0;d<=total;d+=2){
+    const point=api.sample(bridge.points,d).point,z=api.roadHeight(bridge,d,layout);
+    assert(z>=0&&z<=6);assert(Math.abs(api.vehicleHeight({road:'b',level:1,point},layout)-z)<1e-9);
+    assert(Math.abs(api.projectPoint(point,bridge,layout)[1]-(point[1]-.28*z))<1e-9);
+  }
+  assert.equal(api.surfaceRoad(bridge,layout),surface);
+});
+
+test('short and double-ended bridges never jump in height or dip below the ground',()=>{
+  for(const length of [30,100,300]){
+    const {api,bridge,layout}=bridgeFixture({length,bothEnds:true});
+    assert.equal(layout.joins.length,2);assert.equal(api.roadHeight(bridge,0,layout),0);assert.equal(api.roadHeight(bridge,length,layout),0);
+    let last=0;for(let d=0;d<=length;d+=.25){const z=api.roadHeight(bridge,d,layout);assert(z>=0&&z<=6);assert(Math.abs(z-last)<.026);last=z;}
+  }
+});
+
+test('unsnapped overlapping endpoints keep their full height and do not open a junction',()=>{
+  const {api,bridge,layout}=bridgeFixture({unconnected:true});
+  assert.equal(layout.joins.length,0);assert.equal(layout.ramps.size,0);
+  assert.equal(api.roadHeight(bridge,0,layout),6);
+  assert(!api.upperVehicle({road:'g',level:0,point:[0,0]},layout));
+});
+
+test('deferred traffic includes receiving roads but never unrelated roads near a ramp',()=>{
+  const {api,layout}=bridgeFixture();
+  assert(api.upperVehicle({road:'g',level:0,point:[-3,0]},layout));
+  assert(api.upperVehicle({road:'b',level:1,point:[150,0]},layout));
+  assert(!api.upperVehicle({road:'other',level:0,point:[0,0]},layout));
+  assert(!api.upperVehicle({road:'g',level:0,point:[-150,0]},layout));
+});
+
+test('markings sample the same curved height profile as the pavement, including long straight segments',()=>{
+ const {api,bridge,layout}=bridgeFixture();
+ const line=api.projectPath(bridge.points,bridge,layout),surface=api.surfaceRoad(bridge,layout);
+ assert.equal(line.length,surface.points.length);assert(line.every((p,i)=>Math.hypot(p[0]-surface.points[i][0],p[1]-surface.points[i][1])<1e-9));assert(line.length>50);
+ assert.equal(line.find(p=>p[0]===15)[1],0);
+ assert(Math.abs(line.find(p=>p[0]===150)[1]+1.68)<1e-9);
+});
+
+test('a wide bridge mouth stops at the opposite edge of its narrow receiving road',()=>{
+ const api=require('../renderer/road-renderer.js');
+ const roads=[{id:'g',kind:'street',level:0,points:[[-200,0],[200,0]]},{id:'b',kind:'avenue',level:1,points:[[0,0],[100,30],[120,200]]}];
+ const network={nodes:{w:[-200,0],j:[0,0],e:[200,0],n:[120,200]},junctions:[],edges:[
+  {road:'g',a:'w',b:'j',startDistance:0,endDistance:200},{road:'g',a:'j',b:'e',startDistance:200,endDistance:400},
+  {road:'b',a:'j',b:'n',startDistance:0,endDistance:Math.hypot(100,30)+Math.hypot(20,170)}]};
+ const layout=api.connections(roads,network,roadTypes),surface=api.surfaceRoad(roads[1],layout);
+ assert(surface.openStart);assert(!surface.openEnd);assert.equal(surface.mouthClips.length,1);
+ assert(surface.mouthClips[0].every(p=>p[1]<=-7));assert.equal(surface.mouthClips[0][0][1],-7);
+});
+
+test('tunnel profiles reach ground at their magnetic mouth and stay below it elsewhere',()=>{
+ const {api,roads,network,bridge,total}=bridgeFixture();bridge.level=-1;
+ const layout=api.connections(roads,network,roadTypes);
+ assert.equal(layout.joins.length,1);assert.equal(api.roadHeight(bridge,0,layout),0);
+ assert.equal(api.roadHeight(bridge,total,layout),-6);
+ const path=api.surfaceRoad(bridge,layout).points;
+ assert.deepEqual(path[0],[0,0]);assert(Math.abs(path.at(-1)[1]-1.68)<1e-9);
+ assert.equal(api.vehicleHeight({road:'b',level:-1,point:[300,0]},layout),-6);
+});

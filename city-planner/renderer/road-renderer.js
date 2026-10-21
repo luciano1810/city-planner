@@ -34,6 +34,121 @@
       return [p[0]-dy/length*offset,p[1]+dx/length*offset];
     });
   }
+  // Shared graph nodes, including degree-two joins, own the visual opening.
+  // Coordinate coincidence alone must never turn an overpass into a ramp.
+  const connectionPlans=new WeakMap();
+  function connections(roads,network,types){
+    if(connectionPlans.has(network))return connectionPlans.get(network);
+    const roadMap=new Map(roads.map(r=>[r.id,r])),incident=new Map();
+    for(const e of network.edges||[])for(const [node,direction] of [[e.a,1],[e.b,-1]]){
+      const road=roadMap.get(e.road);if(!road||!(motorKinds.has(road.kind)||road.kind==='path'))continue;
+      if(!incident.has(node))incident.set(node,[]);
+      const distance=direction===1?e.startDistance:e.endDistance;
+      if(!Number.isFinite(distance))continue;
+      const at=sample(road.points,distance);
+      incident.get(node).push({road:road.id,kind:road.kind,level:road.level,width:types[road.kind].width,
+        distance,direction,tangent:at.tangent.map(v=>v*direction),incoming:direction===-1||!road.oneway,outgoing:direction===1||!road.oneway});
+    }
+    const joins=[];
+    for(const [id,arms] of incident){
+      if(!arms.some(a=>a.level===0)||!arms.some(a=>a.level!==0))continue;
+      const point=network.nodes[id],extent=Math.min(80,Math.max(...arms.map(a=>approachClearance(a,{point,approaches:arms},roadMap)))+12);
+      joins.push({id,point,approaches:arms,extent,level:0});
+    }
+    const ramps=new Map();
+    for(const j of joins)for(const a of j.approaches)if(a.level!==0){
+      const r=roadMap.get(a.road),length=measure(r.points).length;
+      if(a.distance>.1&&a.distance<length-.1)continue;
+      if(!ramps.has(r.id))ramps.set(r.id,[]);
+      ramps.get(r.id).push({distance:a.distance,flat:j.extent+2});
+    }
+    const result={joins,ramps,roadMap,surfaces:new Map()};connectionPlans.set(network,result);return result;
+  }
+  function nearestDistance(points,p){
+    const {distances}=measure(points);let best=Infinity,distance=0;
+    for(let i=1;i<points.length;i++){
+      const a=points[i-1],b=points[i],dx=b[0]-a[0],dy=b[1]-a[1],len=dx*dx+dy*dy;
+      const t=len?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len)):0;
+      const error=(p[0]-a[0]-t*dx)**2+(p[1]-a[1]-t*dy)**2;
+      if(error<best){best=error;distance=distances[i-1]+Math.sqrt(len)*t;}
+    }return distance;
+  }
+  function roadHeight(road,distance,layout){
+    if(road.level===0)return 0;
+    let height=6;
+    for(const ramp of layout.ramps.get(road.id)||[]){
+      const t=Math.max(0,Math.min(1,(Math.abs(distance-ramp.distance)-ramp.flat)/90));
+      height=Math.min(height,6*t*t*(3-2*t));
+    }return height?height*road.level:0;
+  }
+  function projectPoint(point,road,layout){
+    return [point[0],point[1]-.28*roadHeight(road,nearestDistance(road.points,point),layout)];
+  }
+  function projectPath(points,road,layout){
+    if(road.level===0)return points;
+    const length=measure(points).length,distances=new Set(measure(points).distances);
+    for(let d=0;d<length;d+=3)distances.add(d);
+    return [...distances].sort((a,b)=>a-b).map(d=>projectPoint(sample(points,d).point,road,layout));
+  }
+  function surfaceRoad(road,layout){
+    if(road.level===0)return road;
+    if(layout.surfaces.has(road.id))return layout.surfaces.get(road.id);
+    const length=measure(road.points).length,distances=new Set(measure(road.points).distances);
+    for(let d=0;d<length;d+=3)distances.add(d);
+    const samples=[...distances].sort((a,b)=>a-b).map(d=>{const p=sample(road.points,d).point;return {point:p,height:roadHeight(road,d,layout)};});
+    const ramps=layout.ramps.get(road.id)||[],mouthClips=[];
+    for(const j of layout.joins){
+      const arm=j.approaches.find(a=>a.road===road.id);if(!arm)continue;
+      const ground=j.approaches.find(a=>a.level===0&&j.approaches.some(b=>b!==a&&b.road===a.road&&b.direction!==a.direction));
+      if(!ground)continue;
+      const tangent=ground.tangent,n=[-tangent[1],tangent[0]];
+      if(n[0]*arm.tangent[0]+n[1]*arm.tangent[1]<0){n[0]*=-1;n[1]*=-1;}
+      const at=(along,across)=>j.point.map((v,i)=>v+tangent[i]*along+n[i]*across);
+      mouthClips.push([at(-j.extent,-ground.width/2),at(j.extent,-ground.width/2),at(j.extent,-j.extent),at(-j.extent,-j.extent)]);
+    }
+    const result={...road,points:samples.map(s=>[s.point[0],s.point[1]-.28*s.height]),elevationSamples:samples,
+      openStart:ramps.some(r=>r.distance<.1),openEnd:ramps.some(r=>r.distance>length-.1),mouthClips};
+    layout.surfaces.set(road.id,result);return result;
+  }
+  function upperVehicle(vehicle,layout){
+    return vehicle.level===1||layout.joins.some(j=>(!vehicle.road||j.approaches.some(a=>a.road===vehicle.road))&&Math.hypot(vehicle.point[0]-j.point[0],vehicle.point[1]-j.point[1])<j.extent+8);
+  }
+  function vehicleHeight(vehicle,layout){
+    if(vehicle.level===0)return 0;
+    // Traffic road IDs are absent on older saves; choose the closest bridge.
+    let road=layout.roadMap.get(vehicle.road),best=Infinity;
+    if(!road||road.level!==vehicle.level)for(const r of layout.roadMap.values())if(r.level===vehicle.level){
+      const d=nearestDistance(r.points,vehicle.point),p=sample(r.points,d).point,error=Math.hypot(p[0]-vehicle.point[0],p[1]-vehicle.point[1]);
+      if(error<best){best=error;road=r;}
+    }
+    return road?roadHeight(road,nearestDistance(road.points,vehicle.point),layout):6*vehicle.level;
+  }
+  function undergroundCovered(vehicle,layout,types){
+    if(vehicle.level>=0||vehicleHeight(vehicle,layout)>-.5)return false;
+    const point=[vehicle.point[0],vehicle.point[1]-.28*vehicleHeight(vehicle,layout)];
+    return [...layout.roadMap.values()].some(r=>r.level===0&&Math.hypot(...sample(r.points,nearestDistance(r.points,point)).point.map((v,i)=>v-point[i]))<types[r.kind].width/2+3);
+  }
+  function clipUnderground(ctx,roads,types,inView){
+    for(const r of roads)if(r.level===0&&inView(r.points)){
+      const radius=types[r.kind].width/2+(types[r.kind].walk?3:1);
+      const outline=[...offsetPath(r.points,radius),...offsetPath(r.points,-radius).reverse()];
+      ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(...outline[0]);for(const p of outline.slice(1))ctx.lineTo(...p);ctx.closePath();ctx.clip('evenodd');
+      for(const p of [r.points[0],r.points.at(-1)]){ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(p[0]+radius,p[1]);ctx.arc(...p,radius,0,Math.PI*2);ctx.clip('evenodd');}
+    }
+  }
+  function clipJoin(ctx,j){ctx.beginPath();ctx.arc(...j.point,j.extent,0,Math.PI*2);ctx.clip();}
+  function paintConnections(ctx,state,scale,layout,joins){
+    for(const j of joins){
+      ctx.save();clipJoin(ctx,j);
+      const ids=new Set(j.approaches.map(a=>a.road));
+      const local=state.roads.filter(r=>ids.has(r.id)).map(r=>surfaceRoad(r,layout));
+      // One outline pass and one pavement pass across both levels removes
+      // terminal caps and cuts openings through the receiving road's curb.
+      root.CityScene.roadSurfaces(ctx,local,state.roadTypes,scale,0,{shadows:false});
+      paintCorners(ctx,{junctions:[{...j,approaches:j.approaches.map(a=>({...a,level:0}))}]});
+      ctx.restore();
+    }
+  }
   function turnsFor(approach,approaches){
     const incoming=approach.tangent.map(v=>-v),turns=new Set();
     for(const other of approaches){
@@ -55,6 +170,23 @@
     }
     return distance;
   }
+  function approachClearance(arm,junction,roadMap){
+    // A curved merge departs from the main road; extrapolating its almost
+    // parallel endpoint tangent erases hundreds of metres of lane markings.
+    if(!junction.approaches.some(a=>a.level!==arm.level))return clearDistance(arm,junction.approaches);
+    const road=roadMap.get(arm.road),length=measure(road.points).length;
+    const available=arm.direction>0?length-arm.distance:arm.distance;
+    const others=[...new Map(junction.approaches.filter(a=>a.road!==arm.road).map(a=>[a.road,a])).values()];
+    for(let d=2;d<Math.min(120,available);d+=2){
+      const at=sample(road.points,arm.distance+arm.direction*d);
+      if(others.every(other=>{
+        const r=roadMap.get(other.road),near=sample(r.points,nearestDistance(r.points,at.point));
+        const dot=Math.abs(at.tangent[0]*near.tangent[0]+at.tangent[1]*near.tangent[1]);
+        return Math.hypot(at.point[0]-near.point[0],at.point[1]-near.point[1])>other.width/2+arm.width/2*dot+2;
+      }))return Math.max(arm.width/2+2,d);
+    }
+    return Math.min(120,available);
+  }
   function buildPlan(roads,network,roadTypes){
     if(plans.has(network))return plans.get(network);
     const roadMap=new Map(roads.map(r=>[r.id,r])),arrows=[],crosswalks=[],stopLines=[],signals=[],pedestrianSignals=[];
@@ -72,7 +204,7 @@
     for(const junction of junctions){
       for(const arm of junction.approaches){
         const road=roadMap.get(arm.road);if(!road)continue;
-        const length=measure(road.points).length,clearance=clearDistance(arm,junction.approaches);
+        const length=measure(road.points).length,clearance=approachClearance(arm,junction,roadMap);
         const available=arm.direction>0?length-arm.distance:arm.distance;
         // Neighbouring junctions bound the approach; frontage nodes do not.
         let room=available;
@@ -293,20 +425,22 @@
   }
 
   function paint(ctx,state,{scale,selected,inView=()=>true,visible=()=>true,traffic=null,stage='all',vehicles=true,signals=true,levels=[-1,0,1]}){
-    const {roads,network,roadTypes}=state,plan=buildPlan(roads,network,roadTypes);
+    const {roads,network,roadTypes}=state,plan=buildPlan(roads,network,roadTypes),layout=connections(roads,network,roadTypes);
+    const projected=(points,id)=>{const r=layout.roadMap.get(id);return r&&r.level!==0?(points.length===1?[projectPoint(points[0],r,layout)]:projectPath(points,r,layout)):points;};
     const path=points=>{ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));};
-    const local=(item,draw)=>{ctx.save();ctx.translate(...item.point);ctx.rotate(Math.atan2(item.tangent[1],item.tangent[0]));draw();ctx.restore();};
+    const local=(item,draw)=>{ctx.save();ctx.translate(...projected([item.point],item.road)[0]);ctx.rotate(Math.atan2(item.tangent[1],item.tangent[0]));draw();ctx.restore();};
     const arrow=item=>{
-      ctx.save();ctx.translate(...item.point);ctx.rotate(Math.atan2(item.travel[1],item.travel[0]));
+      ctx.save();ctx.translate(...projected([item.point],item.road)[0]);ctx.rotate(Math.atan2(item.travel[1],item.travel[0]));
       ctx.fillStyle=root.CityScene?.material(ctx,'marking',root.CityScene.seed(item.road))||'#f5f1dc';
       for(const polygon of arrowPolygons(item.turns,item.laneWidth)){path(polygon);ctx.closePath();ctx.fill();}ctx.restore();
     };
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
     for(const level of levels){
+      ctx.save();if(level<0)clipUnderground(ctx,roads,roadTypes,inView);
       const visibleRoads=roads.filter(r=>r.level===level&&inView(r.points));
       // Outline every road first, then fill the connected surface. A later
       // road's casing must never draw a barrier across an at-grade junction.
-      if(root.CityScene&&(stage!=='details'||level>0))root.CityScene.roadSurfaces(ctx,visibleRoads,roadTypes,scale,level);
+      if(root.CityScene&&(stage!=='details'||level>0))root.CityScene.roadSurfaces(ctx,visibleRoads.map(r=>surfaceRoad(r,layout)),roadTypes,scale,level);
       else if(!root.CityScene&&stage!=='details')for(const pass of ['outline','surface'])for(const road of visibleRoads){
         const cfg=roadTypes[road.kind],rail=!motorKinds.has(road.kind)&&road.kind!=='path';
         path(road.points);ctx.setLineDash(level<0?[6/scale,4/scale]:[]);
@@ -315,22 +449,27 @@
       }
       ctx.setLineDash([]);
       if(level===0&&stage!=='details'&&root.CityScene)paintCorners(ctx,network);
-      if(stage==='surface')continue;
+      if((level===1||level===0)&&root.CityScene&&stage!=='details'){
+        const joins=layout.joins.filter(j=>j.approaches.some(a=>a.level===(level===1?1:-1))&&inView([[j.point[0]-j.extent,j.point[1]-j.extent],[j.point[0]+j.extent,j.point[1]+j.extent]]));
+        paintConnections(ctx,state,scale,layout,joins);
+        for(const j of level===1?joins:[]){ctx.save();clipJoin(ctx,j);paint(ctx,state,{scale,selected:null,inView,visible,traffic:null,stage:'details',vehicles:false,signals:false,levels:[0]});ctx.restore();}
+      }
+      if(stage==='surface'){ctx.restore();continue;}
       if(scale>=.2){
         ctx.lineWidth=Math.max(.35,.55/scale);ctx.setLineDash([4,6]);
         for(const line of plan.centerlines)if(line.level===level&&inView(line.points)){
           ctx.strokeStyle=root.CityScene?.material(ctx,line.median?'markingYellow':'marking',root.CityScene.seed(line.road))||(line.median?'#e6bf56':'#ecede3');
           if(line.median){
             ctx.setLineDash([]);ctx.lineWidth=Math.max(.18,.4/scale);
-            for(const offset of [-.3,.3]){path(offsetPath(line.points,offset));ctx.stroke();}
+            for(const offset of [-.3,.3]){path(projected(offsetPath(line.points,offset),line.road));ctx.stroke();}
             ctx.lineWidth=Math.max(.35,.55/scale);ctx.setLineDash([4,6]);
-          }else{path(line.points);ctx.stroke();}
+          }else{path(projected(line.points,line.road));ctx.stroke();}
         }
         ctx.setLineDash([]);
       }
       if(level===0&&scale>=.65){
         ctx.strokeStyle='#e2e1d49c';ctx.lineWidth=.14;ctx.setLineDash([1.7,2.2]);
-        for(const line of plan.guides)if(inView(line.points)){path(line.points);ctx.stroke();}
+        for(const line of plan.guides)if(inView(line.points)){path(projected(line.points,line.road));ctx.stroke();}
         ctx.setLineDash([]);
       }
       if(scale>=.45){
@@ -343,19 +482,21 @@
         for(const item of plan.arrows)if(item.level===level&&visible(item.point))arrow(item);
         if(signals)paintSignals(ctx,plan,{scale,visible,traffic,level});
       }
-      for(const car of vehicles?traffic?.vehicles||[]:[])if(car.level===level&&visible(car.point)){
-        if(root.CityScene){root.CityScene.vehicle(ctx,car,scale);continue;}
+      for(const car of vehicles?traffic?.vehicles||[]:[])if((car.level===level||level===1&&upperVehicle(car,layout))&&visible(car.point)){
+        if(undergroundCovered(car,layout,roadTypes))continue;
+        if(root.CityScene){root.CityScene.vehicle(ctx,{...car,point:[car.point[0],car.point[1]-.28*vehicleHeight(car,layout)]},scale);continue;}
         ctx.save();ctx.translate(...car.point);ctx.rotate(car.heading);
         ctx.fillStyle='#203c3240';ctx.fillRect(-2.25+.6,-.95+.6,4.5,1.9);
         ctx.fillStyle=['#f4cf80','#81bcc7','#e8e7df','#d79e81'][car.id%4];ctx.fillRect(-2.25,-.95,4.5,1.9);
         ctx.fillStyle='#405d63';ctx.fillRect(.35,-.7,.8,1.4);
         ctx.fillStyle=car.speed<.2?'#f7604d':'#b66d51';ctx.fillRect(-2.3,-.8,.35,.45);ctx.fillRect(-2.3,.35,.35,.45);ctx.restore();
       }
-      for(const road of visibleRoads)if(road.id===selected){path(road.points);ctx.strokeStyle='#d78b39';ctx.lineWidth=2/scale;ctx.stroke();}
+      for(const road of visibleRoads)if(road.id===selected){path(surfaceRoad(road,layout).points);ctx.strokeStyle='#d78b39';ctx.lineWidth=2/scale;ctx.stroke();}
+      ctx.restore();
     }
     ctx.restore();
   }
-  const api={sample,turnsFor,buildPlan,junctionCorners,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection,paintSignals,paint};
+  const api={connections,nearestDistance,roadHeight,projectPoint,projectPath,surfaceRoad,upperVehicle,vehicleHeight,undergroundCovered,slice,clipJoin,sample,turnsFor,buildPlan,junctionCorners,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection,paintSignals,paint};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.RoadRenderer=api;
 })(typeof window==='undefined'?{}:window);

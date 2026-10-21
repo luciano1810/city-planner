@@ -177,7 +177,7 @@
       offer(r.points[0],'道路端点',1,r.id);offer(r.points.at(-1),'道路端点',1,r.id);
       // A bridge endpoint may land on a ground road; a ground endpoint
       // cannot jump into the middle of an elevated span.
-      if(r.level!==level&&!(level===1&&r.level===0))continue;
+      if(r.level!==level&&!(level!==0&&r.level===0))continue;
       for(let i=1;i<r.points.length;i++){
         const a=r.points[i-1],b=r.points[i],dx=(b[0]-a[0])*sx,dy=(b[1]-a[1])*sy;
         const t=Math.max(0,Math.min(1,((point[0]-a[0])*sx*dx+(point[1]-a[1])*sy*dy)/(dx*dx+dy*dy||1)));

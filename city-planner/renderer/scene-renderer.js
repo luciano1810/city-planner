@@ -306,6 +306,7 @@
   }
   function streetTreesFor(state){
     if(streetTreeCache.has(state.network))return streetTreeCache.get(state.network);
+    const joins=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes).joins;
     const trees=[],occupied=state.parcels.filter(p=>p.building).map(p=>p.building.footprint);
     for(const r of state.roads){
       if(r.level!==0||!['street','avenue'].includes(r.kind))continue;
@@ -317,6 +318,7 @@
         const at=root.RoadRenderer.sample(r.points,d);
         for(const side of [-1,1]){
           const radius=Math.min(r.kind==='avenue'?4.8:3.8,type.radius[0]+rng()*.8),offset=side*(cfg.width/2+(r.kind==='avenue'?3.3:2.35)),point=[at.point[0]-at.tangent[1]*offset,at.point[1]+at.tangent[0]*offset];
+          if(joins.some(j=>Math.hypot(point[0]-j.point[0],point[1]-j.point[1])<j.extent+radius))continue;
           if(occupied.some(points=>inside(point,points)||edgeDistance(point,points)<radius*.7+1))continue;
           trees.push({point,radius,species:type.id,variant:species+Math.floor(rng()*4)*materialCatalog.treeSpecies.length,height:type.height[0]*.7+rng()*3,street:true});
         }
@@ -361,20 +363,33 @@
       for(let i=1;i<4;i++){ctx.beginPath();ctx.arc(0,0,r*i/4,0,Math.PI*2);ctx.stroke();}ctx.fillStyle='#f4f8ef';ctx.beginPath();ctx.arc(-.25,-.25,.65,0,Math.PI*2);ctx.fill();ctx.restore();
     }
   }
-  function roadSurfaces(ctx,roads,types,scale,level){
+  function roadSurfaces(ctx,roads,types,scale,level,{shadows=true}={}){
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
-    if(level>0&&settings.quality!=='map'&&sun().elevation>0)for(const r of roads){ctx.save();ctx.translate(...shadowOffset(6));path(ctx,r.points,false);ctx.lineWidth=types[r.kind].width+4;ctx.strokeStyle=`rgba(36,51,69,${sun().strength})`;ctx.stroke();ctx.restore();}
+    if(shadows&&level>0&&settings.quality!=='map'&&sun().elevation>0)for(const r of roads){
+      const points=r.elevationSamples?r.elevationSamples.map(s=>{const offset=shadowOffset(s.height);return s.point.map((v,i)=>v+offset[i]);}):r.points.map(p=>p.map((v,i)=>v+shadowOffset(6)[i]));
+      path(ctx,points,false);ctx.lineWidth=types[r.kind].width;ctx.strokeStyle=`rgba(36,51,69,${sun().strength})`;ctx.stroke();
+    }
     for(const pass of ['sidewalk','curb','surface'])for(const r of roads){
-      const cfg=types[r.kind],motor=motorKinds.has(r.kind),rail=!motor&&r.kind!=='path',walk=cfg.walk&&level===0&&motor;
-      path(ctx,r.points,false);ctx.setLineDash(level<0?[7/scale,4/scale]:[]);
+      const cfg=types[r.kind],motor=motorKinds.has(r.kind),rail=!motor&&r.kind!=='path',walk=cfg.walk&&r.level===0&&motor;
+      if(pass==='sidewalk'&&!walk)continue;
+      ctx.save();
+      for(const cut of r.mouthClips||[]){
+        ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(...cut[0]);for(const p of cut.slice(1))ctx.lineTo(...p);ctx.closePath();ctx.clip('evenodd');
+      }
+      ctx.lineCap=r.openStart||r.openEnd?'butt':'round';
+      path(ctx,r.points,false);ctx.setLineDash(level<0&&pass==='curb'?[5,4]:[]);
       if(pass==='sidewalk'){
-        if(!walk)continue;ctx.lineWidth=cfg.width+(r.kind==='avenue'?9:6);ctx.strokeStyle=material(ctx,'paving',seed(r.id));
+        ctx.lineWidth=cfg.width+(r.kind==='avenue'?9:6);ctx.strokeStyle=material(ctx,'paving',seed(r.id));
       }else if(pass==='curb'){
         ctx.lineWidth=Math.max(cfg.width+1.1,2/scale);ctx.strokeStyle=material(ctx,rail?'gravel':'curb',seed(r.id));
       }else{
         ctx.lineWidth=Math.max(cfg.width,rail?1.5/scale:1/scale);ctx.strokeStyle=material(ctx,motor?'asphalt':rail?'gravel':'paving',seed(r.id));
       }
       ctx.stroke();
+      if(r.openStart||r.openEnd)for(const [p,open] of [[r.points[0],r.openStart],[r.points.at(-1),r.openEnd]])if(!open){
+        ctx.beginPath();ctx.arc(...p,ctx.lineWidth/2,0,Math.PI*2);ctx.fillStyle=ctx.strokeStyle;ctx.fill();
+      }
+      ctx.restore();
     }
     ctx.setLineDash([]);ctx.restore();
   }
@@ -401,7 +416,7 @@
       for(let d=16;d<length-8;d+=32){
         if(junctions.some(j=>Math.abs(d-j)<cfg.width+10))continue;
         const at=root.RoadRenderer.sample(road.points,d),n=[-at.tangent[1],at.tangent[0]];
-        for(const side of [-1,1])lamps.push({point:[at.point[0]+n[0]*(cfg.width/2+1.8)*side,at.point[1]+n[1]*(cfg.width/2+1.8)*side],arm:[-n[0]*1.5*side,-n[1]*1.5*side]});
+        for(const side of [-1,1])lamps.push({base:root.RoadRenderer.roadHeight(road,d,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes)),point:[at.point[0]+n[0]*(cfg.width/2+1.8)*side,at.point[1]+n[1]*(cfg.width/2+1.8)*side],arm:[-n[0]*1.5*side,-n[1]*1.5*side]});
       }
     }
     for(const f of state.facilities||[])if(f.kind==='plaza'&&f.points&&!f.blockCommon){
@@ -441,7 +456,7 @@
     for(const lamp of lamps){
       const [x,y]=lamp.point,[dx,dy]=lamp.arm;
       glow(ctx,x+dx,y+dy,lamp.radius||13,'255,209,132',.3*night);
-      const lampY=y+dy-(solid?(lamp.height||5.1)*root.CityScene3D.tilt:0);
+      const lampY=y+dy-.28*((lamp.base||0)+(solid?(lamp.height||5.1):0));
       glow(ctx,x+dx,lampY,2.2,'255,231,174',.9*night);
       ctx.fillStyle=`rgba(255,240,195,${night})`;ctx.beginPath();ctx.arc(x+dx,lampY,.4,0,Math.PI*2);ctx.fill();
     }
@@ -462,8 +477,8 @@
         }
       }
     }
-    for(const car of traffic?.vehicles||[])if(visible(car.point)){
-      ctx.save();ctx.translate(...car.point);ctx.rotate(car.heading);
+    for(const car of traffic?.vehicles||[])if(visible(car.point)&&!root.RoadRenderer.undergroundCovered(car,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes),state.meta.roadTypes)){
+      ctx.save();const z=root.RoadRenderer.vehicleHeight(car,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes));ctx.translate(car.point[0],car.point[1]-.28*z);ctx.rotate(car.heading);
       const style=variation.vehicle(car.id),front=style.length*style.scale*.46,side=style.width*style.scale*.34;
       for(const y of [-side,side]){
         ctx.save();ctx.globalAlpha=night;ctx.drawImage(headlight(),front,y-2.2,10,4.4);ctx.restore();

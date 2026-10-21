@@ -121,7 +121,12 @@ class ControlledEconomyTests(unittest.TestCase):
         c=City(flat_world(True));c.s['settings']['autoGrow']=False
         road(c,[[800,1600],[1750,1600]]);road(c,[[2250,1600],[3200,1600]])
         east=next(p for p in c.s['parcels'] if p['center'][0]>2600);complete(c,east,'office',200)
-        c.rebuild();a=City.restore(c.snapshot());b=City.restore(c.snapshot());road(b,[[1750,1600],[2250,1600]],level=1)
+        c.rebuild();a=City.restore(c.snapshot());b=City.restore(c.snapshot())
+        # New cross-level roads require the same explicit endpoint targets
+        # produced by magnetic snapping in the editor.
+        b.command(dict(type='road',level=1,points=[[1750,1600],[2250,1600]],snap=False,
+                       connections=[dict(road=b.s['roads'][0]['id'],point=[1750,1600]),
+                                    dict(road=b.s['roads'][1]['id'],point=[2250,1600])]))
         for branch in (a,b):
             for month in range(12):branch.s['month']+=1;branch.update_market()
         west=next(p['id'] for p in a.s['parcels'] if p['center'][0]<1400)

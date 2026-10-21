@@ -130,6 +130,13 @@
         ctx.setLineDash([3/scale,4/scale]);ctx.strokeStyle='#fafaf7';ctx.lineWidth=1/scale;ctx.stroke();ctx.setLineDash([]);
       }
     }
+    if(root.RoadRenderer?.connections)for(const j of root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes).joins){
+      const ids=new Set(j.approaches.map(a=>a.road)),joined=roads.filter(r=>ids.has(r.road.id)&&!r.rail);
+      ctx.save();ctx.beginPath();ctx.arc(...j.point,Math.max(j.extent,8/scale),0,Math.PI*2);ctx.clip();
+      for(const item of joined){path(ctx,item.road.points);ctx.lineWidth=(item.width+1.1)/scale;ctx.strokeStyle=item.edge;ctx.stroke();}
+      for(const item of joined){path(ctx,item.road.points);ctx.lineWidth=item.width/scale;ctx.strokeStyle=item.fill;ctx.stroke();}
+      ctx.restore();
+    }
     for(const {road,width,major,rail} of roads){
       if(road.id===selected){path(ctx,road.points);ctx.strokeStyle='#438de4';ctx.lineWidth=(width+2)/scale;ctx.stroke();}
       if(rail||scale<(major?.055:.16)||!road.name||road.name===state.meta.roadTypes[road.kind]?.name)continue;
