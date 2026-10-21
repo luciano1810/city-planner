@@ -2,6 +2,7 @@
 import copy
 import gzip
 import json
+import math
 import os
 import re
 import tempfile
@@ -10,10 +11,11 @@ import uuid
 import hashlib
 from pathlib import Path
 
-from .engine import City, MODEL_VERSION
+from .engine import City, MODEL_VERSION, number
 from height_format import MAX_SAVE_BYTES
 from .urban import aggregate_flows
 from .reporting import metric_definitions
+from .simulation import month_days
 
 
 class CityService:
@@ -83,7 +85,10 @@ class CityService:
             if action == 'scenario':
                 from .scenario import valley_world,build_valley,build_small_blocks
                 small=payload.get('variant')=='blocks'
-                if payload.get('mature'):
+                if payload.get('variant') == 'architectural':
+                    from .visual_case import build_visual_case
+                    city = build_visual_case()
+                elif payload.get('mature'):
                     root=Path(__file__).resolve().parents[3]/'docs'/'experiments'
                     path=root/('blocks-v8-final.json.gz' if small else 'valley-v5-final.json.gz')
                     if not small and not path.exists():path=root/'valley-v4-final.json.gz'
@@ -134,6 +139,37 @@ class CityService:
                 raise ValueError('城市会话不存在，请从存档恢复')
             if action == 'state':
                 return city.view()
+            if action == 'clock':
+                minute=number(payload.get('minute'),0,1439,'模拟时刻',True)
+                city.s['sceneTimeSeconds']=math.floor(city.s['sceneTimeSeconds']/86400)*86400+minute*60.
+                clock=city.s['simulation']
+                clock['monthSeconds']=math.floor(clock['monthSeconds']/86400)*86400+minute*60.
+                return dict(sceneTimeSeconds=city.s['sceneTimeSeconds'],simulation=copy.deepcopy(clock))
+            if action == 'simulate':
+                from .simulation import advance
+                result=advance(city,payload.get('seconds',0),payload.get('speed'),
+                               payload.get('mode','observed'),payload.get('reset',False))
+                if result['monthsAdvanced']:
+                    try:self.autosave(city)
+                    except OSError as exc:result['saveWarning']='自动保存失败，请检查磁盘空间：'+str(exc)
+                return result
+            if action == 'traffic':
+                from .signals import LiveTraffic
+                mode=payload.get('mode','observed')
+                if mode not in ('observed','test'):raise ValueError('未知车流来源')
+                seconds=number(payload.get('seconds',0),0,10,'实景秒数')
+                if not isinstance(payload.get('reset',False),bool):raise ValueError('无效的重置参数')
+                if city.live_traffic is None or payload.get('reset') or city.live_traffic.mode!=mode:
+                    city.live_traffic=LiveTraffic(city,mode)
+                result=city.live_traffic.advance(seconds)
+                city.s['sceneTimeSeconds']+=seconds
+                # Compatibility endpoint for existing clients. New clients use
+                # simulate, which also settles crossed calendar months.
+                city.s['simulation']['elapsedSeconds']=city.live_traffic.clock
+                duration=month_days(city.s['month'])*86400
+                city.s['simulation']['monthSeconds']=(city.s['simulation']['monthSeconds']+seconds)%duration
+                result['sceneTimeSeconds']=city.s['sceneTimeSeconds']
+                return result
             if action == 'command':
                 if payload.get('command',{}).get('type') in ('delete','road_edit','road_update','renewal_start','renewal_cancel'):
                     self.autosave(city, '编辑前检查点')
@@ -166,6 +202,9 @@ class CityService:
                 return preview(city, payload.get('command',{}))
             if action == 'preview':
                 return city.preview_road(payload.get('command',{}))
+            if action == 'special_preview':
+                from .special_buildings import preview
+                return preview(city,payload.get('command',{}))
             if action == 'query':
                 return city.query(payload)
             if action == 'summary':

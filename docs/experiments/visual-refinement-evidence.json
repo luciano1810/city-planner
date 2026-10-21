@@ -1,0 +1,204 @@
+{
+  "solidRenderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "calls": 107,
+    "triangles": 187816,
+    "meshes": 101,
+    "windows": 1991,
+    "failure": null
+  },
+  "materialInventory": {
+    "asphalt": 4,
+    "paving": 8,
+    "roof": 8,
+    "roofTiles": 4,
+    "metal": 4,
+    "facade": 12,
+    "glass": 4,
+    "grass": 4,
+    "gravel": 4,
+    "water": 4,
+    "soil": 4,
+    "curb": 4,
+    "marking": 4,
+    "markingYellow": 4,
+    "carPaint": 12
+  },
+  "treeSpecies": [
+    {
+      "id": "oak",
+      "name": "阔冠橡树"
+    },
+    {
+      "id": "maple",
+      "name": "绿枫"
+    },
+    {
+      "id": "plane",
+      "name": "悬铃木"
+    },
+    {
+      "id": "street-smallleaf",
+      "name": "小叶行道树"
+    },
+    {
+      "id": "london-plane",
+      "name": "伦敦悬铃木"
+    },
+    {
+      "id": "english-oak",
+      "name": "英国橡树"
+    },
+    {
+      "id": "elm",
+      "name": "榆树"
+    },
+    {
+      "id": "linden",
+      "name": "椴树"
+    },
+    {
+      "id": "ginkgo",
+      "name": "银杏"
+    },
+    {
+      "id": "japanese-maple",
+      "name": "红枫"
+    },
+    {
+      "id": "cherry",
+      "name": "樱花树"
+    },
+    {
+      "id": "birch",
+      "name": "白桦"
+    },
+    {
+      "id": "scots-pine",
+      "name": "欧洲赤松"
+    },
+    {
+      "id": "blue-spruce",
+      "name": "蓝云杉"
+    },
+    {
+      "id": "fir",
+      "name": "冷杉"
+    },
+    {
+      "id": "cypress",
+      "name": "意大利柏"
+    },
+    {
+      "id": "willow",
+      "name": "垂柳"
+    },
+    {
+      "id": "palm",
+      "name": "棕榈"
+    },
+    {
+      "id": "magnolia",
+      "name": "广玉兰"
+    },
+    {
+      "id": "crape-myrtle",
+      "name": "紫薇"
+    }
+  ],
+  "plantedSpecies": [
+    "oak",
+    "maple",
+    "plane",
+    "street-smallleaf",
+    "elm",
+    "linden",
+    "cherry",
+    "scots-pine",
+    "birch",
+    "crape-myrtle",
+    "ginkgo",
+    "magnolia",
+    "japanese-maple",
+    "fir",
+    "london-plane",
+    "english-oak",
+    "cypress",
+    "willow"
+  ],
+  "assetsLoaded": true,
+  "errors": [],
+  "timings": [
+    16.699999999254942,
+    13.900000002235174,
+    26.399999998509884,
+    12,
+    14.699999999254942,
+    11,
+    16.100000001490116,
+    17.399999998509884,
+    14.900000002235174,
+    22.599999997764826,
+    23.800000000745058,
+    18.5,
+    17.400000002235174,
+    15.799999997019768,
+    23.5,
+    20,
+    17.400000002235174,
+    15.699999999254942,
+    16.899999998509884,
+    29.200000002980232,
+    15.799999997019768,
+    17.5,
+    19.5,
+    18.300000000745058,
+    17.600000001490116
+  ],
+  "first": {
+    "traffic": 11.69,
+    "scene": 32411.690500000004,
+    "cars": 0
+  },
+  "midnight": {
+    "time": 86416.70000000022,
+    "clock": "00:00 · 夜晚",
+    "traffic": 328.641
+  },
+  "validationCars": 20,
+  "geometryEvidence": {
+    "vehicleHeads": 95,
+    "pedestrianHeads": 190,
+    "crosswalks": 95,
+    "buildings": 161,
+    "podiums": 143,
+    "regularVolumes": 220
+  },
+  "pedestrianPhase": {
+    "id": "road:0:2354.37:2437.14",
+    "lamps": {
+      "r-5:-1": "red",
+      "r-10:1": "red",
+      "r-5:1": "red",
+      "r-10:-1": "red"
+    },
+    "phase": "pedestrian",
+    "stage": 4,
+    "remaining": 12.1,
+    "pedestrian": "green",
+    "point": [
+      2354.37,
+      2437.14
+    ]
+  },
+  "occupiedBuildingDataPreserved": true,
+  "pauseVerified": true,
+  "timeScrubPreservesTraffic": true,
+  "speedSlidersSynchronized": true,
+  "settings": {
+    "quality": "high",
+    "labels": false
+  }
+}

@@ -25,6 +25,7 @@
 .city-tool svg{width:18px;height:18px}
 .city-tool span:last-child{flex:1;text-align:left}
 .city-fields{display:grid;gap:12px;margin:14px 0}
+#city-special-controls[hidden]{display:none}
 .city-fields label{display:grid;gap:6px;font-size:12px;color:var(--city-muted)}
 .city-field{width:100%;min-height:36px;background:white;border:1px solid #d4dfd1;border-radius:5px;padding:8px;color:var(--city-ink);font-size:12px}
 .city-fields .paired{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -49,7 +50,12 @@
 .city-date small{font-size:11px;color:var(--city-muted);letter-spacing:0;display:block;margin-top:4px}
 .city-play{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .city-play .city-btn{padding:8px 10px}
-.city-play select{max-width:80px}
+.city-simulation-speed{width:230px;padding:0 12px}
+.city-simulation-speed label{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--city-muted);margin-bottom:7px}
+.city-simulation-speed output{color:var(--city-green);font-weight:600;font-variant-numeric:tabular-nums}
+.city-simulation-speed input{display:block;width:100%;height:5px;accent-color:var(--city-green);cursor:pointer}
+.city-simulation-speed .signal-speed-labels{margin-top:6px}
+.city-simulation-note{flex-basis:100%;margin:0;font-size:11px;line-height:1.6;color:var(--city-muted)}
 .city-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .city-kpi{padding:12px 14px;background:var(--city-paper);border:1px solid var(--city-line);border-radius:7px;min-width:0}
 .city-kpi>span{display:block;font-size:11px;color:var(--city-muted)}
@@ -105,3 +111,11 @@
 .renewal-key{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;margin:8px 0 16px}.renewal-notice{padding:10px 12px;background:#f5eddf;border-left:3px solid #b88248;font-size:12px;line-height:1.7}.renewal-stages{padding-left:24px}.renewal-stages li{padding:9px 0;border-bottom:1px solid var(--city-line)}.renewal-stages small{display:block;color:var(--city-muted);margin-top:5px}#city-renewal-list{max-height:240px;overflow:auto;margin-top:10px}#renewal-commit{margin-top:18px;width:100%}
 
 .renewal-phase-0{color:#b88248}.renewal-phase-1{color:#668f9b}.renewal-phase-2{color:#8f7ba4}.renewal-phase-3{color:#759066}
+
+.signal-panel{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--city-line)}
+.signal-panel h3{margin-top:0}.signal-panel .city-row{align-items:center}.signal-panel #signal-speed{width:100%;min-width:0}.signal-panel details{margin-top:12px}.signal-test-note{color:#986a36!important}
+.signal-hud{position:absolute;right:18px;top:64px;width:230px;padding:15px 16px;background:#f8faf1f5;border:1px solid #ccd8c6;border-radius:10px;color:#304a39;box-shadow:0 6px 24px #203d2920;pointer-events:none;z-index:3}
+.signal-hud[hidden]{display:none}.signal-hud-heading{display:flex;align-items:center;gap:8px;font-size:12px}.signal-hud-heading>span:last-child{margin-left:auto;font-variant-numeric:tabular-nums;font-size:11px;color:#708370}
+.signal-dot{width:8px;height:8px;border-radius:50%;background:#d57f69;box-shadow:0 0 0 4px #d57f6914}.signal-dot.green,.signal-dot.pedestrian{background:#5d9c70;box-shadow:0 0 0 4px #5d9c7017}.signal-dot.yellow{background:#d1a945;box-shadow:0 0 0 4px #d1a94517}
+.signal-hud-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.signal-hud-stats div{display:flex;flex-direction:column;gap:5px}.signal-hud-stats span{font-size:10px;color:#71826d}.signal-hud-stats b{font-size:25px;font-weight:500;font-variant-numeric:tabular-nums}.signal-hud p{font-size:10px;color:#78856e;margin:13px 0 0;line-height:1.6}
+.signal-speed-control{margin:16px 0 12px}.signal-speed-control label{display:flex;justify-content:space-between;align-items:center;color:#62755e;font-size:11px;margin-bottom:9px}.signal-speed-control output{color:#355b41;font-weight:600;font-variant-numeric:tabular-nums}.signal-speed-control input{display:block;width:100%;height:5px;accent-color:#63815a;cursor:pointer}.signal-speed-labels{display:flex;justify-content:space-between;font-size:10px;color:#85907d;margin-top:8px}

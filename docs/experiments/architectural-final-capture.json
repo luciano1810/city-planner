@@ -1,0 +1,25 @@
+{
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "calls": 135,
+    "triangles": 256330,
+    "meshes": 127,
+    "windows": 230,
+    "failure": null
+  },
+  "clock": 36000,
+  "vehicles": 71,
+  "canvas": [
+    1616,
+    1018
+  ],
+  "states": [],
+  "trafficAfter": {
+    "note": "Clock, playback, pause and quality switching verified in architectural-evidence.json"
+  },
+  "geometryPreserved": true,
+  "builtInCase": true,
+  "errors": []
+}

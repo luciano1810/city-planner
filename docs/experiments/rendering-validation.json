@@ -1,0 +1,18 @@
+{
+  "javascript_tests": 38,
+  "python_tests": 39,
+  "errors": [],
+  "browser": "Chromium with SwiftShader",
+  "captures": [
+    "architectural-day.png",
+    "architectural-night.png"
+  ],
+  "source_files": {
+    "renderer/scene-3d.js": "4e959d26b6f8165ab33b74e5ea4b1586c5be2b93e32d009e12f6a3606dd7c431",
+    "renderer/scene-renderer.js": "2fe47f53a92ccf80914c0f1e8102c6377fbbbe22d1d0250b9a0cc41ce3d7cf07",
+    "renderer/material-catalog.js": "01470631c6a51dbfce30a45c0596887535e3d8dbb51072b4f7da42f3e1e518c6",
+    "renderer/road-renderer.js": "d33c05a16804cc84b97ee6fc02eef6ee5a96e873b236df4c631b409609347cb4",
+    "renderer/city-geometry.js": "fc43db6760012bb7adef83516aaf8c74eec2a84a4d9dc1a8248adb262dcd8220",
+    "backend/city/visual_case.py": "54149b2f487090a95155c1fcf3247a1fa73bfbb7df0f6671f3147f355be746f6"
+  }
+}

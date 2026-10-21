@@ -1,0 +1,93 @@
+{
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "calls": 146,
+    "triangles": 259938,
+    "meshes": 127,
+    "windows": 230,
+    "failure": null
+  },
+  "clock": 36000,
+  "vehicles": 83,
+  "canvas": [
+    1616,
+    1018
+  ],
+  "states": [
+    {
+      "time": 27000,
+      "light": {
+        "hour": 7.5,
+        "azimuth": 22.5,
+        "elevation": 22.961005941905388,
+        "daylight": 1,
+        "night": 0,
+        "strength": 0.28,
+        "warmth": 0.02441527052052585
+      },
+      "render": {
+        "engine": "WebGL / Three.js r180",
+        "ambientOcclusion": true,
+        "vehicleAtlas": true,
+        "calls": 135,
+        "triangles": 253688,
+        "meshes": 127,
+        "windows": 230,
+        "failure": null
+      }
+    },
+    {
+      "time": 64200,
+      "light": {
+        "hour": 17.833333333333332,
+        "azimuth": 177.49999999999997,
+        "elevation": 2.6171632419201907,
+        "daylight": 0.5092492606571447,
+        "night": 0.036777734590807354,
+        "strength": 0.029475760245666564,
+        "warmth": 0.1662491412092061
+      },
+      "render": {
+        "engine": "WebGL / Three.js r180",
+        "ambientOcclusion": true,
+        "vehicleAtlas": true,
+        "calls": 135,
+        "triangles": 253688,
+        "meshes": 127,
+        "windows": 230,
+        "failure": null
+      }
+    },
+    {
+      "time": 75600,
+      "light": {
+        "hour": 21,
+        "azimuth": 225,
+        "elevation": -42.426406871192825,
+        "daylight": 0,
+        "night": 1,
+        "strength": 0,
+        "warmth": 1.5224919145200115e-8
+      },
+      "render": {
+        "engine": "WebGL / Three.js r180",
+        "ambientOcclusion": true,
+        "vehicleAtlas": true,
+        "calls": 135,
+        "triangles": 253688,
+        "meshes": 127,
+        "windows": 230,
+        "failure": null
+      }
+    }
+  ],
+  "trafficAfter": {
+    "traffic": 97.254,
+    "scene": 75637.25399999991
+  },
+  "geometryPreserved": true,
+  "builtInCase": true,
+  "errors": []
+}

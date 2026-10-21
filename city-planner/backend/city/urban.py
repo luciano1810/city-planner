@@ -12,6 +12,7 @@ from .geometry import ROAD_TYPES, stable_id, curve_points, building_footprint
 from .planning import plan_streets, grow_block_streets, occupancy_index, street_extension_ready
 
 from .parameters import POLICY
+from .auto_facilities import sensitive_site_safe
 from .blocks import block_walkways
 
 
@@ -120,7 +121,8 @@ def grow_public_spaces(city):
         choices=[p for p in city.s['parcels'] if p['connected'] and not p.get('renewalProject') and not p.get('building') and not p.get('openSpace') and p['use']!='protected'
             and not p.get('blockCommon') and (not p.get('block') or p.get('blockLayout')=='single')
             and all(math.dist(p['center'],f['point'])>=separation for f in existing)
-            and (kind=='plaza' or p.get('businessCore',0)<.72)]
+            and (kind=='plaza' or p.get('businessCore',0)<.72)
+            and (kind not in ('school','clinic') or sensitive_site_safe(city,Polygon(p['points'])))]
         if not choices:continue
         def score(p):
             f=p['terrain']

@@ -6,6 +6,7 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 from .geometry import stable_id,building_footprint
 from .routing import shortest_paths
+from .auto_facilities import sensitive_site_safe
 
 
 def opportunity_fields(city,employers,homes,facilities):
@@ -35,6 +36,7 @@ def opportunity_fields(city,employers,homes,facilities):
         for source,f in fields.items():
             if min(public.get(source,math.inf),car.get(source,math.inf)+parking)<=budget:f['accessWorkers']+=count
     for facility in facilities:
+        if facility.get('capacity',0)<=0:continue
         public,_=shortest_paths(reverse['public'],facility['id'])
         for pid,f in fields.items():
             t=public.get(pid,math.inf)
@@ -198,6 +200,7 @@ def select_projects(city,uses,style):
             warehouse=(.2+(1-central)**2*1.8+p.get('industryCluster',0)+hub*2)/(1+freight/25+terrain['slope']*18+p['landValue']/1000))
         for use,score in scores.items():
             if p['use'] in uses and p['use']!=use:continue
+            if use=='residential' and not sensitive_site_safe(city,Polygon(p['points'])):continue
             if use in ('industrial','warehouse') and freight>=120:continue
             rng=random.Random(stable_id('',(p['id'],use,'site')))
             # Persistent micro-site variation breaks identical rows without

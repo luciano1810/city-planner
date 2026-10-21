@@ -14,7 +14,7 @@ import numpy as np
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 
-from .geometry import ROAD_TYPES, TRANSIT_TYPES, Terrain, RoadConflict, make_network, parcels_for, building_footprint, curve_points, group, stable_id
+from .geometry import ROAD_TYPES, TRANSIT_TYPES, Terrain, RoadConflict, make_network, parcels_for, building_footprint, curve_points, group, stable_id, road_contacts
 from .routing import shortest_paths, reconstruct
 from .development import update_location_context, select_projects, opportunity_fields, desired_floors, development_targets, planned_supply
 from .urban import POLICY, grow_lanes, grow_public_spaces, building_style, update_entrances, update_firms, spatial_summary, clustered_districts, detailed_metrics, observe_changes, aggregate_flows, accessibility_by_group
@@ -25,8 +25,11 @@ from .regional import rebuild_regional, assign_regional_passengers, assign_freig
 from .blocks import prepare_blocks, grow_block_commons
 
 from . import renewal
+from . import signals
+from . import simulation
+from . import special_buildings, auto_facilities
 
-MODEL_VERSION = 'shanhai-city-9'
+MODEL_VERSION = 'shanhai-city-10'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
 
 
@@ -60,11 +63,14 @@ class City:
                       treasury=100000000., constructionCost=0., maintenance=0., revenue=0.,
                       pendingHousing=0, movedIn=0, movedOut=0, relocated=0, stats={})
         self.s['gateway']=None
+        self.s['sceneTimeSeconds']=9*3600.
+        self.s['simulation']=simulation.initial_state()
         self.s.update(firms=[], localPaths=[], growthAttempts=[], districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
         self.s.update(streetPlans=[],plannedBlocks=0,regionalServices=[],regionalFlows=[],growthCenters=[],blockLayouts=[],renewals=[])
         self.undo, self.redo = [], []
         self.network = make_network([], [], self.terrain)
         self.paths, self.line_segments, self.graphs = [], {}, {}
+        self.live_traffic = None
         self.rebuild()
         self.summarize()
 
@@ -89,7 +95,8 @@ class City:
 
     def runtime(self):
         return copy.deepcopy(dict(edges={e['id']: {k:e[k] for k in ('time','traffic','ratio')} for e in self.network['edges']},
-                                  trips=getattr(self,'trips',[]), paths=self.paths))
+                                  trips=getattr(self,'trips',[]), paths=self.paths,
+                                  liveTraffic=self.live_traffic.snapshot() if self.live_traffic else None))
 
     def restore_runtime(self, runtime):
         for edge in self.network['edges']:
@@ -98,13 +105,21 @@ class City:
         self.build_graphs()
         self.trips=copy.deepcopy(runtime.get('trips',[]))
         self.paths=copy.deepcopy(runtime.get('paths',[]))
+        if runtime.get('liveTraffic'):
+            if not isinstance(runtime['liveTraffic'],dict):raise ValueError('无效的路口实景存档')
+            self.live_traffic=signals.LiveTraffic(self,runtime['liveTraffic'].get('mode','observed'))
+            self.live_traffic.restore(runtime['liveTraffic'])
 
     @classmethod
     def restore(cls, data):
-        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8'):
+        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9'):
             raise ValueError('存档格式或模型版本不受支持')
         city = cls(data['terrain'], data['state']['name'])
         s = copy.deepcopy(data['state'])
+        s['sceneTimeSeconds']=number(s.get('sceneTimeSeconds',9*3600.),0,1e12,'城市时钟')
+        s.setdefault('simulation',simulation.initial_state(s['sceneTimeSeconds'],
+            (data.get('runtime',{}).get('liveTraffic') or {}).get('seconds',0.)))
+        simulation.validate(s['simulation'],s['month'])
         old_model=s.get('version')
         for key in ('firms','localPaths','growthAttempts','districtCells','policy','annual','accessibilityGroups','migrationFlows','streetPlans','plannedBlocks','regionalServices','regionalFlows','growthCenters','blockLayouts','renewals'):
             s.setdefault(key,copy.deepcopy(city.s[key]))
@@ -120,9 +135,10 @@ class City:
         unclassified=s['constructionCost']-sum(accounts.values())
         if unclassified<-.01: raise ValueError('建设分项支出超过累计支出')
         if unclassified>.01: accounts['历史建设（未分项）']=accounts.get('历史建设（未分项）',0)+unclassified
-        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8'):
+        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9'):
             s['version']=MODEL_VERSION
-            s['migrationNote']='已迁移到模型 9；保留既有建筑、街区与校准值，新增分期街区更新与建筑翻新'
+            s['policy']['version']=POLICY['version']
+            s['migrationNote']='已迁移到模型 10；保留既有建筑、街区与校准值，新增信号等待、路口配时与实景交通'
             s['policy']['version']=POLICY['version']
         required = set(city.s)
         if not required <= set(s) or s['version'] != MODEL_VERSION:
@@ -180,6 +196,12 @@ class City:
         city.s = s
         city.parcelmap = pm
         renewal.validate(city)
+        special_buildings.validate(city)
+        for facility in s['facilities']:
+            if facility['kind'] in auto_facilities.CATALOG:
+                auto_facilities.facility_architecture.ensure(facility)
+        from .visual_case import upgrade_visual_layout
+        upgrade_visual_layout(city)
         city.rng.setstate(tuples(data['random']))
         city.rebuild(regenerate=False)
         city.restore_runtime(data.get('runtime',{}))
@@ -203,12 +225,18 @@ class City:
             self.s['parcels'] = parcels_for(self.s['roads'], self.s['parcels'], self.terrain,plans,affected)
             self._parcel_roads=current
             self.s['geometryUpdate']=dict(changedRoads=len(changed),recomputedRoads=len(affected),totalRoads=len(current))
+        special_buildings.reserve(self)
         self.network = make_network(self.s['roads'], self.s['stops'], self.terrain,self.s['parcels'])
+        signals.configure(self.network,self.s['policy'])
+        self.live_traffic = None
         for stop in self.s['stops']:
             attachment = self.network['stops'].get(stop['id'])
             stop['connected'] = bool(attachment and attachment['access'])
             if attachment:
                 stop['point'] = attachment['point']
+        for f in self.s['facilities']:
+            if f.get('stop'):
+                f['railConnected'] = bool(self.network['stops'].get(f['stop']))
         self.parcelmap = {p['id']: p for p in self.s['parcels']}
         for p in self.s['parcels']:
             p.setdefault('terrain',self.terrain.features(Polygon(p['points'])))
@@ -250,9 +278,11 @@ class City:
                 for a,b in [(e['a'],e['b']), (e['b'],e['a'])]:
                     self.add(walk,a,b,e.get('walkTime',e['length']/80)*80/self.s['policy']['walkingMetersPerMinute'],'walk',e['id'],length=e['length'])
             if e['kind'] in DRIVABLE_ROADS:
-                self.add(drive,e['a'],e['b'],e['time'],'car',e['id'],length=e['length'])
+                delay=e.get('signalDelayForward',0)
+                self.add(drive,e['a'],e['b'],e['time']+delay,'car',e['id'],length=e['length'],signalDelay=delay)
                 if not e['oneway']:
-                    self.add(drive,e['b'],e['a'],e['time'],'car',e['id'],length=e['length'])
+                    delay=e.get('signalDelayReverse',0)
+                    self.add(drive,e['b'],e['a'],e['time']+delay,'car',e['id'],length=e['length'],signalDelay=delay)
             if e['kind'] in rails:
                 for a,b in [(e['a'],e['b']), (e['b'],e['a'])]:
                     self.add(rails[e['kind']],a,b,e['time'],e['kind'],e['id'],length=e['length'])
@@ -264,16 +294,19 @@ class City:
                 for source,target in [(p['id'],node),(node,p['id'])]:
                     self.add(walk,source,target,distance/max(1,self.edge_map[a['edge']]['length'])*self.edge_map[a['edge']].get('walkTime',distance/80)*80/self.s['policy']['walkingMetersPerMinute']+p.get('accessLength',math.dist(p.get('entrance',p['center']),p['frontage']))/self.s['policy']['walkingMetersPerMinute']*(1+p['terrain']['slope']*5),'walk',length=distance+p.get('accessLength',math.dist(p.get('entrance',p['center']),p['frontage'])))
             speed = ROAD_TYPES[a['kind']]['speed']/max(1,self.edge_map[a['edge']]['time']/max(.0001,self.edge_map[a['edge']]['length']/1000/ROAD_TYPES[a['kind']]['speed']*60))
-            self.add(drive,p['id'],a['b'],a['db']/1000/speed*60+.5,'car',a['edge'],length=a['db'])
+            delay=self.edge_map[a['edge']].get('signalDelayForward',0)
+            self.add(drive,p['id'],a['b'],a['db']/1000/speed*60+.5+delay,'car',a['edge'],length=a['db'],signalDelay=delay)
             self.add(drive,a['a'],p['id'],a['da']/1000/speed*60+.5,'car',a['edge'],length=a['da'])
             if not a['oneway']:
-                self.add(drive,p['id'],a['a'],a['da']/1000/speed*60+.5,'car',a['edge'],length=a['da'])
+                delay=self.edge_map[a['edge']].get('signalDelayReverse',0)
+                self.add(drive,p['id'],a['a'],a['da']/1000/speed*60+.5+delay,'car',a['edge'],length=a['da'],signalDelay=delay)
                 self.add(drive,a['b'],p['id'],a['db']/1000/speed*60+.5,'car',a['edge'],length=a['db'])
         for path in self.s.get('localPaths',[]):
             if path['kind']=='neighbourhood':
                 for a,b in [(path['parcel'],path['target']),(path['target'],path['parcel'])]:
                     self.add(walk,a,b,path['minutes']*80/self.s['policy']['walkingMetersPerMinute'],'walk',path['id'],length=path['length'])
         for facility in self.s['facilities']:
+            facility.pop('accessPath',None)
             # Parcel-based facilities use their actual reserved entrance. A
             # nearest-road shortcut can otherwise pass through another site.
             parcel=self.parcelmap.get(facility.get('parcel'))
@@ -288,24 +321,28 @@ class City:
             facility['connected']=False
             if not candidates:
                 continue
-            e=min(candidates,key=lambda e:(LineString(e['points']).distance(Point(facility['point'])),e['id']))
+            access_point=facility.get('accessPoint',facility['point'])
+            e=min(candidates,key=lambda e:(LineString(e['points']).distance(Point(access_point)),e['id']))
             shape=LineString(e['points'])
-            d=shape.project(Point(facility['point']))
+            d=shape.project(Point(access_point))
             q=list(shape.interpolate(d).coords[0])
-            connector=LineString([q,facility['point']])
+            connector=LineString([q,access_point])
             if connector.length>200 or (connector.length>1 and not self.terrain.buildable(connector.buffer(.1),1)):
                 continue
             facility['connected']=True
+            if special_buildings.special(facility):facility['accessPath']=[q,access_point]
             for node,distance in [(e['a'],d),(e['b'],e['length']-d)]:
                 for a,b in [(facility['id'],node),(node,facility['id'])]:
                     self.add(walk,a,b,(distance+connector.length)/self.s['policy']['walkingMetersPerMinute'],'walk',length=distance+connector.length)
             # Drive to the road-side access, with parking included by route().
             if e['kind']!='path':
                 speed=ROAD_TYPES[e['kind']]['speed']
-                self.add(drive,facility['id'],e['b'],(e['length']-d)/1000/speed*60+.5,'car',e['id'],length=e['length']-d)
+                delay=e.get('signalDelayForward',0)
+                self.add(drive,facility['id'],e['b'],(e['length']-d)/1000/speed*60+.5+delay,'car',e['id'],length=e['length']-d,signalDelay=delay)
                 self.add(drive,e['a'],facility['id'],d/1000/speed*60+.5,'car',e['id'],length=d)
                 if not e['oneway']:
-                    self.add(drive,facility['id'],e['a'],d/1000/speed*60+.5,'car',e['id'],length=d)
+                    delay=e.get('signalDelayReverse',0)
+                    self.add(drive,facility['id'],e['a'],d/1000/speed*60+.5+delay,'car',e['id'],length=d,signalDelay=delay)
                     self.add(drive,e['b'],facility['id'],(e['length']-d)/1000/speed*60+.5,'car',e['id'],length=e['length']-d)
         ground_nodes={nid:point for nid,point in self.network['nodes'].items() if nid.startswith('road:0:')}
         if self.s['gateway'] is None and ground_nodes:
@@ -502,7 +539,8 @@ class City:
         main_mode=max(ride_distance,key=ride_distance.get) if ride_distance else mode
         result=dict(mode=mode,mainMode=main_mode, minutes=round(minutes,2), path=path, fee=fee,
                     distance=sum(e.get('length',0) for e in path), transfers=max(0,sum(e['kind']=='board' for e in path)-1),
-                    wait=max(0,sum(e['time'] for e in path if e['kind']=='board')+extra_wait))
+                    wait=max(0,sum(e['time'] for e in path if e['kind']=='board')+extra_wait),
+                    signalWait=round(sum(e.get('signalDelay',0) for e in path),3))
         if len(self.route_solutions)<24000:self.route_solutions[key]=result
         return result
 
@@ -519,7 +557,15 @@ class City:
                 raise ValueError('没有可撤销的操作')
             target.append((copy.deepcopy(self.s),self.rng.getstate(),self.runtime()))
             revision=self.s['revision']+1
+            clock=copy.deepcopy(self.s['simulation'])
+            daylight=self.s['sceneTimeSeconds']
             self.s,random_state,runtime=source.pop()
+            clock_changed=self.s['simulation']!=clock or self.s['sceneTimeSeconds']!=daylight
+            self.s['simulation']=clock
+            self.s['sceneTimeSeconds']=daylight
+            if clock_changed:
+                runtime=copy.deepcopy(runtime)
+                runtime['liveTraffic']=None
             self.rng.setstate(random_state)
             self.s['revision']=revision
             self.rebuild()
@@ -613,6 +659,7 @@ class City:
                 if 'enabled' in cmd: stop['enabled']=bool(cmd['enabled'])
                 self.rebuild()
             elif op=='delete':
+                special_buildings.remove(self,cmd.get('id'))
                 found=False
                 for parcel in self.s['parcels']:
                     if parcel.get('openSpace')==cmd.get('id'):
@@ -641,6 +688,9 @@ class City:
                 if p.get('blockCommon') and cmd['use'] not in ('auto','protected'):
                     raise ValueError('街区共享通道与公共空间不能改成建筑用地')
                 p['use']=cmd['use']
+            elif op=='special_building':
+                special_buildings.place(self,cmd)
+                self.rebuild()
             elif op=='facility':
                 kind=cmd.get('kind')
                 if kind not in ('school','clinic','park','plaza'):
@@ -649,6 +699,8 @@ class City:
                 shape=Point(point).buffer(15)
                 if not self.terrain.buildable(shape):
                     raise ValueError('公共设施需建在平缓陆地')
+                if any(shape.intersection(Polygon(f['points'])).area>.1 for f in self.s['facilities'] if f.get('points')):
+                    raise ValueError('公共设施与已有设施用地冲突')
                 if any(shape.intersects(Polygon(p['building']['footprint'])) for p in self.s['parcels'] if p.get('building')) or any(shape.intersects(LineString(r['points']).buffer(ROAD_TYPES[r['kind']]['width']/2)) for r in self.s['roads'] if r['level']==0):
                     raise ValueError('公共设施与建筑或道路冲突')
                 fid=self.uid('f')
@@ -677,12 +729,19 @@ class City:
                         self.s['settings'][k]=number(v,*limits[k],k)
                     else:
                         raise ValueError('未知情景参数')
+            elif op=='signal_timing':
+                limits=dict(signalGreenSeconds=(5,90),signalYellowSeconds=(2,6),signalClearanceSeconds=(2,15))
+                for key,value in cmd.get('values',{}).items():
+                    if key not in limits:raise ValueError('未知配时参数')
+                    self.s['policy'][key]=number(value,*limits[key],key,True)
+                self.rebuild()
             elif op=='road_update':
                 road=next((r for r in self.s['roads'] if r['id']==cmd.get('id')),None)
                 kind=cmd.get('kind')
                 if not road or kind not in ROAD_KINDS or group(road)!='road':
                     raise ValueError('只能升级道路网络中的设施')
                 shape=LineString(road['points'])
+                special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,road['level'],road['id'])
                 self.terrain.valid_link(shape,kind,road['level'])
                 if road['level']==0 and any(shape.buffer(ROAD_TYPES[kind]['width']/2+2).intersection(Polygon(p['building']['footprint'])).area>1 for p in self.s['parcels'] if p.get('building')):
                     raise ValueError('升级后的道路侵入建筑，请先处理冲突')
@@ -773,6 +832,7 @@ class City:
                 if shape.intersection(LineString(road['points'])).length>2:
                     raise RoadConflict('路线与已有设施重叠',shape.intersection(LineString(road['points'])).representative_point().coords[0])
         self.terrain.valid_link(shape,kind,level)
+        special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level)
         if level==0:
             occupied=shape.buffer(ROAD_TYPES[kind]['width']/2+2)
             for parcel in self.s['parcels']:
@@ -800,7 +860,7 @@ class City:
                 self.s['roads']=[r for r in self.s['roads'] if r['id']!=cmd['id']]
             self.add_road(cmd)
             road=self.s['roads'][-1]
-            return dict(valid=True,road=road,connections=sum(LineString(road['points']).intersects(LineString(r['points'])) for r in state['roads'] if r['id']!=cmd.get('id') and group(r)==group(road) and r['level']==road['level']))
+            return dict(valid=True,road=road,connections=sum(next(road_contacts(road,r),None) is not None for r in state['roads'] if r['id']!=cmd.get('id')))
         except ValueError as error:
             return dict(valid=False,reason=str(error),point=getattr(error,'point',None))
         finally:
@@ -876,11 +936,12 @@ class City:
         self.rebuild(regenerate=True)
         self.event('规划','示范街区已建立，开始推进月份以观察真实开发')
 
-    def step(self, months=1):
+    def step(self, months=1, *, advance_clock=True):
         months=number(months,1,24,'推进月份',True)
         before=(copy.deepcopy(self.s),self.rng.getstate(),self.runtime())
         try:
             for _ in range(months):
+                if advance_clock:simulation.shift_month(self,self.s['month'])
                 self.s['month']+=1
                 self.s['movedIn']=self.s['movedOut']=self.s['relocated']=0
                 self.s['migrationFlows']=[]
@@ -899,10 +960,13 @@ class City:
                 self.update_market()
                 renewal.automatic(self)
                 self.redevelop()
+                if auto_facilities.grow(self):self.rebuild()
+                if special_buildings.grow_parking(self):self.rebuild()
                 self.develop()
                 if grow_block_commons(self):self.rebuild()
                 update_entrances(self)
                 clustered_districts(self)
+                if special_buildings.grow_cbd(self):update_entrances(self)
                 self.finance()
                 self.s['revision']+=1
                 self.summarize()
@@ -1077,8 +1141,9 @@ class City:
                 for kind,purpose,eligible,departure in [('school','school',h['size']>=3,450),
                                                         ('park','leisure',choice_hash%4==0,1140),
                                                         ('plaza','leisure',choice_hash%5==0,1020),
-                                                        ('clinic','health',choice_hash%20==0,660)]:
-                    candidates=[f for f in facilities.values() if f['kind']==kind and f.get('connected') and facility_load[f['id']]<f['capacity']]
+                                                        ('clinic','health',choice_hash%20==0,660),
+                                                        ('culture','culture',choice_hash%12==0,1080)]:
+                    candidates=[f for f in facilities.values() if (f['kind']==kind or f.get('service')==purpose) and f.get('connected') and facility_load[f['id']]<f['capacity']]
                     if not eligible or not candidates:
                         continue
                     possibilities=[(self.route(h['home'],f['id'],False,h['income'],departure=departure),f) for f in candidates]
@@ -1118,7 +1183,7 @@ class City:
                 cfg=ROAD_TYPES[e['kind']]
                 load=max(self.road_load[('am',e['id'])],self.road_load[('pm',e['id'])])/2
                 e['traffic']=load
-                e['ratio']=load/max(1,cfg['capacity']*e.get('terrainCapacity',1)) if cfg['capacity'] else 0
+                e['ratio']=load/max(1,cfg['capacity']*e.get('terrainCapacity',1)*e.get('signalCapacityFactor',1)) if cfg['capacity'] else 0
                 before_time=e['time']
                 e['time']=e.get('freeTime',e['length']/1000/cfg['speed']*60)*(1+.6*min(5,e['ratio'])**2)
                 changes.append(abs(e['time']-before_time)/max(.001,before_time))
@@ -1141,6 +1206,7 @@ class City:
             stop['alightings']=stop_alight[stop['id']]
         for f in self.s['facilities']:
             f['visits']=facility_load[f['id']]
+        self.live_traffic=None
 
     def update_market(self):
         update_location_context(self)
@@ -1216,6 +1282,7 @@ class City:
                 b['floorArea']=round(b['floorArea']/b['floors']*(b['floors']+extra),1)
                 b['floors']+=extra
                 b.update(building_style(p,b['use'],b['floors']))
+                if b.get('landmark')=='cbd_skyscraper':b['height']=round(b['floors']*3.9,1)
                 b['usableArea']=round(b['floorArea']*b['usableRatio'],1)
                 b['useAreas']={b['use']:b['floorArea']}
                 b['capacity']=max(1,int(b['floorArea']/(self.s['policy']['householdSpace'] if b['use']=='residential' else USES[b['use']]['space'])))
@@ -1316,10 +1383,12 @@ class City:
         for flow in self.s['migrationFlows']:
             migration[(tuple(flow['source']),tuple(flow['target']),flow['kind'])]+=flow['people']
         state['migrationFlows']=[dict(source=list(a),target=list(b),kind=kind,people=count) for (a,b,kind),count in migration.items()]
-        return copy.deepcopy(dict(**state,network=self.network,flows=self.paths,aggregateFlows=aggregate_flows(self),canUndo=bool(self.undo),
+        return copy.deepcopy(dict(**state,network=self.network,flows=self.paths,
+                                  liveTraffic=self.live_traffic.view() if self.live_traffic else None,
+                                  aggregateFlows=aggregate_flows(self),canUndo=bool(self.undo),
                                   canRedo=bool(self.redo),householdSample=self.s['households'][:100],
                                   meta=dict(model=MODEL_VERSION,width=self.terrain.width,height=self.terrain.height,
-                                            uses=USES,roadTypes=ROAD_TYPES,transitTypes=TRANSIT_TYPES,
+                                            uses=USES,roadTypes=ROAD_TYPES,transitTypes=TRANSIT_TYPES,specialBuildings=special_buildings.CATALOG,
                                             policy=self.s['policy'],parameters=parameter_definitions(self.s['policy']),metrics=metric_definitions(self.s['stats'],MODEL_VERSION),trafficPeriod='典型工作日 · 早晚高峰各 2 小时，平峰活动抽样')))
 
     def inspect(self, object_id):

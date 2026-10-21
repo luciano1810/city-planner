@@ -1,0 +1,54 @@
+{
+  "placements": [
+    {
+      "kind": "airport",
+      "id": "f-169",
+      "point": [
+        850,
+        580.0000000000001
+      ],
+      "rotation": 0,
+      "connected": true
+    },
+    {
+      "kind": "port",
+      "id": "f-170",
+      "point": [
+        2000,
+        980
+      ],
+      "rotation": 270,
+      "connected": false
+    },
+    {
+      "kind": "train_station",
+      "id": "f-171",
+      "point": [
+        1000,
+        1522
+      ],
+      "rotation": 0,
+      "connected": true,
+      "railConnected": true
+    }
+  ],
+  "errors": [],
+  "parking": {
+    "lots": 5,
+    "garages": 5
+  },
+  "tower": {
+    "floors": 38,
+    "height": 148.2
+  },
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": false,
+    "vehicleAtlas": true,
+    "calls": 21,
+    "triangles": 74737,
+    "meshes": 20,
+    "windows": 0,
+    "failure": null
+  }
+}

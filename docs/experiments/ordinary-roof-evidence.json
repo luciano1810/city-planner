@@ -1,0 +1,317 @@
+{
+  "samples": [
+    {
+      "id": "roof-0",
+      "use": "residential",
+      "point": [
+        800,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "hip"
+      ]
+    },
+    {
+      "id": "roof-1",
+      "use": "residential",
+      "point": [
+        885,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-2",
+      "use": "residential",
+      "point": [
+        970,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "gable"
+      ]
+    },
+    {
+      "id": "roof-3",
+      "use": "residential",
+      "point": [
+        1055,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "hip"
+      ]
+    },
+    {
+      "id": "roof-4",
+      "use": "residential",
+      "point": [
+        1140,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-5",
+      "use": "residential",
+      "point": [
+        1225,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-6",
+      "use": "residential",
+      "point": [
+        1310,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-7",
+      "use": "residential",
+      "point": [
+        1395,
+        1110
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-8",
+      "use": "residential",
+      "point": [
+        800,
+        1240
+      ],
+      "height": 19.799999999999997,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-9",
+      "use": "commercial",
+      "point": [
+        885,
+        1240
+      ],
+      "height": 13.2,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-10",
+      "use": "residential",
+      "point": [
+        970,
+        1240
+      ],
+      "height": 19.799999999999997,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-11",
+      "use": "commercial",
+      "point": [
+        1055,
+        1240
+      ],
+      "height": 13.2,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-12",
+      "use": "residential",
+      "point": [
+        1140,
+        1240
+      ],
+      "height": 19.799999999999997,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-13",
+      "use": "commercial",
+      "point": [
+        1225,
+        1240
+      ],
+      "height": 13.2,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-14",
+      "use": "residential",
+      "point": [
+        1310,
+        1240
+      ],
+      "height": 19.799999999999997,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-15",
+      "use": "commercial",
+      "point": [
+        1395,
+        1240
+      ],
+      "height": 13.2,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-16",
+      "use": "office",
+      "point": [
+        800,
+        1370
+      ],
+      "height": 59.4,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-17",
+      "use": "industrial",
+      "point": [
+        885,
+        1370
+      ],
+      "height": 6.6,
+      "roofs": [
+        "sawtooth"
+      ]
+    },
+    {
+      "id": "roof-18",
+      "use": "warehouse",
+      "point": [
+        970,
+        1370
+      ],
+      "height": 3.3,
+      "roofs": [
+        "barrel"
+      ]
+    },
+    {
+      "id": "roof-19",
+      "use": "office",
+      "point": [
+        1055,
+        1370
+      ],
+      "height": 39.599999999999994,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-20",
+      "use": "office",
+      "point": [
+        1140,
+        1370
+      ],
+      "height": 59.4,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-21",
+      "use": "industrial",
+      "point": [
+        1225,
+        1370
+      ],
+      "height": 6.6,
+      "roofs": [
+        "flat"
+      ]
+    },
+    {
+      "id": "roof-22",
+      "use": "warehouse",
+      "point": [
+        1310,
+        1370
+      ],
+      "height": 3.3,
+      "roofs": [
+        "sawtooth"
+      ]
+    },
+    {
+      "id": "roof-23",
+      "use": "office",
+      "point": [
+        1395,
+        1370
+      ],
+      "height": 39.599999999999994,
+      "roofs": [
+        "flat",
+        "flat"
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "pedestrianAtlas": true,
+    "pedestrians": 0,
+    "calls": 37,
+    "triangles": 164908,
+    "meshes": 102,
+    "windows": 188,
+    "failure": null
+  },
+  "canvas": true,
+  "night": true
+}

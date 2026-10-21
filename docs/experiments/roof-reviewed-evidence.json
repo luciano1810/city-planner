@@ -1,0 +1,55 @@
+{
+  "facilityKinds": [
+    "power_plant",
+    "university",
+    "sports_arena",
+    "hospital",
+    "theater",
+    "industrial_plant",
+    "sewage_plant",
+    "police_station",
+    "charging_station",
+    "hotel",
+    "gas_station",
+    "water_plant",
+    "fire_station",
+    "substation",
+    "city_hall",
+    "recycling_center",
+    "convention_center",
+    "logistics_hub",
+    "museum",
+    "cinema"
+  ],
+  "errors": [],
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "pedestrianAtlas": true,
+    "pedestrians": 0,
+    "calls": 115,
+    "triangles": 447909,
+    "meshes": 129,
+    "windows": 135,
+    "failure": null
+  },
+  "inspector": true,
+  "canvasFallback": true,
+  "night": true,
+  "finalSilhouetteReview": {
+    "types": [
+      "university",
+      "city_hall",
+      "museum",
+      "theater",
+      "sports_arena",
+      "industrial_plant",
+      "convention_center",
+      "logistics_hub"
+    ],
+    "errors": []
+  },
+  "roofLayoutTest": "passed",
+  "adaptiveMeshTest": "passed"
+}

@@ -12,7 +12,7 @@ from .geometry import stable_id
 
 def plan_streets(city):
     roads=[r for r in city.s['roads'] if not r.get('generated') and r['level']==0 and r['kind'] in ('street','avenue','lane')]
-    signature=(bool(city.s['settings'].get('autoGrow',True)),city.s['policy']['blockTargetArea'],tuple((r['id'],tuple(map(tuple,r['points']))) for r in roads))
+    signature=(bool(city.s['settings'].get('autoGrow',True)),city.s['policy']['blockTargetArea'],tuple((r['id'],tuple(map(tuple,r['points']))) for r in roads),tuple((f['id'],tuple(map(tuple,f.get('points',[])))) for f in city.s['facilities']))
     source=stable_id('',signature)
     if city.s.get('streetPlanSource')==source and city.s.get('streetPlans'):
         city._street_signature=signature
@@ -25,7 +25,8 @@ def plan_streets(city):
     blocks=list(polygonize(unary_union(lines)))
     plans=[]
     obstacles=unary_union([Polygon(p['building']['footprint']).buffer(7) for p in city.s['parcels'] if p.get('building')]+
-        [Polygon(p['points']) for p in city.s['parcels'] if p.get('openSpace') or p['use']=='protected'])
+        [Polygon(p['points']) for p in city.s['parcels'] if p.get('openSpace') or p['use']=='protected']+
+        [Polygon(f['points']) for f in city.s['facilities'] if f.get('points')])
     limit=city.s['policy']['blockTargetArea']
     def subdivide(poly,parent=None,depth=0):
         if poly.area<=limit or depth>=6:return

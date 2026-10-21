@@ -1,5 +1,5 @@
 """Saved, versioned model calibration. Currency is fictional simulation currency."""
-POLICY = dict(regionalPassengerHouseholds=12,regionalBoundaryMeters=650,freightHandlingMinutes=12,freightTonnesPerWorker=.8,externalRoadMinutes=45,truckTonnes=12,version='urban-9', autoLanesPerMonth=3, blockTargetArea=22000, laneMaximumLength=210,
+POLICY = dict(regionalPassengerHouseholds=12,regionalBoundaryMeters=650,freightHandlingMinutes=12,freightTonnesPerWorker=.8,externalRoadMinutes=45,truckTonnes=12,version='urban-10', autoLanesPerMonth=3, blockTargetArea=22000, laneMaximumLength=210,
               parkPerBuildings=28, plazaPerBuildings=45, householdSpace=75,
               walkingMetersPerMinute=80, trafficIterations=2, priceMonthlyLimit=.07,
               districtCellMeters=400, districtPersistenceMonths=3, districtJoinMeters=220,
@@ -66,6 +66,9 @@ LABELS.update(streetFillThreshold='自动补路前沿街土地开发比例',fron
 POLICY.update(renewalReviewMonths=6,renewalCooldownMonths=120,renewalMinimumAge=120,
     renewalConditionThreshold=70,renewalReturnYears=20,renewalBudgetShare=.2,
     renewalActiveLimit=2,renewalBlockVacancyShare=.6)
+POLICY.update(signalGreenSeconds=12,signalYellowSeconds=3,signalClearanceSeconds=3)
+UNITS.update(signalGreenSeconds='秒',signalYellowSeconds='秒',signalClearanceSeconds='秒')
+LABELS.update(signalGreenSeconds='路口保护绿灯时长',signalYellowSeconds='路口黄灯时长',signalClearanceSeconds='路口全红清空时长')
 UNITS.update(renewalReviewMonths='月',renewalCooldownMonths='月',renewalMinimumAge='月',
     renewalConditionThreshold='状况指数',renewalReturnYears='年',renewalBudgetShare='资金比例',
     renewalActiveLimit='项',renewalBlockVacancyShare='空置面积比例')

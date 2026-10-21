@@ -1,0 +1,358 @@
+{
+  "initial": {
+    "month": 0,
+    "monthSeconds": 36000,
+    "elapsedSeconds": 83.9999999999995,
+    "speed": 1,
+    "sampled": false
+  },
+  "live": {
+    "month": 0,
+    "monthSeconds": 36008.292700000005,
+    "elapsedSeconds": 92.29269999999877,
+    "speed": 1,
+    "sampled": false
+  },
+  "hourly": {
+    "month": 0,
+    "monthSeconds": 40622.41269999732,
+    "elapsedSeconds": 4706.412699997317,
+    "speed": 3600,
+    "sampled": true
+  },
+  "monthly": {
+    "month": 1,
+    "monthSeconds": 103780.81269806623,
+    "elapsedSeconds": 2746264.8126980662,
+    "speed": 2592000,
+    "sampled": true,
+    "history": 1
+  },
+  "resumed": {
+    "month": 1,
+    "monthSeconds": 103787.13479806624,
+    "elapsedSeconds": 2746271.134798066,
+    "speed": 1,
+    "sampled": false
+  },
+  "restored": {
+    "monthSeconds": 103787.13479806624,
+    "elapsedSeconds": 2746271.134798066,
+    "speed": 1,
+    "sampled": false
+  },
+  "clockScrub": {
+    "expected": 75600,
+    "actual": 75600
+  },
+  "peakConcurrentRequests": 1,
+  "compactLayout": {
+    "width": 528,
+    "scroll": 528
+  },
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "pedestrianAtlas": true,
+    "pedestrians": 45,
+    "calls": 228,
+    "triangles": 268382,
+    "meshes": 216,
+    "windows": 230,
+    "failure": null
+  },
+  "ticks": [
+    {
+      "month": 0,
+      "clock": 36000.0141,
+      "monthSeconds": 36000.0141,
+      "elapsedSeconds": 84.014100000001,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36000.2794,
+      "monthSeconds": 36000.2794,
+      "elapsedSeconds": 84.27939999999802,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36000.526600000005,
+      "monthSeconds": 36000.526600000005,
+      "elapsedSeconds": 84.526600000001,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36000.781200000005,
+      "monthSeconds": 36000.781200000005,
+      "elapsedSeconds": 84.78119999999876,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36001.02810000001,
+      "monthSeconds": 36001.02810000001,
+      "elapsedSeconds": 85.028100000001,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36001.28180000001,
+      "monthSeconds": 36001.28180000001,
+      "elapsedSeconds": 85.28180000000026,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36001.54320000001,
+      "monthSeconds": 36001.54320000001,
+      "elapsedSeconds": 85.54319999999878,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36001.78330000001,
+      "monthSeconds": 36001.78330000001,
+      "elapsedSeconds": 85.78330000000027,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36008.292700000005,
+      "monthSeconds": 36008.292700000005,
+      "elapsedSeconds": 92.29269999999877,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36008.292700000005,
+      "monthSeconds": 36008.292700000005,
+      "elapsedSeconds": 92.29269999999877,
+      "speed": 3600,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36008.292700000005,
+      "monthSeconds": 36008.292700000005,
+      "elapsedSeconds": 92.29269999999877,
+      "speed": 3600,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 36057.97270000269,
+      "monthSeconds": 36057.97270000269,
+      "elapsedSeconds": 141.972700002681,
+      "speed": 3600,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 37223.652700005376,
+      "monthSeconds": 37223.652700005376,
+      "elapsedSeconds": 1307.6527000053632,
+      "speed": 3600,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 38358.732700008055,
+      "monthSeconds": 38358.732700008055,
+      "elapsedSeconds": 2442.7327000080454,
+      "speed": 3600,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 39511.09270000001,
+      "monthSeconds": 39511.09270000001,
+      "elapsedSeconds": 3595.092699999999,
+      "speed": 3600,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 40622.41269999732,
+      "monthSeconds": 40622.41269999732,
+      "elapsedSeconds": 4706.412699997317,
+      "speed": 3600,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 40622.41269999732,
+      "monthSeconds": 40622.41269999732,
+      "elapsedSeconds": 4706.412699997317,
+      "speed": 2592000,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 40622.41269999732,
+      "monthSeconds": 40622.41269999732,
+      "elapsedSeconds": 4706.412699997317,
+      "speed": 2592000,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 59025.612703859704,
+      "monthSeconds": 59025.612703859704,
+      "elapsedSeconds": 23109.612703859697,
+      "speed": 2592000,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 0,
+      "clock": 1284782.4126999974,
+      "monthSeconds": 1284782.4126999974,
+      "elapsedSeconds": 1248866.4126999974,
+      "speed": 2592000,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782180.8126980662,
+      "monthSeconds": 103780.81269806623,
+      "elapsedSeconds": 2746264.8126980662,
+      "speed": 2592000,
+      "sampled": true,
+      "monthsAdvanced": 1,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782180.8126980662,
+      "monthSeconds": 103780.81269806623,
+      "elapsedSeconds": 2746264.8126980662,
+      "speed": 1,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782180.8126980662,
+      "monthSeconds": 103780.81269806623,
+      "elapsedSeconds": 2746264.8126980662,
+      "speed": 1,
+      "sampled": true,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782180.822598066,
+      "monthSeconds": 103780.82259806624,
+      "elapsedSeconds": 2746264.822598066,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782181.063598066,
+      "monthSeconds": 103781.06359806623,
+      "elapsedSeconds": 2746265.063598066,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782181.3115980662,
+      "monthSeconds": 103781.31159806624,
+      "elapsedSeconds": 2746265.3115980662,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782181.567998066,
+      "monthSeconds": 103781.56799806624,
+      "elapsedSeconds": 2746265.567998066,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782187.134798066,
+      "monthSeconds": 103787.13479806624,
+      "elapsedSeconds": 2746271.134798066,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    },
+    {
+      "month": 1,
+      "clock": 2782187.147998066,
+      "monthSeconds": 103787.14799806624,
+      "elapsedSeconds": 2746271.147998066,
+      "speed": 1,
+      "sampled": false,
+      "monthsAdvanced": 0,
+      "status": 200
+    }
+  ],
+  "errors": []
+}

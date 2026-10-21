@@ -1,0 +1,582 @@
+{
+  "months": 19,
+  "population": 15400,
+  "counts": {
+    "theater": 2,
+    "industrial_plant": 2,
+    "sewage_plant": 1,
+    "police_station": 3,
+    "university": 1,
+    "charging_station": 7,
+    "hotel": 4,
+    "gas_station": 3,
+    "water_plant": 1,
+    "hospital": 3,
+    "fire_station": 4,
+    "substation": 3,
+    "city_hall": 1,
+    "sports_arena": 2,
+    "recycling_center": 2,
+    "convention_center": 1,
+    "logistics_hub": 2,
+    "museum": 1,
+    "cinema": 2,
+    "power_plant": 1
+  },
+  "elapsedSeconds": 13.99,
+  "missing": [],
+  "facilities": [
+    {
+      "id": "f-3345",
+      "kind": "theater",
+      "point": [
+        490.10165617670606,
+        950.0
+      ],
+      "width": 75,
+      "depth": 62,
+      "connected": true,
+      "created": 1
+    },
+    {
+      "id": "f-3346",
+      "kind": "industrial_plant",
+      "point": [
+        2593.049320588161,
+        2855.125
+      ],
+      "width": 97.75,
+      "depth": 72.25,
+      "connected": true,
+      "created": 1
+    },
+    {
+      "id": "f-3347",
+      "kind": "sewage_plant",
+      "point": [
+        3111.563378250268,
+        2865.75
+      ],
+      "width": 121.00000000000001,
+      "depth": 93.50000000000001,
+      "connected": true,
+      "created": 1
+    },
+    {
+      "id": "f-3348",
+      "kind": "police_station",
+      "point": [
+        1456.8047073549153,
+        935.15
+      ],
+      "width": 38.25,
+      "depth": 32.3,
+      "connected": true,
+      "created": 2
+    },
+    {
+      "id": "f-3349",
+      "kind": "university",
+      "point": [
+        113.5,
+        1002.6178656250601
+      ],
+      "width": 180,
+      "depth": 145,
+      "connected": true,
+      "created": 2
+    },
+    {
+      "id": "f-3350",
+      "kind": "charging_station",
+      "point": [
+        2686.042481934083,
+        936.6
+      ],
+      "width": 46.2,
+      "depth": 35.2,
+      "connected": true,
+      "created": 2
+    },
+    {
+      "id": "f-3351",
+      "kind": "charging_station",
+      "point": [
+        3137.7911232047168,
+        935.0
+      ],
+      "width": 42,
+      "depth": 32,
+      "connected": true,
+      "created": 3
+    },
+    {
+      "id": "f-3352",
+      "kind": "hotel",
+      "point": [
+        2862.7361339546505,
+        943.2
+      ],
+      "width": 57.2,
+      "depth": 48.400000000000006,
+      "connected": true,
+      "created": 3
+    },
+    {
+      "id": "f-3353",
+      "kind": "gas_station",
+      "point": [
+        237.1,
+        2681.598938451684
+      ],
+      "width": 57.2,
+      "depth": 46.2,
+      "connected": true,
+      "created": 3
+    },
+    {
+      "id": "f-3354",
+      "kind": "hotel",
+      "point": [
+        717.7397084079297,
+        943.2
+      ],
+      "width": 57.2,
+      "depth": 48.400000000000006,
+      "connected": true,
+      "created": 4
+    },
+    {
+      "id": "f-3355",
+      "kind": "water_plant",
+      "point": [
+        147.5,
+        1390.25024047832
+      ],
+      "width": 99.00000000000001,
+      "depth": 77.0,
+      "connected": true,
+      "created": 4
+    },
+    {
+      "id": "f-3356",
+      "kind": "hospital",
+      "point": [
+        3529.8105878785286,
+        955.0
+      ],
+      "width": 90,
+      "depth": 72,
+      "connected": true,
+      "created": 4
+    },
+    {
+      "id": "f-3357",
+      "kind": "industrial_plant",
+      "point": [
+        366.0887005222013,
+        2861.5
+      ],
+      "width": 115,
+      "depth": 85,
+      "connected": true,
+      "created": 5
+    },
+    {
+      "id": "f-3358",
+      "kind": "fire_station",
+      "point": [
+        1264.987542361911,
+        939.0
+      ],
+      "width": 48,
+      "depth": 40,
+      "connected": true,
+      "created": 5
+    },
+    {
+      "id": "f-3359",
+      "kind": "charging_station",
+      "point": [
+        168.4,
+        1264.6126505143332
+      ],
+      "width": 46.2,
+      "depth": 35.2,
+      "connected": true,
+      "created": 5
+    },
+    {
+      "id": "f-3360",
+      "kind": "charging_station",
+      "point": [
+        3648.296647545993,
+        936.6
+      ],
+      "width": 46.2,
+      "depth": 35.2,
+      "connected": true,
+      "created": 6
+    },
+    {
+      "id": "f-3361",
+      "kind": "substation",
+      "point": [
+        840.6356921906818,
+        2837.0
+      ],
+      "width": 44,
+      "depth": 36,
+      "connected": true,
+      "created": 6
+    },
+    {
+      "id": "f-3362",
+      "kind": "city_hall",
+      "point": [
+        1554.4942584725939,
+        956.4
+      ],
+      "width": 93.50000000000001,
+      "depth": 74.80000000000001,
+      "connected": true,
+      "created": 6
+    },
+    {
+      "id": "f-3363",
+      "kind": "gas_station",
+      "point": [
+        1931.6809920210026,
+        936.85
+      ],
+      "width": 44.199999999999996,
+      "depth": 35.699999999999996,
+      "connected": true,
+      "created": 7
+    },
+    {
+      "id": "f-3364",
+      "kind": "charging_station",
+      "point": [
+        1198.4784749919736,
+        932.6
+      ],
+      "width": 35.699999999999996,
+      "depth": 27.2,
+      "connected": true,
+      "created": 7
+    },
+    {
+      "id": "f-3365",
+      "kind": "hotel",
+      "point": [
+        2121.7911661197004,
+        937.7
+      ],
+      "width": 44.199999999999996,
+      "depth": 37.4,
+      "connected": true,
+      "created": 8
+    },
+    {
+      "id": "f-3366",
+      "kind": "sports_arena",
+      "point": [
+        260.75,
+        1191.151166954671
+      ],
+      "width": 121.00000000000001,
+      "depth": 93.50000000000001,
+      "connected": true,
+      "created": 8
+    },
+    {
+      "id": "f-3367",
+      "kind": "fire_station",
+      "point": [
+        1864.9516441225478,
+        2839.0
+      ],
+      "width": 48,
+      "depth": 40,
+      "connected": true,
+      "created": 8
+    },
+    {
+      "id": "f-3368",
+      "kind": "gas_station",
+      "point": [
+        1670.2924304156534,
+        2840.0
+      ],
+      "width": 52,
+      "depth": 42,
+      "connected": true,
+      "created": 9
+    },
+    {
+      "id": "f-3369",
+      "kind": "charging_station",
+      "point": [
+        652.2317903180362,
+        932.6
+      ],
+      "width": 35.699999999999996,
+      "depth": 27.2,
+      "connected": true,
+      "created": 9
+    },
+    {
+      "id": "f-3370",
+      "kind": "recycling_center",
+      "point": [
+        1152.9588762180026,
+        2851.5
+      ],
+      "width": 85,
+      "depth": 65,
+      "connected": true,
+      "created": 9
+    },
+    {
+      "id": "f-3371",
+      "kind": "convention_center",
+      "point": [
+        1679.852389389664,
+        961.5
+      ],
+      "width": 123.25,
+      "depth": 85.0,
+      "connected": true,
+      "created": 10
+    },
+    {
+      "id": "f-3372",
+      "kind": "hospital",
+      "point": [
+        860.7012892885163,
+        958.6
+      ],
+      "width": 99.00000000000001,
+      "depth": 79.2,
+      "connected": true,
+      "created": 10
+    },
+    {
+      "id": "f-3373",
+      "kind": "charging_station",
+      "point": [
+        2248.807361208686,
+        935.0
+      ],
+      "width": 42,
+      "depth": 32,
+      "connected": true,
+      "created": 10
+    },
+    {
+      "id": "f-3374",
+      "kind": "logistics_hub",
+      "point": [
+        1532.6733182702972,
+        2853.0
+      ],
+      "width": 93.5,
+      "depth": 68.0,
+      "connected": true,
+      "created": 11
+    },
+    {
+      "id": "f-3375",
+      "kind": "recycling_center",
+      "point": [
+        241.625,
+        2492.0855005296253
+      ],
+      "width": 72.25,
+      "depth": 55.25,
+      "connected": true,
+      "created": 11
+    },
+    {
+      "id": "f-3376",
+      "kind": "police_station",
+      "point": [
+        406.6147820551647,
+        938.0
+      ],
+      "width": 45,
+      "depth": 38,
+      "connected": true,
+      "created": 11
+    },
+    {
+      "id": "f-3377",
+      "kind": "hotel",
+      "point": [
+        3292.529443338672,
+        937.7
+      ],
+      "width": 44.199999999999996,
+      "depth": 37.4,
+      "connected": true,
+      "created": 12
+    },
+    {
+      "id": "f-3378",
+      "kind": "substation",
+      "point": [
+        3547.866185589117,
+        2838.8
+      ],
+      "width": 48.400000000000006,
+      "depth": 39.6,
+      "connected": true,
+      "created": 12
+    },
+    {
+      "id": "f-3379",
+      "kind": "hospital",
+      "point": [
+        2559.4281713394694,
+        955.0
+      ],
+      "width": 90,
+      "depth": 72,
+      "connected": true,
+      "created": 12
+    },
+    {
+      "id": "f-3380",
+      "kind": "substation",
+      "point": [
+        1053.0156600835662,
+        938.8
+      ],
+      "width": 48.400000000000006,
+      "depth": 39.6,
+      "connected": true,
+      "created": 13
+    },
+    {
+      "id": "f-3381",
+      "kind": "sports_arena",
+      "point": [
+        3398.415149364547,
+        965.75
+      ],
+      "width": 121.00000000000001,
+      "depth": 93.50000000000001,
+      "connected": true,
+      "created": 14
+    },
+    {
+      "id": "f-3382",
+      "kind": "logistics_hub",
+      "point": [
+        2763.7060095619154,
+        2853.0
+      ],
+      "width": 93.5,
+      "depth": 68.0,
+      "connected": true,
+      "created": 14
+    },
+    {
+      "id": "f-3383",
+      "kind": "police_station",
+      "point": [
+        2947.9718422976566,
+        939.9
+      ],
+      "width": 49.50000000000001,
+      "depth": 41.800000000000004,
+      "connected": true,
+      "created": 15
+    },
+    {
+      "id": "f-3384",
+      "kind": "fire_station",
+      "point": [
+        3618.161308704614,
+        2836.0
+      ],
+      "width": 40.8,
+      "depth": 34.0,
+      "connected": true,
+      "created": 15
+    },
+    {
+      "id": "f-3385",
+      "kind": "fire_station",
+      "point": [
+        717.808305824931,
+        2839.0
+      ],
+      "width": 48,
+      "depth": 40,
+      "connected": true,
+      "created": 16
+    },
+    {
+      "id": "f-3386",
+      "kind": "theater",
+      "point": [
+        3718.4915913073633,
+        854.65
+      ],
+      "width": 63.75,
+      "depth": 52.699999999999996,
+      "connected": true,
+      "created": 18
+    },
+    {
+      "id": "f-3387",
+      "kind": "museum",
+      "point": [
+        245.0,
+        1002.6178656250601
+      ],
+      "width": 78,
+      "depth": 62,
+      "connected": true,
+      "created": 18
+    },
+    {
+      "id": "f-3388",
+      "kind": "cinema",
+      "point": [
+        1863.3800910267012,
+        942.1
+      ],
+      "width": 55.00000000000001,
+      "depth": 46.2,
+      "connected": true,
+      "created": 18
+    },
+    {
+      "id": "f-3389",
+      "kind": "power_plant",
+      "point": [
+        2419.035062785858,
+        2871.25
+      ],
+      "width": 132.0,
+      "depth": 104.50000000000001,
+      "connected": true,
+      "created": 19
+    },
+    {
+      "id": "f-3390",
+      "kind": "cinema",
+      "point": [
+        306.858696986911,
+        942.1
+      ],
+      "width": 55.00000000000001,
+      "depth": 46.2,
+      "connected": true,
+      "created": 19
+    }
+  ]
+}

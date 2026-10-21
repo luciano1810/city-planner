@@ -1,0 +1,38 @@
+{
+  "facilityKinds": [
+    "theater",
+    "industrial_plant",
+    "sewage_plant",
+    "police_station",
+    "university",
+    "charging_station",
+    "hotel",
+    "gas_station",
+    "water_plant",
+    "hospital",
+    "fire_station",
+    "substation",
+    "city_hall",
+    "sports_arena",
+    "recycling_center",
+    "convention_center",
+    "logistics_hub",
+    "museum",
+    "cinema",
+    "power_plant"
+  ],
+  "errors": [],
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "calls": 58,
+    "triangles": 432379,
+    "meshes": 69,
+    "windows": 135,
+    "failure": null
+  },
+  "inspector": true,
+  "canvasFallback": true,
+  "night": true
+}

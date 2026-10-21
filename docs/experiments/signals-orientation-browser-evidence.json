@@ -1,0 +1,275 @@
+{
+  "buildings": [
+    {
+      "id": "p-7",
+      "streetAngle": 90,
+      "axis": 90,
+      "volumeAngles": [
+        90,
+        90
+      ]
+    },
+    {
+      "id": "p-9",
+      "streetAngle": 65.0497879662538,
+      "axis": 65.04978796625366,
+      "volumeAngles": [
+        65.04978796625366,
+        65.04978796625366
+      ]
+    },
+    {
+      "id": "p-11",
+      "streetAngle": 64.3416477173834,
+      "axis": 64.34164771738331,
+      "volumeAngles": [
+        64.34164771738331
+      ]
+    },
+    {
+      "id": "p-13",
+      "streetAngle": 59.66636081980374,
+      "axis": 59.666360819803714,
+      "volumeAngles": [
+        59.66636081980372,
+        59.66636081980372
+      ]
+    },
+    {
+      "id": "p-15",
+      "streetAngle": 90,
+      "axis": 90,
+      "volumeAngles": [
+        90
+      ]
+    },
+    {
+      "id": "p-17",
+      "streetAngle": 90.93919094573724,
+      "axis": 90.9391909457372,
+      "volumeAngles": [
+        90.9391909457372,
+        90.9391909457372
+      ]
+    },
+    {
+      "id": "p-19",
+      "streetAngle": 90.93919094573398,
+      "axis": 90.93919094573391,
+      "volumeAngles": [
+        90.93919094573393
+      ]
+    },
+    {
+      "id": "p-21",
+      "streetAngle": 90.93919094573724,
+      "axis": 90.93919094573707,
+      "volumeAngles": [
+        90.93919094573707,
+        90.93919094573707
+      ]
+    },
+    {
+      "id": "p-23",
+      "streetAngle": 90,
+      "axis": 90,
+      "volumeAngles": [
+        90,
+        90
+      ]
+    },
+    {
+      "id": "p-25",
+      "streetAngle": 90.93919094573393,
+      "axis": 0.9391909457339409,
+      "volumeAngles": [
+        0.9391909457339409
+      ]
+    },
+    {
+      "id": "p-27",
+      "streetAngle": 0,
+      "axis": 0,
+      "volumeAngles": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "p-29",
+      "streetAngle": 0,
+      "axis": 0,
+      "volumeAngles": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "p-31",
+      "streetAngle": -7.986491312640204,
+      "axis": 82.0135086873597,
+      "volumeAngles": [
+        82.01350868735969,
+        82.01350868735969
+      ]
+    },
+    {
+      "id": "p-33",
+      "streetAngle": -10.701653430358819,
+      "axis": 169.2983465696411,
+      "volumeAngles": [
+        169.2983465696411
+      ]
+    },
+    {
+      "id": "p-35",
+      "streetAngle": 0,
+      "axis": 0,
+      "volumeAngles": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "p-37",
+      "streetAngle": 0,
+      "axis": 0,
+      "volumeAngles": [
+        0
+      ]
+    }
+  ],
+  "renderer": {
+    "engine": "WebGL / Three.js r180",
+    "ambientOcclusion": true,
+    "vehicleAtlas": true,
+    "pedestrianAtlas": true,
+    "pedestrians": 16,
+    "calls": 210,
+    "triangles": 237718,
+    "meshes": 213,
+    "windows": 276,
+    "failure": null
+  },
+  "signalSizes": [
+    {
+      "scale": 1.5,
+      "vehicle": {
+        "unit": 2.6666666666666665,
+        "compact": true,
+        "width": 3.6666666666666665,
+        "height": 3.6666666666666665
+      },
+      "pedestrian": {
+        "unit": 2.2666666666666666,
+        "compact": true,
+        "width": 3.6666666666666665,
+        "height": 3.6666666666666665
+      }
+    },
+    {
+      "scale": 4.5,
+      "vehicle": {
+        "unit": 0.8888888888888888,
+        "compact": false,
+        "width": 1.7777777777777777,
+        "height": 4.977777777777777
+      },
+      "pedestrian": {
+        "unit": 0.7555555555555555,
+        "compact": false,
+        "width": 1.6622222222222223,
+        "height": 3.4755555555555553
+      }
+    },
+    {
+      "scale": 7,
+      "vehicle": {
+        "unit": 0.5714285714285714,
+        "compact": false,
+        "width": 1.1428571428571428,
+        "height": 3.1999999999999997
+      },
+      "pedestrian": {
+        "unit": 0.4857142857142857,
+        "compact": false,
+        "width": 1.0685714285714287,
+        "height": 2.234285714285714
+      }
+    },
+    {
+      "scale": 16,
+      "vehicle": {
+        "unit": 0.25,
+        "compact": false,
+        "width": 0.5,
+        "height": 1.4
+      },
+      "pedestrian": {
+        "unit": 0.22,
+        "compact": false,
+        "width": 0.48400000000000004,
+        "height": 1.012
+      }
+    },
+    {
+      "scale": 20,
+      "vehicle": {
+        "unit": 0.24,
+        "compact": false,
+        "width": 0.48,
+        "height": 1.3439999999999999
+      },
+      "pedestrian": {
+        "unit": 0.22,
+        "compact": false,
+        "width": 0.48400000000000004,
+        "height": 1.012
+      }
+    }
+  ],
+  "canvas": {
+    "quality": "balanced",
+    "assetsReady": true
+  },
+  "running": {
+    "seconds": 2746281.314,
+    "lamps": [
+      {
+        "r-1:-1": "red",
+        "r-2:1": "red",
+        "r-1:1": "red",
+        "r-2:-1": "red"
+      },
+      {
+        "r-1:-1": "red",
+        "r-5:1": "red",
+        "r-1:1": "red",
+        "r-5:-1": "red"
+      },
+      {
+        "r-3:-1": "green",
+        "r-2:1": "red",
+        "r-2:-1": "red"
+      },
+      {
+        "r-2:1": "green",
+        "r-4:1": "red",
+        "r-2:-1": "red"
+      },
+      {
+        "r-2:-1": "red",
+        "r-6:-1": "red",
+        "r-2:1": "red",
+        "r-6:1": "red"
+      },
+      {
+        "r-4:-1": "red",
+        "r-6:-1": "red",
+        "r-4:1": "red",
+        "r-6:1": "red"
+      }
+    ]
+  },
+  "errors": []
+}

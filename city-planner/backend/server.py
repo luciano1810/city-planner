@@ -39,15 +39,29 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {'status': 'ok', 'engine': 'Python / NumPy'})
         # Renderer assets are exposed only for local browser preview.
         allowed = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/height-format.js': 'height-format.js', '/map-geometry.js': 'map-geometry.js', '/style.css': 'style.css',
-                   '/city.js': 'city.js', '/city-geometry.js': 'city-geometry.js', '/city.css': 'city.css',
+                   '/city.js': 'city.js', '/city-geometry.js': 'city-geometry.js', '/road-renderer.js': 'road-renderer.js', '/scene-renderer.js': 'scene-renderer.js', '/city.css': 'city.css',
+                   '/assets/tree-canopies.png': 'assets/tree-canopies.png',
+                   '/assets/tree-species.png': 'assets/tree-species.png',
+                   '/assets/vehicles.png': 'assets/vehicles.png',
+                   '/assets/pedestrian-clothing.png': 'assets/pedestrian-clothing.png',
+                   '/pedestrian-renderer.js': 'pedestrian-renderer.js',
+                   '/scene-3d.js': 'scene-3d.js', '/vendor/three.min.js': 'vendor/three.min.js',
+                   '/material-catalog.js': 'material-catalog.js',
+                   '/surface-variation.js': 'surface-variation.js', '/simulation-driver.js': 'simulation-driver.js',
+                   '/special-buildings.js': 'special-buildings.js',
+                   '/civic-buildings.js': 'civic-buildings.js',
+                   '/civic-details.js': 'civic-details.js',
+                   '/block-architecture.js': 'block-architecture.js', '/ordinary-roofs.js': 'ordinary-roofs.js',
+                   '/assets/roof-atlas.png': 'assets/roof-atlas.png', '/assets/ground-atlas.png': 'assets/ground-atlas.png',
+                   '/assets/facade-atlas.png': 'assets/facade-atlas.png', '/assets/landscape-atlas.png': 'assets/landscape-atlas.png',
                    '/navigation.js': 'navigation.js', '/navigation.css': 'navigation.css'}
         if not self.server.preview or route not in allowed:
             return self.reply(404, {'error': '未找到资源'})
         asset = ROOT / allowed[route]
-        mime = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css'}[asset.suffix[1:]]
+        mime = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css', 'png': 'image/png'}[asset.suffix[1:]]
         body = asset.read_bytes()
         self.send_response(200)
-        self.send_header('Content-Type', mime + '; charset=utf-8')
+        self.send_header('Content-Type', mime + ('; charset=utf-8' if mime.startswith('text/') else ''))
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)

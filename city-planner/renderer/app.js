@@ -145,7 +145,7 @@ function installTerrain(result) {
     updateMeasureHint();
     generation++;
     renderTerrain(); fit();
-    $('map-name').textContent = presets[result.config.preset].name;
+    $('map-name').textContent = presets[result.config.preset]?.name || '自定义地形';
     $('map-number').textContent = `NO. ${String(generation).padStart(3, '0')}`;
     $('stat-size').innerHTML = `${result.config.widthKm} × ${result.config.heightKm}<small> km</small>`;
     $('stat-size').title = `输出精度：${result.width} × ${result.height} px · 每像素约 ${(result.config.widthKm * 1000 / result.width).toFixed(2)} m`;
@@ -323,6 +323,7 @@ function paintMap(context, g) {
     context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
     context.drawImage(source,0,0);
   }
+  if(view!=='height')window.CityScene?.ground(context,g,terrain,vectorLayers);
   if (view === 'height' || contour) {
     context.save(); context.clip(vectorLayers.land,'evenodd');
     context.strokeStyle = view === 'vector' ? '#70856570' : '#42583b66';
@@ -338,6 +339,7 @@ function paintMap(context, g) {
   context.restore();
   context.fillStyle = view === 'vector' ? '#65a1af' : '#4b929e';
   context.fill(vectorLayers.lakes,'evenodd');
+  if(view!=='height')window.CityScene?.water(context,terrain,vectorLayers);
   context.strokeStyle = view === 'vector' ? '#426f765e' : '#375e5838';
   context.lineWidth = .6/g.scale; context.stroke(vectorLayers.waterStroke);
   if (grid) {
