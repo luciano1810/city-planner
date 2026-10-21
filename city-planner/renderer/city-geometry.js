@@ -1,5 +1,21 @@
 /* Identical chord-scaled interpolation to backend city.geometry.curve_points. */
 (function(root){
+  // A pointer is only a guide to the next click. It must never bend the
+  // committed alignment or inherit a validation result for different points.
+  function roadDraftPlan(controls,hover,curved=true,preview=null){
+    const points=preview?.valid?preview.road.points:curvePoints(controls,curved);
+    const last=points.at(-1);
+    const guide=last&&hover&&Math.hypot(last[0]-hover[0],last[1]-hover[1])>1e-6?[last,hover]:[];
+    return {points,guide,invalid:preview?.valid===false,reason:preview?.valid===false?preview.reason:null};
+  }
+  function roadControlAt(controls,point,scaleX,scaleY,radius=10){
+    let best=-1,distance=radius;
+    controls.forEach((p,i)=>{
+      const d=Math.hypot((p[0]-point[0])*scaleX,(p[1]-point[1])*scaleY);
+      if(d<=distance){best=i;distance=d;}
+    });
+    return best;
+  }
   function curvePoints(controls,curved=true,spacing=8){
     const points=controls.map(p=>p.slice());
     if(!curved||points.length<3)return points;
@@ -144,7 +160,7 @@
     }
     const result={podium,volumes,type};buildingLayouts.set(b,result);return result;
   }
-  const api={curvePoints,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
+  const api={curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.CityGeometry=api;
 })(typeof window==='undefined'?{}:window);

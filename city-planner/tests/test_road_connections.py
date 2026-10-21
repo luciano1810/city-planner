@@ -111,6 +111,51 @@ class RoadConnectionTests(unittest.TestCase):
         city.command(dict(type='delete', id=rid))
         self.assertEqual(city.network['junctions'], [])
 
+    def test_new_main_road_completes_nearby_lane_entrance_and_preview_matches(self):
+        city = City(flat_world())
+        lane = road(city, [[1000, 1200], [1000, 1013]], kind='lane')
+        before = city.snapshot()
+        cmd = dict(type='road', points=[[700, 1000], [1300, 1000]])
+        preview = city.preview_road(cmd)
+        self.assertTrue(preview['valid'])
+        self.assertEqual(preview['connections'], 1)
+        self.assertEqual(city.snapshot(), before)
+        city.command(cmd)
+        self.assertEqual(city.s['roads'][0]['points'][-1], [1000, 1000])
+        self.assertAlmostEqual(city.s['roads'][0]['length'], 200)
+        self.assertTrue(self.shared(city.network, lane, city.s['roads'][-1]['id']))
+        self.assertEqual(len(city.network['junctions'][0]['approaches']), 3)
+        city.command(dict(type='undo'))
+        self.assertEqual(city.s['roads'][0]['points'][-1], [1000, 1013])
+
+    def test_lane_entrance_repair_is_bounded_directional_and_ground_only(self):
+        from city.lane_connections import connect_lane_entrances
+        from unittest.mock import patch
+        for end, level, blocked in (([1000,1018.1],0,False), ([1000,1013],1,False),
+                                    ([1010,1100],0,False), ([1000,1013],0,True)):
+            with self.subTest(end=end, level=level, blocked=blocked):
+                city = City(flat_world())
+                lane = link('lane', [[1000,1200],end], kind='lane')
+                # The third case is parallel to the nearby main road.
+                points = [[1000,900],[1000,1300]] if end==[1010,1100] else [[700,1000],[1300,1000]]
+                city.s['roads'] = [lane, link('main', points, level=level)]
+                before = json.loads(json.dumps(lane))
+                with patch.object(city.terrain, 'valid_link', side_effect=ValueError('blocked') if blocked else None):
+                    self.assertFalse(connect_lane_entrances(city))
+                self.assertEqual(lane, before)
+
+    def test_existing_save_lane_gap_repairs_once_and_preserves_buildings(self):
+        from city.lane_connections import connect_lane_entrances
+        city = City(flat_world())
+        city.s['roads'] = [link('lane', [[1000,1200],[1000,1013]], kind='lane'),
+                           link('main', [[700,1000],[1300,1000]])]
+        footprint = [[997,1003],[1003,1003],[1003,1009],[997,1009]]
+        city.s['parcels'] = [dict(use='residential',building=dict(footprint=footprint))]
+        self.assertFalse(connect_lane_entrances(city))
+        city.s['parcels'] = []
+        self.assertTrue(connect_lane_entrances(city))
+        self.assertFalse(connect_lane_entrances(city))
+
 
 if __name__ == '__main__':
     unittest.main()

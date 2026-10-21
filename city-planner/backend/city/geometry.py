@@ -14,9 +14,10 @@ from .parameters import ROAD_TYPES,TRANSIT_TYPES,ROAD_KINDS,FRONTAGE_ROADS,DRIVA
 
 
 class RoadConflict(ValueError):
-    def __init__(self,message,point):
+    def __init__(self,message,point,code=None):
         super().__init__(message)
         self.point=list(point)
+        self.code=code
 def stable_id(prefix, text):
     return prefix + hashlib.sha256(str(text).encode()).hexdigest()[:14]
 
@@ -90,6 +91,12 @@ class Terrain:
     def buildable(self, shape, max_slope=.32):
         if not self.bounds.covers(shape) or self.river_geometry.intersects(shape):
             return False
+        # Thin/rotated parcels can contain no bounding-grid sample at all.
+        probes=[shape.representative_point().coords[0]]
+        if shape.geom_type=='Polygon':probes.extend(shape.exterior.coords)
+        for point in probes:
+            value=self.sample(point)
+            if value['water'] or value['slope']>max_slope:return False
         minx, miny, maxx, maxy = shape.bounds
         # Sample every underlying terrain cell in a parcel, including its boundary.
         step = max(4, min(20, self.width / self.w, self.height / self.h))
@@ -149,13 +156,32 @@ class Terrain:
             return
         if self.river_geometry.intersects(line):
             raise RoadConflict('路线穿过河流，请选择高架桥或隧道',self.river_geometry.intersection(line).representative_point().coords[0])
-        step = max(3, min(20, self.width / self.w))
-        for d in np.linspace(0, line.length, max(2, math.ceil(line.length / step) + 1)):
-            value = self.sample(line.interpolate(d).coords[0])
+        # Road grade is rise/run along the alignment, not the terrain's
+        # steepest gradient: a contour road can cross a steep hillside level.
+        # Sample each segment separately so switchbacks and short uphill legs
+        # cannot cancel one another. Respect both raster axes on narrow maps.
+        step = min(20, self.width / max(1, self.w-1) / 2,
+                   self.height / max(1, self.h-1) / 2)
+        samples = [tuple(line.coords[0])]
+        for a, b in zip(line.coords, list(line.coords)[1:]):
+            count = max(1, math.ceil(math.dist(a, b) / step))
+            samples.extend(tuple(a[k]+(b[k]-a[k])*i/count for k in (0,1))
+                           for i in range(1, count+1))
+        limit = ROAD_TYPES[kind]['maxGrade']
+        heights = []
+        for point in samples:
+            value = self.sample(point)
             if value['water']:
-                raise RoadConflict('路线穿过水面，请选择高架桥或隧道',line.interpolate(d).coords[0])
-            if value['slope'] > (.16 if kind == 'train' else .42):
-                raise RoadConflict('地形坡度过大，请改线或使用隧道',line.interpolate(d).coords[0])
+                raise RoadConflict('路线穿过水面，请选择高架桥或隧道',point)
+            heights.append(value['height'])
+        # Water takes precedence over the steep riverbank leading into it.
+        for a, b, ha, hb in zip(samples, samples[1:], heights, heights[1:]):
+            distance = math.dist(a, b)
+            grade = abs(hb-ha) / distance if distance > 1e-8 else 0
+            # Float32 height storage slightly perturbs an exact-limit incline.
+            if grade > limit + 1e-5:
+                midpoint = [(x+y)/2 for x,y in zip(a,b)]
+                raise RoadConflict(f'道路纵坡过大（{grade:.1%}，上限 {limit:.1%} / {math.degrees(math.atan(limit)):.1f}°），请沿等高线绕行、增加折返点或使用隧道',midpoint,code='grade')
 
 
 def road_contacts(road, other, shape=None, other_shape=None, tolerance=.05):
@@ -452,6 +478,7 @@ def building_footprint(parcel,use,intensity=0,maximum=math.inf):
         # Slender offices can rise with the market rather than consuming the
         # entire site's demand in a single enormous floorplate.
         if use=='office' and local.area>950:maximum=rng.uniform(420,780)
+    if parcel.get('terrain',{}).get('slope',0)>.20:maximum=min(maximum,240.)
     target=min(maximum,local.area*min(.95,coverage+intensity*.06))
     lo,hi=y0,y1
     for _ in range(18):
@@ -538,7 +565,7 @@ def parcels_for(roads, old, terrain, reserves=(), affected=None):
                 parts=[q for q in parts if q.geom_type=='Polygon' and q.is_valid and not q.interiors and q.area>=220 and q.buffer(-2).area>=130 and q.distance(point)<=half+8]
                 if not parts:continue
                 candidate=max(parts,key=lambda q:q.area)
-                if not terrain.buildable(candidate):continue
+                if not terrain.buildable(candidate, .45):continue
                 center=candidate.centroid
                 value=dict(existing) if existing else dict(id=pid,building=None,landValue=80.,rent=9.,use='auto',age=0)
                 value.update(road=r['id'],points=[list(q) for q in candidate.exterior.coords],center=[center.x,center.y],area=round(candidate.area,2),frontage=[point.x,point.y],streetAngle=math.degrees(math.atan2(ty,tx)),connected=True)

@@ -77,6 +77,7 @@
 .city-divider{height:1px;background:var(--city-line);margin:18px 0}
 .city-empty{padding:20px 6px;text-align:center;color:var(--city-muted);font-size:12px;line-height:1.9}
 .city-hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:9px 14px;max-width:65%;background:#fbfcf6f2;border:1px solid #d9e2d3;border-radius:6px;color:#3d5c46;font-size:12px;text-align:center;pointer-events:none}
+.city-hint.error{color:#923b2b;border-color:#c98473;background:#fff4eef5;font-weight:600}
 .city-legend{display:flex;align-items:center;gap:14px;font-size:11px;color:#53695b;flex-wrap:wrap}
 .city-legend span{display:inline-flex;align-items:center;gap:5px}.city-legend i{width:9px;height:9px;border-radius:2px;background:var(--swatch)}
 .city-status{font-size:11px;color:var(--city-muted);min-height:16px}

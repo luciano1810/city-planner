@@ -1,4 +1,5 @@
 """Saved, versioned model calibration. Currency is fictional simulation currency."""
+import math
 POLICY = dict(regionalPassengerHouseholds=12,regionalBoundaryMeters=650,freightHandlingMinutes=12,freightTonnesPerWorker=.8,externalRoadMinutes=45,truckTonnes=12,version='urban-10', autoLanesPerMonth=3, blockTargetArea=22000, laneMaximumLength=210,
               parkPerBuildings=28, plazaPerBuildings=45, householdSpace=75,
               walkingMetersPerMinute=80, trafficIterations=2, priceMonthlyLimit=.07,
@@ -95,6 +96,10 @@ ROAD_TYPES = {
 }
 
 ROAD_KINDS = frozenset(('lane','street','avenue','highway','motorway','path'))
+# Permissive game construction limits: steep roads trade speed/capacity and
+# engineering cost for keeping the player's alignment instead of long detours.
+for kind, config in ROAD_TYPES.items():
+    config['maxGrade'] = math.tan(math.radians(30)) if kind in ROAD_KINDS else (.16 if kind == 'train' else .42)
 DRIVABLE_ROADS = ROAD_KINDS - {'path'}
 FRONTAGE_ROADS = frozenset(('lane','street','avenue'))
 
@@ -118,7 +123,7 @@ USES = {
 }
 
 
-TABLE_UNITS=dict(road=dict(width='m',speed='km/h',capacity='车辆/h',cost='模拟币/m'),
+TABLE_UNITS=dict(road=dict(width='m',speed='km/h',capacity='车辆/h',cost='模拟币/m',maxGrade='高差 / 水平距离'),
     transit=dict(speed='km/h',capacity='人/辆',vehicleCost='模拟币/辆/月',kmCost='模拟币/车·km'),
     use=dict(rent='模拟币/m²/月',cost='模拟币/m²',space='m²/户或岗位'))
 

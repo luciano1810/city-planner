@@ -208,6 +208,9 @@ class City:
         return city
 
     def rebuild(self, regenerate=False):
+        from .lane_connections import connect_lane_entrances
+        if connect_lane_entrances(self):
+            regenerate = True
         if regenerate:
             previous=getattr(self,'_parcel_roads',{})
             current={r['id']:(r['kind'],r['level'],tuple(map(tuple,r['points']))) for r in self.s['roads']}
@@ -827,11 +830,30 @@ class City:
         shape=LineString(pts)
         if not shape.is_simple or shape.length<20:
             raise ValueError('路线过短或自相交')
+        adjusted = False
+        try:
+            self.terrain.valid_link(shape,kind,level)
+        except RoadConflict as error:
+            if error.code!='grade' or not cmd.get('autoRoute') or level!=0:
+                raise
+            from .road_alignment import route_around_grade
+            from shapely.ops import unary_union
+            clearance = ROAD_TYPES[kind]['width']/2+2
+            obstacles = []
+            for parcel in self.s['parcels']:
+                if parcel.get('building'):
+                    obstacles.append(Polygon(parcel['building']['footprint']).buffer(clearance))
+                if parcel.get('openSpace') or parcel['use']=='protected' or renewal.locked(self,parcel):
+                    obstacles.append(Polygon(parcel['points']).buffer(clearance))
+            routed = route_around_grade(self.terrain,controls,kind,unary_union(obstacles))
+            if routed is None:
+                raise RoadConflict('附近未找到可行的绕坡路线，请移动终点、增加中间控制点或使用隧道',error.point,code='grade')
+            pts=controls=routed
+            shape=LineString(pts);shape_mode='polyline';adjusted=True
         for road in self.s['roads']:
             if road['level']==level and group(road)==('road' if kind in ROAD_KINDS else kind):
                 if shape.intersection(LineString(road['points'])).length>2:
                     raise RoadConflict('路线与已有设施重叠',shape.intersection(LineString(road['points'])).representative_point().coords[0])
-        self.terrain.valid_link(shape,kind,level)
         special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level)
         if level==0:
             occupied=shape.buffer(ROAD_TYPES[kind]['width']/2+2)
@@ -848,7 +870,7 @@ class City:
         cost=shape.length*ROAD_TYPES[kind]['cost']*profile['costFactor']
         self.spend(cost,'轨道工程' if kind in ('metro','train','tram') else '道路工程')
         self.s['roads'].append(dict(id=self.uid('r'),kind=kind,level=level,points=pts,
-                                   controls=controls,shape=shape_mode,profile=profile,constructionCost=round(cost),
+                                   controls=controls,shape=shape_mode,terrainAdjusted=adjusted,profile=profile,constructionCost=round(cost),
                                    oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name',ROAD_TYPES[kind]['name'])),
                                    length=shape.length))
 
@@ -859,8 +881,10 @@ class City:
             if cmd.get('id'):
                 self.s['roads']=[r for r in self.s['roads'] if r['id']!=cmd['id']]
             self.add_road(cmd)
+            from .lane_connections import connect_lane_entrances
+            connect_lane_entrances(self)
             road=self.s['roads'][-1]
-            return dict(valid=True,road=road,connections=sum(next(road_contacts(road,r),None) is not None for r in state['roads'] if r['id']!=cmd.get('id')))
+            return dict(valid=True,road=road,connections=sum(next(road_contacts(road,r),None) is not None for r in self.s['roads'] if r['id']!=road['id']))
         except ValueError as error:
             return dict(valid=False,reason=str(error),point=getattr(error,'point',None))
         finally:
@@ -1030,9 +1054,10 @@ class City:
                     continue
             surviving.append(h)
         self.s['households']=surviving
-        demand=int(self.s['settings']['migration']*self.s['settings']['growth'])
+        arrivals=int(self.s['settings']['migration']*self.s['settings']['growth'])
+        demand=self.s['pendingHousing']+arrivals
         jobs=sum(p['building'].get('positions',0) for p in self.s['parcels'] if p.get('building') and p['building']['status']=='active')
-        incoming=min(demand,max(3,jobs-len(surviving)+8))
+        incoming=min(demand,max(3,jobs-len(surviving)+8)) if self.s['settings']['growth']>0 else 0
         admitted=0
         for _ in range(incoming):
             homes=[p for p in self.available_homes() if occupied[p['id']]<p['building']['capacity']]

@@ -147,12 +147,16 @@ def desired_floors(city,p,use):
 def development_targets(city):
     population=sum(h['size'] for h in city.s['households']);policy=city.s['policy']
     external=city.s['settings']['externalJobs']
-    return {'residential':policy['housingBaseDemand']+len(city.s['households'])+city.s['pendingHousing']*policy['pendingHousingMultiplier'],
+    waiting=city.s['pendingHousing']
+    arrivals=city.s['settings']['migration']*city.s['settings']['growth']
+    # Count queued households once; retain only a bounded near-term demand buffer.
+    buffer=min(waiting,arrivals)*max(0,policy['pendingHousingMultiplier']-1)
+    return {'residential':policy['housingBaseDemand']+len(city.s['households'])+waiting+buffer,
         'commercial':policy['commercialBaseDemand']+population*policy['commercialPopulationDemand'],'office':external*policy['officeExternalDemand']+population*policy['officePopulationDemand'],
         'industrial':external*policy['industrialExternalDemand']+population*policy['industrialPopulationDemand'],'warehouse':policy['warehouseBaseDemand']+external*policy['warehouseExternalDemand']+population*policy['warehousePopulationDemand']}
 
 
-def planned_supply(city):
+def planned_supply(city, *, housing_credit=1.):
     supply=Counter()
     replaced=set()
     for project in city.s.get('renewals',[]):
@@ -162,26 +166,47 @@ def planned_supply(city):
             replaced.update(phase['sourceIds'])
             for site in phase['sites']:
                 b=site.get('targetBuilding')
-                if b:supply[b['use']]+=b['capacity']
+                if b:supply[b['use']]+=b['capacity']*(housing_credit if b['use']=='residential' else 1)
     for p in city.s['parcels']:
         if p['id'] in replaced:continue
         b=p.get('building')
         if not b:continue
-        supply[b['use']]+=b['capacity']
+        supply[b['use']]+=b['capacity']*(housing_credit if b['use']=='residential' and b['status']=='construction' else 1)
         if b.get('extensionReady'):
             from .parameters import USES
             space=city.s['policy']['householdSpace'] if b['use']=='residential' else USES[b['use']]['space']
-            supply[b['use']]+=b['footprintArea']*b.get('extensionFloors',1)/space
+            supply[b['use']]+=b['footprintArea']*b.get('extensionFloors',1)/space*(housing_credit if b['use']=='residential' else 1)
     return supply
 
 
 def select_projects(city,uses,style):
     from .renewal import locked
-    policy=city.s['policy'];supply=planned_supply(city);targets=development_targets(city)
+    policy=city.s['policy'];supply=planned_supply(city,housing_credit=.5);targets=development_targets(city)
+    full_supply=planned_supply(city)
+    housing_limit=targets['residential']+2*city.s['settings']['migration']*city.s['settings']['growth']
+    def needed(use):
+        gap=targets[use]-supply[use]
+        return (gap/max(1,targets[use])>=policy['minimumDevelopmentDemand'] or gap>=policy['minimumProjectUnits']) and (use!='residential' or full_supply[use]<housing_limit)
     demand={k:max(0,(targets[k]-supply[k])/max(1,targets[k])) for k in uses}
     city.s['demand']=demand
-    candidates=[p for p in city.s['parcels'] if p['connected'] and not locked(city,p) and not p.get('building') and not p.get('openSpace') and not p.get('blockCommon') and p['use']!='protected']
+    candidates=[]
+    for p in city.s['parcels']:
+        p.pop('developmentReason',None)
+        if p.get('building'):continue
+        reason=('公共配套占地' if p.get('openSpace') or p.get('blockCommon') else
+                '保护用地，不允许开发' if p['use']=='protected' else
+                '道路未接入' if not p['connected'] else
+                '更新项目已预留此地块' if locked(city,p) else
+                '坡度超过 45%，保留为不可开发陡坡' if p['terrain'].get('maxSlope',p['terrain']['slope'])>.45 else
+                '发展速度为零，已停止新开发' if city.s['settings']['growth']<=0 else
+                '每月新项目名额为零' if city.s['settings']['maxProjects']<=0 else None)
+        p['developmentReason']=reason or '等待本月开发评估'
+        if not reason:candidates.append(p)
+    startup=sum(h['size'] for h in city.s['households'])<100
+
     ranked={u:[] for u in uses}
+    eligible={p['id']:set() for p in candidates}
+    exclusions={p['id']:set() for p in candidates}
     served_yards={s['start'] for s in city.s['regionalServices'] if s.get('valid')}
     # The best feasible site for each use competes for limited construction
     # capacity. Infill favours existing fabric; heavy uses prefer the edge.
@@ -200,8 +225,10 @@ def select_projects(city,uses,style):
             warehouse=(.2+(1-central)**2*1.8+p.get('industryCluster',0)+hub*2)/(1+freight/25+terrain['slope']*18+p['landValue']/1000))
         for use,score in scores.items():
             if p['use'] in uses and p['use']!=use:continue
-            if use=='residential' and not sensitive_site_safe(city,Polygon(p['points'])):continue
-            if use in ('industrial','warehouse') and freight>=120:continue
+            if use=='residential' and not sensitive_site_safe(city,Polygon(p['points'])):
+                exclusions[p['id']].add('住宅选址受周边污染或安全间距限制');continue
+            if use in ('industrial','warehouse') and freight>=120:
+                exclusions[p['id']].add('工业与仓储缺少可达货运门户');continue
             rng=random.Random(stable_id('',(p['id'],use,'site')))
             # Persistent micro-site variation breaks identical rows without
             # re-rolling the entire city every month.
@@ -209,16 +236,21 @@ def select_projects(city,uses,style):
             if use in ('residential','commercial','office'):
                 score*=1+policy['frontageInfillBonus']*(p.get('frontageFill',0)+int(p.get('infillGap',False)))
                 if p.get('block'):score*=1.4
-            ranked[use].append((score,p))
+            ranked[use].append((score,p));eligible[p['id']].add(use)
     for rows in ranked.values():rows.sort(key=lambda row:(-row[0],row[1]['id']))
-    used=set();max_projects=int(city.s['settings']['maxProjects']*city.s['settings']['growth'])
-    for _ in range(max_projects):
+    used=set();max_projects=int(city.s['settings']['maxProjects']*city.s['settings']['growth']);started=0
+    # Rejected proposals do not consume construction slots. Each parcel is tried once.
+    for attempt in range(len(candidates)):
+        if started>=max_projects:break
         choices=[]
         for use,rows in ranked.items():
             while rows and rows[0][1]['id'] in used:rows.pop(0)
             gap=targets[use]-supply[use]
-            if rows and (demand[use]>=policy['minimumDevelopmentDemand'] or gap>=policy['minimumProjectUnits']):choices.append((rows[0][0]*demand[use],use,rows[0][1]))
+            if rows and needed(use):choices.append((rows[0][0]*demand[use],use,rows[0][1]))
         if not choices:break
+        # Give the first homes a foothold before employment uses fill the queue.
+        housing=[row for row in choices if row[1]=='residential' and row[2]['terrain']['slope']>.20]
+        if startup and started<3 and housing:choices=housing
         _,use,p=max(choices,key=lambda row:(row[0],row[1],row[2]['id']));used.add(p['id'])
         if use in ('industrial','warehouse') and not p.get('block'):
             # Heavy uses assemble adjacent vacant frontage lots into a larger
@@ -247,18 +279,24 @@ def select_projects(city,uses,style):
         terrain=p['terrain'];central=p.get('centrality',0);cluster=p.get('cluster',0);urban=p.get('urbanity',0)
         intensity=max(0,min(1,p.get('businessCore',0)*.7+urban*.3))
         floors=desired_floors(city,p,use)
+        hillside=terrain['slope']>.20
+        if hillside:floors=min(floors,3)
         maximum=policy['officeFootprintMaximum'] if use=='office' else policy['residentialFootprintMaximum'] if use=='residential' else math.inf
         sizing=random.Random(stable_id('',(p['id'],use,'floorplate')))
         maximum*=sizing.uniform(.55,1) if use=='office' else sizing.uniform(.75,1)
+        if hillside:maximum=min(maximum,240.)
         footprint=building_footprint(p,use,intensity,maximum)
-        if footprint is None:continue
+        if footprint is None:
+            p['developmentReason']='地块形状或退界后面积不足，无法布置建筑';continue
+        if not city.terrain.buildable(footprint,.45):
+            p['developmentReason']='建筑范围含水面或超过 45% 的陡坡';continue
         if p.get('block'):
             space=policy['householdSpace'] if use=='residential' else uses[use]['space']
             gap=max(0,targets[use]-supply[use])
             # Large floorplates need real demand; start low and add floors as
             # needed rather than forcing a huge vacant complex into a village.
             if footprint.area/space>max(gap*1.25,targets[use]*.25):
-                p['reason']='整街区项目等待足够的住房或经营空间需求';continue
+                p['developmentReason']=p['reason']='整街区项目等待足够的住房或经营空间需求';continue
             floors=min(floors,max(1,int(gap*space/footprint.area)))
         if use=='office':
             # A single early tower must not consume the next decade's demand.
@@ -266,9 +304,17 @@ def select_projects(city,uses,style):
             floors=min(floors,max(2,int(project_jobs*uses[use]['space']/footprint.area)))
         floor_area=footprint.area*floors;cap=max(1,int(floor_area/(policy['householdSpace'] if use=='residential' else uses[use]['space'])))
         projected_rent=uses[use]['rent']*(1+central*.35+cluster*.35)
-        cost=floor_area*uses[use]['cost']*terrain['costFactor']+p['landValue']*p['area']
-        if floor_area*projected_rent*12*.8*policy['developmentPaybackYears']<cost:
-            p['reason']='预计租金收益不足以覆盖土地与建设成本';continue
+        engineering=terrain['costFactor']
+        # Small low-rise homes need local stepped foundations, not full-lot grading.
+        if hillside and use=='residential' and footprint.area<=240.1:
+            engineering=1+(engineering-1)*.5
+        cost=floor_area*uses[use]['cost']*engineering+p['landValue']*p['area']
+        payback=policy['developmentPaybackYears']
+        # Early low-rise hillside housing accepts a longer investment horizon.
+        if startup and hillside and use=='residential':payback*=1.5
+        if floor_area*projected_rent*12*.8*payback<cost:
+            p['developmentReason']=p['reason']=f"候选{uses[use]['name']}项目预计租金收益不足以覆盖土地与建设成本";continue
+        p.pop('developmentReason',None)
         p['rent']=round(projected_rent,2)
         p['building']=dict(id=city.uid('b'),use=use,floors=floors,floorArea=round(floor_area,1),footprintArea=round(footprint.area,1),
             footprint=[list(q) for q in footprint.exterior.coords],center=list(footprint.centroid.coords[0]),capacity=cap,status='construction',ready=city.s['month']+policy['constructionBaseMonths']+floors//2,
@@ -276,6 +322,25 @@ def select_projects(city,uses,style):
         b=p['building']
         if len(footprint.exterior.coords)>7 and use in ('residential','commercial'):b['form']='courtyard'
         b['usableArea']=round(floor_area*b['usableRatio'],1);b['useAreas']={use:round(floor_area,1)}
-        supply[use]+=cap;demand[use]=max(0,(targets[use]-supply[use])/max(1,targets[use]))
+        started+=1
+        full_supply[use]+=cap;supply[use]+=cap*(.5 if use=='residential' else 1)
+        demand[use]=max(0,(targets[use]-supply[use])/max(1,targets[use]))
         p['reason']='用途竞争选址：交通中心性、既有街区、有效需求与开发收益满足条件'
+    for p in candidates:
+        if p.get('building') or p['id'] in used:continue
+        options=eligible[p['id']]
+        if not options:
+            p['developmentReason']='；'.join(sorted(exclusions[p['id']])) or '规划用途没有可行的开发方案'
+        elif any(needed(use) for use in options):
+            p['developmentReason']=f'本月新建名额已用尽（{started}/{max_projects}），等待下月选址'
+        elif 'residential' in options and full_supply['residential']>=housing_limit:
+            p['developmentReason']=f"住房规划总容量（含在建、更新及扩建） {full_supply['residential']:.0f} 户，已覆盖排队需求及未来两个月迁入预留"
+        else:
+            rows=[f"{uses[u]['name']}缺口 {max(0,targets[u]-supply[u]):.1f} / 目标 {targets[u]:.1f}" for u in sorted(options)]
+            p['developmentReason']=f"需求未达开工门槛（缺口至少 {policy['minimumProjectUnits']} 或占目标 {policy['minimumDevelopmentDemand']:.0%}）；"+'；'.join(rows)
+            if exclusions[p['id']]:p['developmentReason']+='；'+'；'.join(sorted(exclusions[p['id']]))
+    city.s['housingDemand']=dict(waiting=city.s['pendingHousing'],target=round(targets['residential'],1),
+        completed=sum(p['building']['capacity'] for p in city.s['parcels'] if p.get('building') and p['building']['use']=='residential' and p['building']['status']!='construction'),
+        planned=round(full_supply['residential'],1),effective=round(supply['residential'],1),
+        constructionCredit=.5,month=city.s['month'],started=started,projectLimit=max_projects)
     return demand

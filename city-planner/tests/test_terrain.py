@@ -49,7 +49,18 @@ class TerrainTests(unittest.TestCase):
     def test_sea_level_and_humidity_have_expected_effects(self):
         baseline = generate({**self.options, 'riverDensity': 0})
         high_sea = generate({**self.options, 'sea': 60, 'riverDensity': 0})
-        self.assertEqual(baseline['elevation'], high_sea['elevation'])
+        # Sea level may raise/relocate the guaranteed dry starter terrace.
+        a,b=decode_heights(baseline)[0],decode_heights(high_sea)[0]
+        yy,xx=np.mgrid[:a.shape[0],:a.shape[1]]
+        outside=np.ones(a.shape,dtype=bool)
+        for world in (baseline,high_sea):
+            site=world['startupArea'];cx,cy=site['center']
+            dx=world['grid']['widthMeters']/(world['width']-1)
+            dy=world['grid']['heightMeters']/(world['height']-1)
+            core=site['sizeMeters']/np.sqrt(2)+3*max(dx,dy)
+            radius=core+max(site['sizeMeters']*.4,2*max(dx,dy))
+            outside &= np.hypot(xx*dx-cx,yy*dy-cy)>=radius
+        np.testing.assert_array_equal(a[outside],b[outside])
         self.assertLess(high_sea['stats']['landPercent'], baseline['stats']['landPercent'])
         dry = generate({**self.options, 'moisture': 0})
         wet = generate({**self.options, 'moisture': 100})

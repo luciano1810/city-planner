@@ -114,11 +114,20 @@ def grow_public_spaces(city):
     for kind,target in targets.items():
         existing=[f for f in city.s['facilities'] if f['kind']==kind and not f.get('blockCommon')]
         if len(existing)>=target:continue
+        # Bootstrap housing and employment before consuming scarce land.
+        if kind=='park' and population<40:continue
+        if kind=='plaza' and jobs<20:continue
+        available=[p for p in city.s['parcels'] if p['connected'] and not p.get('building')
+                   and not p.get('openSpace') and not p.get('blockCommon')
+                   and not p.get('renewalProject') and p['use'] in ('auto','residential')
+                   and p['terrain'].get('maxSlope',p['terrain']['slope'])<=.45]
+        reserved={p['id'] for p in sorted(available,key=lambda p:(p['terrain']['slope'],p['id']))[:3]}
+        if population>=100:reserved=set()
         separation=policy[kind+'Separation']
         coverage=[city.distances(f['id'],'walk')[0] for f in existing if f.get('connected')]
         budget=8 if kind in ('park','plaza') else 15
         underserved={p['id']:residents[p['id']]*(1 if not any(d.get(p['id'],math.inf)<budget for d in coverage) else .12) for p in homes}
-        choices=[p for p in city.s['parcels'] if p['connected'] and not p.get('renewalProject') and not p.get('building') and not p.get('openSpace') and p['use']!='protected'
+        choices=[p for p in city.s['parcels'] if p['id'] not in reserved and p['terrain'].get('maxSlope',p['terrain']['slope'])<=.45 and p['connected'] and not p.get('renewalProject') and not p.get('building') and not p.get('openSpace') and p['use']!='protected'
             and not p.get('blockCommon') and (not p.get('block') or p.get('blockLayout')=='single')
             and all(math.dist(p['center'],f['point'])>=separation for f in existing)
             and (kind=='plaza' or p.get('businessCore',0)<.72)

@@ -5,6 +5,7 @@ import hashlib
 import time
 import numpy as np
 from hydrology import drainage, estuary, carve_channels, lake_outlets
+from startup_land import reserve_startup_land, restore_startup_land, outside_startup
 from coastal import BAY_STYLES, bay_height, random_bay_height
 from height_format import HEIGHT_ENCODING, encode_heights, sea_level_meters
 
@@ -95,7 +96,7 @@ def flatten_terrain(h, sea, amount):
     return result
 
 
-def add_lakes(h, x, y, detail, cfg, rng):
+def add_lakes(h, x, y, detail, cfg, rng, startup=None):
     """Carve irregular enclosed basins; retain each lake's own water surface."""
     sea = sea_level_meters(cfg)
     water = np.full_like(h, -np.inf)
@@ -118,6 +119,9 @@ def add_lakes(h, x, y, detail, cfg, rng):
         shoreline = 1 + np.sin(angle * 3 + count) * .15 + np.sin(angle * 5 - count) * .09
         irregular = distance / shoreline + (detail - .5) * 1.8
         footprint = irregular < 1.30
+        if startup:
+            y0,y1,x0,x1=startup['bounds']
+            if np.any(footprint[y0:y1,x0:x1] & startup['mask']):continue
         if np.any(h[footprint] < sea + 324):
             continue
         level = max(sea + 252, float(h[cy, cx]) - 86.4)
@@ -190,7 +194,8 @@ def generate(options):
     wet = np.clip(fractal(x, y, rng, frequency=4, octaves=4) + cfg['moisture'] / 100 - .5, 0, 1)
     sea = sea_level_meters(cfg)
     h = flatten_terrain(h, sea, cfg['flatness'])
-    water, lake_count = add_lakes(h, x, y, detail, cfg, np.random.default_rng(seed_int + 17))
+    startup=reserve_startup_land(h,sea,cfg)
+    water, lake_count = add_lakes(h, x, y, detail, cfg, np.random.default_rng(seed_int + 17),startup)
     lake_water = water.copy()
     if kind == 'bay' and cfg['bayStyle'] != 'gulf':
         # Regional trunks use the same drainage graph as their tributaries.
@@ -198,6 +203,8 @@ def generate(options):
         coastal, sediment = [], np.zeros_like(h)
     else:
         coastal, sediment = estuary(h, water, x, y, detail, cfg, np.random.default_rng(seed_int + 913))
+    restore_startup_land(h,water,startup)
+    coastal=outside_startup(coastal,startup,cfg,width)
     # Preserve receiving water bodies before channel incision. Vector rendering
     # uses these shores plus the continuous channel geometry, not raster beds.
     water_bodies = {
@@ -208,8 +215,10 @@ def generate(options):
     cell_size_m = cfg['widthKm'] * 1000 / width
     carve_channels(h, water, coastal, sea, cell_size_m)
     outlets = lake_outlets(h, water, lake_water, sea, cfg)
+    outlets=outside_startup(outlets,startup,cfg,width)
     carve_channels(h, water, outlets, sea, cell_size_m)
     inland = drainage(h, sea, water, cfg, inflow_edge=inflow_edge)
+    inland=outside_startup(inland,startup,cfg,width)
     carve_channels(h, water, inland, sea, cell_size_m)
     channels = inland + coastal + outlets
     land = (h > sea) & (water <= h)
@@ -217,6 +226,7 @@ def generate(options):
     max_m = max(0, int(float(h.max()) - sea))
     data = {
         'width': width, 'height': height, 'config': cfg, 'heightEncoding': HEIGHT_ENCODING,
+        'startupArea': {k:startup[k] for k in ('center','sizeMeters','elevationMeters')},
         'grid': {'widthMeters': cfg['widthKm'] * 1000, 'heightMeters': cfg['heightKm'] * 1000,
                  'pixelSizeMeters': [cfg['widthKm'] * 1000 / width, cfg['heightKm'] * 1000 / height],
                  'seaLevelMeters': sea, 'verticalDatum': 'local', 'elevationUnit': 'm', 'origin': 'top-left',

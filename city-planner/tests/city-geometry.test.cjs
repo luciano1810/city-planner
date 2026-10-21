@@ -1,6 +1,38 @@
 const test=require('node:test');const assert=require('node:assert/strict');
 const {curvePoints,footprintAxis}=require('../renderer/city-geometry.js');
 const {buildingMassing,fitBuildingMasses,rectangleInside,polygonArea,containsPoint}=require('../renderer/city-geometry.js');
+const {roadDraftPlan,roadControlAt}=require('../renderer/city-geometry.js');
+test('moving the cursor cannot bend or invalidate the two clicked road endpoints',()=>{
+ const controls=[[428,388],[693,264]],copy=structuredClone(controls);
+ for(const hover of [[649,106],[0,0],[428,388]]){
+  const plan=roadDraftPlan(controls,hover,true,{valid:false,reason:'道路纵坡过大'});
+  assert.deepEqual(plan.points,controls);
+  assert.deepEqual(plan.guide,[controls[1],hover]);
+  assert.equal(plan.reason,'道路纵坡过大');
+ }
+ assert.deepEqual(controls,copy);
+});
+test('committed curves and snapped geometry match validation while the guide stays separate',()=>{
+ const controls=[[0,0],[100,80],[200,0]];
+ assert.deepEqual(roadDraftPlan(controls,[200,400]).points,curvePoints(controls));
+ const snapped=[[0,5],[100,80],[205,0]],preview={valid:true,road:{points:snapped}};
+ const plan=roadDraftPlan(controls,[300,100],true,preview);
+ assert.deepEqual(plan.points,snapped);
+ assert.deepEqual(plan.guide,[[205,0],[300,100]]);
+ assert.equal(plan.invalid,false);
+ assert.deepEqual(roadDraftPlan(controls,null,true,preview).guide,[]);
+ assert.deepEqual(roadDraftPlan(controls,[205,0],true,preview).guide,[]);
+ assert.deepEqual(roadDraftPlan([],null).points,[]);
+});
+test('draft controls remain draggable at all zooms and double clicks reuse the endpoint',()=>{
+ const controls=[[100,200],[1000,2000]];
+ for(const scale of [.01,.5,5]){
+  assert.equal(roadControlAt(controls,[1000+3/scale,2000+4/scale],scale,scale),1);
+  assert.equal(roadControlAt(controls,[1000+11/scale,2000],scale,scale),-1);
+ }
+ assert.equal(roadControlAt(controls,[1001,2009],1,2),-1);
+ assert.equal(roadControlAt([[0,0],[5,0]],[4,0],1,1),1);
+});
 test('curves retain endpoints, interpolate handles and add true curvature',()=>{
  const controls=[[0,0],[100,100],[200,0]],points=curvePoints(controls);
  assert.deepEqual(points[0],controls[0]);assert.deepEqual(points.at(-1),controls.at(-1));
