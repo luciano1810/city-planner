@@ -1,0 +1,180 @@
+{
+  "model": "shanhai-city-4",
+  "month": 96,
+  "population": 8820,
+  "parcels": 1409,
+  "builtParcels": 240,
+  "generatedRoads": 96,
+  "uses": {
+    "residential": {
+      "buildings": 123,
+      "sameUseNearestShare": 0.992,
+      "meanSameUseNearestMeters": 42.1,
+      "floors": {
+        "5": 60,
+        "2": 2,
+        "4": 15,
+        "3": 3,
+        "6": 40,
+        "7": 3
+      },
+      "medianPlotCoverage": 0.277,
+      "medianDistanceToRoadCenter": 17.1,
+      "medianBuildingGap": 14.2
+    },
+    "commercial": {
+      "buildings": 20,
+      "sameUseNearestShare": 0.8,
+      "meanSameUseNearestMeters": 38.2,
+      "floors": {
+        "4": 3,
+        "3": 17
+      },
+      "medianPlotCoverage": 0.523,
+      "medianDistanceToRoadCenter": 14.3,
+      "medianBuildingGap": 7.0
+    },
+    "office": {
+      "buildings": 13,
+      "sameUseNearestShare": 0.769,
+      "meanSameUseNearestMeters": 38.3,
+      "floors": {
+        "11": 2,
+        "10": 1,
+        "17": 1,
+        "13": 1,
+        "5": 1,
+        "12": 1,
+        "7": 3,
+        "8": 1,
+        "9": 1,
+        "14": 1
+      },
+      "medianPlotCoverage": 0.204,
+      "medianDistanceToRoadCenter": 27.3,
+      "medianBuildingGap": 20.5
+    },
+    "industrial": {
+      "buildings": 59,
+      "sameUseNearestShare": 0.847,
+      "meanSameUseNearestMeters": 96.7,
+      "floors": {
+        "1": 59
+      },
+      "medianPlotCoverage": 0.573,
+      "medianDistanceToRoadCenter": 11.2,
+      "medianBuildingGap": 16.8
+    },
+    "warehouse": {
+      "buildings": 25,
+      "sameUseNearestShare": 0.36,
+      "meanSameUseNearestMeters": 71.4,
+      "floors": {
+        "1": 25
+      },
+      "medianPlotCoverage": 0.647,
+      "medianDistanceToRoadCenter": 13.5,
+      "medianBuildingGap": 13.3
+    }
+  },
+  "tallOffices": 7,
+  "largestTallOfficeCluster": 7,
+  "tallOfficeClusters": [
+    {
+      "buildings": 7,
+      "floors": [
+        10,
+        11,
+        11,
+        12,
+        13,
+        14,
+        17
+      ],
+      "center": [
+        2770.3991112837466,
+        2663.286653252947
+      ]
+    }
+  ],
+  "facilities": {
+    "park": {
+      "count": 3,
+      "minimumSeparation": 519.5456286307517
+    },
+    "plaza": {
+      "count": 3,
+      "minimumSeparation": 262.5194169757454
+    },
+    "school": {
+      "count": 2,
+      "minimumSeparation": 487.0277686734387
+    },
+    "clinic": {
+      "count": 2,
+      "minimumSeparation": 676.1911981080708
+    }
+  },
+  "centers": [
+    {
+      "point": [
+        2770.0521058304253,
+        2707.8378735217075
+      ],
+      "parcel": "p-f4eacc0b70d3cd",
+      "source": "network-opportunity",
+      "formed": 1
+    }
+  ],
+  "districts": [
+    {
+      "kind": "工业仓储区",
+      "buildings": 79,
+      "jobs": 1374,
+      "population": 0,
+      "floorRatio": 0.64
+    },
+    {
+      "kind": "居住区",
+      "buildings": 123,
+      "jobs": 498,
+      "population": 8396,
+      "floorRatio": 1.49
+    },
+    {
+      "kind": "CBD",
+      "buildings": 23,
+      "jobs": 1540,
+      "population": 292,
+      "floorRatio": 1.96
+    },
+    {
+      "kind": "办公集聚区",
+      "buildings": 5,
+      "jobs": 642,
+      "population": 0,
+      "floorRatio": 1.85
+    },
+    {
+      "kind": "居住区",
+      "buildings": 1,
+      "jobs": 0,
+      "population": 34,
+      "floorRatio": 0.46
+    },
+    {
+      "kind": "居住区",
+      "buildings": 3,
+      "jobs": 0,
+      "population": 98,
+      "floorRatio": 0.56
+    },
+    {
+      "kind": "工业仓储区",
+      "buildings": 1,
+      "jobs": 106,
+      "population": 0,
+      "floorRatio": 0.69
+    }
+  ]
+}

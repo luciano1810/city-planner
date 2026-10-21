@@ -1,0 +1,17 @@
+{
+  "sample": "当前可见城市与缩放",
+  "buildings": 10000,
+  "roads": 111,
+  "frames": 1152,
+  "fps": 115.3,
+  "frameP95": 10.3,
+  "inputSamples": 42,
+  "inputP95": 45.2,
+  "viewport": [
+    653,
+    519
+  ],
+  "pixelRatio": 2,
+  "zoom": "300%",
+  "method": "requestAnimationFrame; Event.timeStamp 到下一帧；连续滚轮事件"
+}

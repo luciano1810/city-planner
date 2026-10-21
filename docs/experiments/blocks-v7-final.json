@@ -1,0 +1,784 @@
+{
+  "model": "shanhai-city-7",
+  "months": 48,
+  "elapsedSeconds": 68.85,
+  "settings": {
+    "migration": 65,
+    "externalJobs": 500,
+    "growth": 1.5,
+    "fare": 2,
+    "budget": false,
+    "taxRate": 0.06,
+    "maxProjects": 18,
+    "autoGrow": true,
+    "accessBudget": 30
+  },
+  "policy": {
+    "regionalPassengerHouseholds": 12,
+    "regionalBoundaryMeters": 650,
+    "freightHandlingMinutes": 12,
+    "freightTonnesPerWorker": 0.8,
+    "externalRoadMinutes": 45,
+    "truckTonnes": 12,
+    "version": "urban-7",
+    "autoLanesPerMonth": 3,
+    "blockTargetArea": 22000,
+    "laneMaximumLength": 210,
+    "parkPerBuildings": 28,
+    "plazaPerBuildings": 45,
+    "householdSpace": 75,
+    "walkingMetersPerMinute": 80,
+    "trafficIterations": 2,
+    "priceMonthlyLimit": 0.07,
+    "districtCellMeters": 400,
+    "districtPersistenceMonths": 3,
+    "districtJoinMeters": 220,
+    "cbdMinimumBuildings": 6,
+    "cbdMinimumJobs": 800,
+    "cbdMinimumEmployed": 500,
+    "carCO2KgPerKm": 0.17,
+    "constructionBaseMonths": 2,
+    "relocationStressMonths": 4,
+    "exitStressMonths": 8,
+    "housingBurdenThreshold": 0.5,
+    "eventPersistenceMonths": 3,
+    "eventCooldownMonths": 12,
+    "lowlandProxy": "低海拔邻水指数，非洪水概率",
+    "housingBaseDemand": 40,
+    "pendingHousingMultiplier": 2,
+    "commercialBaseDemand": 15,
+    "commercialPopulationDemand": 0.15,
+    "officeExternalDemand": 0.5,
+    "officePopulationDemand": 0.18,
+    "industrialExternalDemand": 0.5,
+    "industrialPopulationDemand": 0.12,
+    "warehouseBaseDemand": 15,
+    "warehouseExternalDemand": 0.2,
+    "warehousePopulationDemand": 0.05,
+    "minimumDevelopmentDemand": 0.08,
+    "boardingMinutes": 0.8,
+    "alightingMinutes": 0.4,
+    "lowFrequencyHeadway": 20,
+    "streetSeedMonths": 3,
+    "streetGrowthRadius": 200,
+    "streetGrowthMinimumBuildings": 3,
+    "walkMaximumMinutes": 35,
+    "journeyMaximumMinutes": 150,
+    "parkingMinutes": 4,
+    "transferPenaltyMinutes": 4,
+    "carCostPerKm": 0.9,
+    "carParkingFee": 3,
+    "workMaximumMinutes": 100,
+    "workingDaysPerMonth": 22,
+    "jobOfficeExternal": 0.4,
+    "jobCommercialPopulation": 0.12,
+    "jobOfficePopulation": 0.14,
+    "jobIndustrialExternal": 0.45,
+    "jobIndustrialPopulation": 0.1,
+    "jobWarehouseExternal": 0.15,
+    "jobWarehousePopulation": 0.04,
+    "developmentPaybackYears": 24,
+    "priceSmoothing": 0.16,
+    "rentSmoothing": 0.1,
+    "unemploymentStressMonths": 6,
+    "redevelopVacancyMonths": 24,
+    "minimumOfficeShare": 0.35,
+    "cbdAccessJobs": 250,
+    "dominantUseShare": 0.45,
+    "officeClusterRadius": 220,
+    "officeClusterWorkers": 350,
+    "siteInfillRadius": 140,
+    "centralitySources": 24,
+    "centralityMinutes": 7,
+    "smallBlockMaximumArea": 22000,
+    "blockInfillThreshold": 0.28,
+    "minimumProjectUnits": 8,
+    "streetFillThreshold": 0.52,
+    "frontageInfillMeters": 90,
+    "frontageInfillBonus": 1.8,
+    "businessCoreRadius": 230,
+    "neighbourhoodAffinityRadius": 160,
+    "officeProjectShare": 0.16,
+    "officeFootprintMaximum": 520,
+    "residentialFootprintMaximum": 780,
+    "cbdMinimumOffices": 5,
+    "cbdOfficeNeighbourMeters": 180,
+    "schoolResidents": 4500,
+    "clinicResidents": 6500,
+    "parkResidents": 3800,
+    "plazaJobs": 2000,
+    "parkSeparation": 240,
+    "plazaSeparation": 260,
+    "schoolSeparation": 480,
+    "clinicSeparation": 650
+  },
+  "stats": {
+    "month": 48,
+    "population": 3628,
+    "households": 1450,
+    "jobs": 1890,
+    "employed": 1450,
+    "unemployment": 0.0,
+    "housing": 1450,
+    "vacancy": 0.0,
+    "buildings": 164,
+    "construction": 1,
+    "roadKm": 5.030477484131939,
+    "railKm": 0.0,
+    "landValue": 692.1,
+    "rent": 15.375,
+    "trips": 6180,
+    "completedTrips": 6180,
+    "failedTrips": 0,
+    "commute": 1.6959241379310346,
+    "commuteP90": 2.86,
+    "modeShare": {
+      "walk": 100.0,
+      "car": 0.0,
+      "public": 0.0
+    },
+    "boardings": 0,
+    "accessJobs": 1890.0,
+    "publicJobs": 1890.0,
+    "burden": 18.416213331280787,
+    "combinedBurden": 18.525212807881775,
+    "congestion": 0.10453001059388595,
+    "treasury": 111454809,
+    "maintenance": 10159,
+    "revenue": 717600,
+    "movedIn": 52,
+    "movedOut": 0,
+    "relocated": 0,
+    "pendingHousing": 77,
+    "developedArea": 172966.74,
+    "floorArea": 225794.5,
+    "estimatedCO2": 0,
+    "freightTrips": 154,
+    "freightKm": 87.91121827224356,
+    "uses": {
+      "residential": 110788.4,
+      "commercial": 23562.5,
+      "office": 21757.7,
+      "industrial": 37574.8,
+      "warehouse": 32111.1
+    },
+    "density": 100.77777777777777,
+    "regionalPassengers": 0,
+    "railFreightTonnes": 0.0,
+    "unservedFreightTonnes": 0.0,
+    "laborForce": 1450,
+    "vacantJobs": 440,
+    "housingInConstruction": 0,
+    "floorDistribution": {
+      "6": 23,
+      "2": 12,
+      "1": 95,
+      "4": 2,
+      "3": 10,
+      "7": 11,
+      "5": 11
+    },
+    "meanBuildingAge": 30.701219512195124,
+    "buildableArea": 195868,
+    "floorRatio": 1.1683585329329471,
+    "builtDensity": 20975.13082572985,
+    "jobDensity": 10926.956246038979,
+    "firms": 118,
+    "firmOpened": 0,
+    "firmClosed": 0,
+    "firmRelocations": 0,
+    "firmProfit": 11699280,
+    "externalDemand": 510.40000000000003,
+    "localDemand": 1748.0,
+    "landP10": 634.0219999999999,
+    "landP90": 744.944,
+    "rentByUse": {
+      "residential": 15.488478260869567,
+      "office": 33.0276,
+      "commercial": 38.0096,
+      "industrial": 18.296818181818182,
+      "warehouse": 11.788333333333334
+    },
+    "propertyValue": 654104321,
+    "overburdenedPeople": 0,
+    "commuteMedian": 1.68,
+    "commuteDistance": 133.37212993105652,
+    "meanWait": null,
+    "transfers": 0,
+    "publicJourneys": 0,
+    "mainModeShare": {
+      "walk": 100.0,
+      "car": 0.0,
+      "bus": 0.0,
+      "tram": 0.0,
+      "metro": 0.0,
+      "train": 0.0
+    },
+    "tripsByPurpose": {
+      "work": 2900,
+      "school": 856,
+      "shopping": 1016,
+      "leisure": 1288,
+      "health": 120
+    },
+    "vehicleKm": 0,
+    "personKm": 1174.27681098613,
+    "constructionCost": 6373789,
+    "fareRevenue": 0,
+    "operationCost": 0,
+    "terrainEngineeringCost": 55201,
+    "meanSlope": 0.5518644067796611,
+    "landscape": 0.1192090395480226,
+    "lowlandExposure": 0,
+    "pollutionExposure": 0.8920770365517241,
+    "autoRoadKm": 0.13103098044672035,
+    "publicSpaceArea": 14981.634790329907,
+    "parks": 2,
+    "plazas": 9,
+    "pathKm": 10.65660114870001
+  },
+  "morphology": {
+    "buildings": 164,
+    "uses": {
+      "residential": 46,
+      "office": 25,
+      "commercial": 25,
+      "industrial": 44,
+      "warehouse": 24
+    },
+    "floors": {
+      "6": 23,
+      "2": 12,
+      "1": 95,
+      "4": 2,
+      "3": 10,
+      "7": 11,
+      "5": 11
+    },
+    "forms": {
+      "slab": 8,
+      "office": 24,
+      "courtyard": 63,
+      "factory": 44,
+      "warehouse": 24,
+      "tower": 1
+    },
+    "footprintRange": [
+      136.02599489482074,
+      3744.822676805394
+    ],
+    "overlapPairs": 0,
+    "roadEncroachments": 0,
+    "waterEncroachments": 0,
+    "disconnectedBuildings": 0,
+    "intersections": 28,
+    "deadEnds": 2,
+    "deadEndShare": 0.067,
+    "meanNearestBuilding": 25.8,
+    "closedBlocks": 21,
+    "districts": [
+      {
+        "kind": "居住区",
+        "buildings": 120,
+        "jobs": 1417
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 2,
+        "jobs": 146
+      },
+      {
+        "kind": "混合城区",
+        "buildings": 41,
+        "jobs": 327
+      }
+    ],
+    "validLines": 0,
+    "transitModes": []
+  },
+  "sharedAccess": {
+    "paths": 72,
+    "inwardDoors": 63,
+    "buildingSitesWithoutInwardDoor": 0,
+    "buildingCrossings": 0,
+    "maximumUnallocatedArea": 0.0
+  },
+  "layouts": [
+    {
+      "id": "block-layout-f0abb9131f112d",
+      "kind": "pair",
+      "area": 3495.66,
+      "buildingSites": 2,
+      "buildings": 2,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-84ef6ed981f287",
+      "kind": "single",
+      "area": 2239.22,
+      "buildingSites": 1,
+      "buildings": 1,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-c5bcd48212ea85",
+      "kind": "court",
+      "area": 3046.17,
+      "buildingSites": 4,
+      "buildings": 4,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-02d5430b937a58",
+      "kind": "single",
+      "area": 2750.78,
+      "buildingSites": 1,
+      "buildings": 0,
+      "sharedSpace": false,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-2f9ae2490ed88e",
+      "kind": "frontage",
+      "area": 4929.54,
+      "buildingSites": 8,
+      "buildings": 8,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-27adf0850fd0fa",
+      "kind": "frontage",
+      "area": 3503.48,
+      "buildingSites": 8,
+      "buildings": 8,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-594d85d034aaba",
+      "kind": "frontage",
+      "area": 2810.62,
+      "buildingSites": 5,
+      "buildings": 5,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-25fd589ec7220b",
+      "kind": "single",
+      "area": 2349.85,
+      "buildingSites": 1,
+      "buildings": 0,
+      "sharedSpace": false,
+      "publicSpaces": [
+        "park"
+      ]
+    },
+    {
+      "id": "block-layout-ded1fb860e86bf",
+      "kind": "frontage",
+      "area": 8754.48,
+      "buildingSites": 10,
+      "buildings": 10,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-02433835d0ab53",
+      "kind": "frontage",
+      "area": 5996.29,
+      "buildingSites": 9,
+      "buildings": 9,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-5cc83241f8e9df",
+      "kind": "frontage",
+      "area": 3966.07,
+      "buildingSites": 7,
+      "buildings": 7,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-8469128e2c22f5",
+      "kind": "court",
+      "area": 3032.33,
+      "buildingSites": 5,
+      "buildings": 5,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-584ee8712f5228",
+      "kind": "frontage",
+      "area": 10044.99,
+      "buildingSites": 11,
+      "buildings": 11,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-e1529c6952b125",
+      "kind": "court",
+      "area": 13969.89,
+      "buildingSites": 11,
+      "buildings": 11,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "park"
+      ]
+    },
+    {
+      "id": "block-layout-5620ca531792d5",
+      "kind": "frontage",
+      "area": 5901.95,
+      "buildingSites": 10,
+      "buildings": 10,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-37ed16075189b7",
+      "kind": "pair",
+      "area": 3852.72,
+      "buildingSites": 2,
+      "buildings": 2,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-b61a75051c21c3",
+      "kind": "frontage",
+      "area": 7777.69,
+      "buildingSites": 11,
+      "buildings": 11,
+      "sharedSpace": false,
+      "publicSpaces": []
+    },
+    {
+      "id": "block-layout-ec073298cc543d",
+      "kind": "court",
+      "area": 13244.26,
+      "buildingSites": 13,
+      "buildings": 13,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-a9a4a5a7708287",
+      "kind": "court",
+      "area": 8000.89,
+      "buildingSites": 11,
+      "buildings": 11,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-8e5367e52edd0e",
+      "kind": "mews",
+      "area": 4852.52,
+      "buildingSites": 7,
+      "buildings": 7,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    },
+    {
+      "id": "block-layout-eca15e64bea2f5",
+      "kind": "court",
+      "area": 7774.85,
+      "buildingSites": 8,
+      "buildings": 8,
+      "sharedSpace": true,
+      "publicSpaces": [
+        "plaza"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "month": 1,
+      "population": 0,
+      "buildings": 26
+    },
+    {
+      "month": 2,
+      "population": 0,
+      "buildings": 44
+    },
+    {
+      "month": 3,
+      "population": 0,
+      "buildings": 44
+    },
+    {
+      "month": 4,
+      "population": 0,
+      "buildings": 44
+    },
+    {
+      "month": 5,
+      "population": 0,
+      "buildings": 44
+    },
+    {
+      "month": 6,
+      "population": 177,
+      "buildings": 53
+    },
+    {
+      "month": 7,
+      "population": 413,
+      "buildings": 62
+    },
+    {
+      "month": 8,
+      "population": 591,
+      "buildings": 71
+    },
+    {
+      "month": 9,
+      "population": 591,
+      "buildings": 76
+    },
+    {
+      "month": 10,
+      "population": 591,
+      "buildings": 76
+    },
+    {
+      "month": 11,
+      "population": 738,
+      "buildings": 78
+    },
+    {
+      "month": 12,
+      "population": 777,
+      "buildings": 80
+    },
+    {
+      "month": 13,
+      "population": 1015,
+      "buildings": 84
+    },
+    {
+      "month": 14,
+      "population": 1169,
+      "buildings": 90
+    },
+    {
+      "month": 15,
+      "population": 1169,
+      "buildings": 95
+    },
+    {
+      "month": 16,
+      "population": 1264,
+      "buildings": 98
+    },
+    {
+      "month": 17,
+      "population": 1264,
+      "buildings": 99
+    },
+    {
+      "month": 18,
+      "population": 1355,
+      "buildings": 101
+    },
+    {
+      "month": 19,
+      "population": 1439,
+      "buildings": 105
+    },
+    {
+      "month": 20,
+      "population": 1682,
+      "buildings": 107
+    },
+    {
+      "month": 21,
+      "population": 1744,
+      "buildings": 112
+    },
+    {
+      "month": 22,
+      "population": 1851,
+      "buildings": 115
+    },
+    {
+      "month": 23,
+      "population": 1851,
+      "buildings": 118
+    },
+    {
+      "month": 24,
+      "population": 1851,
+      "buildings": 118
+    },
+    {
+      "month": 25,
+      "population": 1871,
+      "buildings": 118
+    },
+    {
+      "month": 26,
+      "population": 2106,
+      "buildings": 121
+    },
+    {
+      "month": 27,
+      "population": 2289,
+      "buildings": 127
+    },
+    {
+      "month": 28,
+      "population": 2425,
+      "buildings": 135
+    },
+    {
+      "month": 29,
+      "population": 2425,
+      "buildings": 138
+    },
+    {
+      "month": 30,
+      "population": 2425,
+      "buildings": 138
+    },
+    {
+      "month": 31,
+      "population": 2425,
+      "buildings": 138
+    },
+    {
+      "month": 32,
+      "population": 2506,
+      "buildings": 138
+    },
+    {
+      "month": 33,
+      "population": 2743,
+      "buildings": 145
+    },
+    {
+      "month": 34,
+      "population": 2982,
+      "buildings": 155
+    },
+    {
+      "month": 35,
+      "population": 2996,
+      "buildings": 162
+    },
+    {
+      "month": 36,
+      "population": 2996,
+      "buildings": 163
+    },
+    {
+      "month": 37,
+      "population": 2996,
+      "buildings": 163
+    },
+    {
+      "month": 38,
+      "population": 2996,
+      "buildings": 162
+    },
+    {
+      "month": 39,
+      "population": 3236,
+      "buildings": 164
+    },
+    {
+      "month": 40,
+      "population": 3473,
+      "buildings": 164
+    },
+    {
+      "month": 41,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 42,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 43,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 44,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 45,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 46,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 47,
+      "population": 3576,
+      "buildings": 164
+    },
+    {
+      "month": 48,
+      "population": 3628,
+      "buildings": 164
+    }
+  ],
+  "layoutDiversity": {
+    "kinds": {
+      "pair": 2,
+      "single": 3,
+      "court": 6,
+      "frontage": 9,
+      "mews": 1
+    },
+    "siteCounts": [
+      1,
+      2,
+      4,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11,
+      13
+    ],
+    "withoutCommon": 12
+  },
+  "irregular": true
+}

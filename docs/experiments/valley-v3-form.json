@@ -1,0 +1,138 @@
+{
+  "model": "shanhai-city-3",
+  "month": 144,
+  "population": 10736,
+  "uses": {
+    "residential": {
+      "buildings": 74,
+      "sameUseNearestShare": 0.851,
+      "meanSameUseNearestMeters": 43.8,
+      "floors": {
+        "3": 6,
+        "2": 1,
+        "4": 9,
+        "5": 10,
+        "7": 20,
+        "11": 1,
+        "6": 15,
+        "8": 9,
+        "10": 2,
+        "9": 1
+      }
+    },
+    "commercial": {
+      "buildings": 16,
+      "sameUseNearestShare": 0.375,
+      "meanSameUseNearestMeters": 88.3,
+      "floors": {
+        "4": 16
+      }
+    },
+    "office": {
+      "buildings": 7,
+      "sameUseNearestShare": 0.429,
+      "meanSameUseNearestMeters": 52.8,
+      "floors": {
+        "5": 2,
+        "6": 2,
+        "10": 1,
+        "7": 1,
+        "24": 1
+      }
+    },
+    "industrial": {
+      "buildings": 34,
+      "sameUseNearestShare": 0.882,
+      "meanSameUseNearestMeters": 69.8,
+      "floors": {
+        "1": 34
+      }
+    },
+    "warehouse": {
+      "buildings": 17,
+      "sameUseNearestShare": 0.824,
+      "meanSameUseNearestMeters": 85.5,
+      "floors": {
+        "1": 17
+      }
+    }
+  },
+  "tallOffices": 2,
+  "largestTallOfficeCluster": 2,
+  "tallOfficeClusters": [
+    {
+      "buildings": 2,
+      "floors": [
+        10,
+        24
+      ],
+      "center": [
+        2788.8445728712704,
+        2850.0320558773
+      ]
+    }
+  ],
+  "facilities": {
+    "park": {
+      "count": 6,
+      "minimumSeparation": 36.43790691534961
+    },
+    "plaza": {
+      "count": 4,
+      "minimumSeparation": 99.09616906430033
+    },
+    "school": {
+      "count": 6,
+      "minimumSeparation": 96.0374381770544
+    },
+    "clinic": {
+      "count": 4,
+      "minimumSeparation": 100.08194239134158
+    }
+  },
+  "centers": [],
+  "districts": [
+    {
+      "kind": "工业仓储区",
+      "buildings": 49,
+      "jobs": 1714,
+      "population": 0,
+      "floorRatio": 0.67
+    },
+    {
+      "kind": "居住区",
+      "buildings": 81,
+      "jobs": 1842,
+      "population": 8589,
+      "floorRatio": 2.57
+    },
+    {
+      "kind": "居住区",
+      "buildings": 1,
+      "jobs": 0,
+      "population": 44,
+      "floorRatio": 0.78
+    },
+    {
+      "kind": "CBD",
+      "buildings": 12,
+      "jobs": 1323,
+      "population": 1863,
+      "floorRatio": 3.94
+    },
+    {
+      "kind": "居住区",
+      "buildings": 2,
+      "jobs": 0,
+      "population": 240,
+      "floorRatio": 1.14
+    },
+    {
+      "kind": "工业仓储区",
+      "buildings": 2,
+      "jobs": 159,
+      "population": 0,
+      "floorRatio": 0.62
+    }
+  ]
+}

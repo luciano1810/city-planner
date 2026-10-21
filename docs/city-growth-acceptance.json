@@ -1,0 +1,508 @@
+{
+  "model": "shanhai-city-2",
+  "fromMonth": 37,
+  "toMonth": 85,
+  "settings": {
+    "migration": 80.0,
+    "externalJobs": 600.0,
+    "growth": 2.0,
+    "fare": 2,
+    "budget": false,
+    "taxRate": 0.06,
+    "maxProjects": 12,
+    "autoGrow": true,
+    "accessBudget": 30
+  },
+  "policy": {
+    "version": "urban-2",
+    "autoLanesPerMonth": 2,
+    "laneMaximumLength": 210,
+    "parkPerBuildings": 28,
+    "plazaPerBuildings": 45,
+    "householdSpace": 75,
+    "walkingMetersPerMinute": 80,
+    "trafficIterations": 2,
+    "priceMonthlyLimit": 0.07,
+    "districtCellMeters": 400,
+    "districtPersistenceMonths": 3,
+    "districtJoinMeters": 220,
+    "cbdMinimumBuildings": 3,
+    "cbdMinimumJobs": 240,
+    "cbdMinimumEmployed": 120,
+    "carCO2KgPerKm": 0.17,
+    "constructionBaseMonths": 2,
+    "relocationStressMonths": 4,
+    "exitStressMonths": 8,
+    "housingBurdenThreshold": 0.5,
+    "eventPersistenceMonths": 3,
+    "eventCooldownMonths": 12,
+    "lowlandProxy": "低海拔邻水指数，非洪水概率"
+  },
+  "monthly": [
+    {
+      "month": 38,
+      "seconds": 0.775,
+      "population": 1204,
+      "buildings": 60,
+      "centers": 1
+    },
+    {
+      "month": 39,
+      "seconds": 0.891,
+      "population": 1204,
+      "buildings": 64,
+      "centers": 1
+    },
+    {
+      "month": 40,
+      "seconds": 0.92,
+      "population": 1204,
+      "buildings": 64,
+      "centers": 0
+    },
+    {
+      "month": 41,
+      "seconds": 0.908,
+      "population": 1204,
+      "buildings": 65,
+      "centers": 0
+    },
+    {
+      "month": 42,
+      "seconds": 0.923,
+      "population": 1204,
+      "buildings": 65,
+      "centers": 0
+    },
+    {
+      "month": 43,
+      "seconds": 1.133,
+      "population": 1611,
+      "buildings": 73,
+      "centers": 0
+    },
+    {
+      "month": 44,
+      "seconds": 1.208,
+      "population": 1979,
+      "buildings": 73,
+      "centers": 0
+    },
+    {
+      "month": 45,
+      "seconds": 1.297,
+      "population": 1979,
+      "buildings": 79,
+      "centers": 0
+    },
+    {
+      "month": 46,
+      "seconds": 1.207,
+      "population": 1979,
+      "buildings": 80,
+      "centers": 0
+    },
+    {
+      "month": 47,
+      "seconds": 1.196,
+      "population": 1979,
+      "buildings": 80,
+      "centers": 0
+    },
+    {
+      "month": 48,
+      "seconds": 1.242,
+      "population": 2023,
+      "buildings": 83,
+      "centers": 0
+    },
+    {
+      "month": 49,
+      "seconds": 1.474,
+      "population": 2342,
+      "buildings": 84,
+      "centers": 0
+    },
+    {
+      "month": 50,
+      "seconds": 1.372,
+      "population": 2342,
+      "buildings": 85,
+      "centers": 0
+    },
+    {
+      "month": 51,
+      "seconds": 1.56,
+      "population": 2523,
+      "buildings": 87,
+      "centers": 0
+    },
+    {
+      "month": 52,
+      "seconds": 1.505,
+      "population": 2752,
+      "buildings": 97,
+      "centers": 0
+    },
+    {
+      "month": 53,
+      "seconds": 1.584,
+      "population": 2752,
+      "buildings": 99,
+      "centers": 0
+    },
+    {
+      "month": 54,
+      "seconds": 1.623,
+      "population": 2752,
+      "buildings": 99,
+      "centers": 0
+    },
+    {
+      "month": 55,
+      "seconds": 1.549,
+      "population": 2752,
+      "buildings": 99,
+      "centers": 0
+    },
+    {
+      "month": 56,
+      "seconds": 1.836,
+      "population": 3120,
+      "buildings": 103,
+      "centers": 0
+    },
+    {
+      "month": 57,
+      "seconds": 1.821,
+      "population": 3120,
+      "buildings": 104,
+      "centers": 0
+    },
+    {
+      "month": 58,
+      "seconds": 1.799,
+      "population": 3120,
+      "buildings": 104,
+      "centers": 0
+    },
+    {
+      "month": 59,
+      "seconds": 1.796,
+      "population": 3120,
+      "buildings": 104,
+      "centers": 0
+    },
+    {
+      "month": 60,
+      "seconds": 2.11,
+      "population": 3505,
+      "buildings": 107,
+      "centers": 0
+    },
+    {
+      "month": 61,
+      "seconds": 1.927,
+      "population": 3550,
+      "buildings": 108,
+      "centers": 0
+    },
+    {
+      "month": 62,
+      "seconds": 1.833,
+      "population": 3550,
+      "buildings": 109,
+      "centers": 0
+    },
+    {
+      "month": 63,
+      "seconds": 1.791,
+      "population": 3550,
+      "buildings": 108,
+      "centers": 0
+    },
+    {
+      "month": 64,
+      "seconds": 1.914,
+      "population": 3627,
+      "buildings": 107,
+      "centers": 0
+    },
+    {
+      "month": 65,
+      "seconds": 2.31,
+      "population": 4040,
+      "buildings": 116,
+      "centers": 0
+    },
+    {
+      "month": 66,
+      "seconds": 2.149,
+      "population": 4040,
+      "buildings": 118,
+      "centers": 0
+    },
+    {
+      "month": 67,
+      "seconds": 2.166,
+      "population": 4040,
+      "buildings": 118,
+      "centers": 0
+    },
+    {
+      "month": 68,
+      "seconds": 2.149,
+      "population": 4040,
+      "buildings": 118,
+      "centers": 0
+    },
+    {
+      "month": 69,
+      "seconds": 2.188,
+      "population": 4040,
+      "buildings": 118,
+      "centers": 0
+    },
+    {
+      "month": 70,
+      "seconds": 2.471,
+      "population": 4394,
+      "buildings": 121,
+      "centers": 0
+    },
+    {
+      "month": 71,
+      "seconds": 2.539,
+      "population": 4630,
+      "buildings": 121,
+      "centers": 0
+    },
+    {
+      "month": 72,
+      "seconds": 2.422,
+      "population": 4630,
+      "buildings": 123,
+      "centers": 0
+    },
+    {
+      "month": 73,
+      "seconds": 2.418,
+      "population": 4630,
+      "buildings": 121,
+      "centers": 0
+    },
+    {
+      "month": 74,
+      "seconds": 2.411,
+      "population": 4630,
+      "buildings": 120,
+      "centers": 0
+    },
+    {
+      "month": 75,
+      "seconds": 2.438,
+      "population": 4630,
+      "buildings": 120,
+      "centers": 0
+    },
+    {
+      "month": 76,
+      "seconds": 2.562,
+      "population": 4630,
+      "buildings": 120,
+      "centers": 0
+    },
+    {
+      "month": 77,
+      "seconds": 2.423,
+      "population": 4630,
+      "buildings": 119,
+      "centers": 0
+    },
+    {
+      "month": 78,
+      "seconds": 2.654,
+      "population": 4881,
+      "buildings": 131,
+      "centers": 0
+    },
+    {
+      "month": 79,
+      "seconds": 2.64,
+      "population": 5224,
+      "buildings": 131,
+      "centers": 0
+    },
+    {
+      "month": 80,
+      "seconds": 2.725,
+      "population": 5224,
+      "buildings": 133,
+      "centers": 0
+    },
+    {
+      "month": 81,
+      "seconds": 2.711,
+      "population": 5224,
+      "buildings": 133,
+      "centers": 0
+    },
+    {
+      "month": 82,
+      "seconds": 2.674,
+      "population": 5224,
+      "buildings": 133,
+      "centers": 0
+    },
+    {
+      "month": 83,
+      "seconds": 2.712,
+      "population": 5224,
+      "buildings": 133,
+      "centers": 0
+    },
+    {
+      "month": 84,
+      "seconds": 2.639,
+      "population": 5224,
+      "buildings": 133,
+      "centers": 0
+    },
+    {
+      "month": 85,
+      "seconds": 2.859,
+      "population": 5391,
+      "buildings": 132,
+      "centers": 0
+    }
+  ],
+  "stats": {
+    "month": 85,
+    "population": 5391,
+    "households": 2159,
+    "jobs": 2735,
+    "employed": 2159,
+    "unemployment": 0.0,
+    "housing": 2159,
+    "vacancy": 0.0,
+    "buildings": 132,
+    "construction": 2,
+    "roadKm": 17.917650647527992,
+    "railKm": 0.0,
+    "landValue": 565.54,
+    "rent": 16.130000000000003,
+    "trips": 9798,
+    "completedTrips": 9798,
+    "failedTrips": 0,
+    "commute": 6.532630847614636,
+    "commuteP90": 11.02,
+    "modeShare": {
+      "walk": 75.66850377628087,
+      "car": 24.331496223719125,
+      "public": 0.0
+    },
+    "boardings": 0,
+    "accessJobs": 2466.634553033812,
+    "publicJobs": 2157.6544696618803,
+    "burden": 19.4644182367829,
+    "combinedBurden": 20.631044905489805,
+    "congestion": 0.326288454756431,
+    "treasury": 111526337,
+    "maintenance": 29016,
+    "revenue": 1057050,
+    "movedIn": 167,
+    "movedOut": 0,
+    "relocated": 0,
+    "pendingHousing": 90,
+    "developedArea": 284784.98,
+    "floorArea": 320488.2,
+    "estimatedCO2": 378.81,
+    "freightTrips": 242,
+    "freightKm": 281.93561918162453,
+    "uses": {
+      "residential": 163184.1,
+      "commercial": 27196.399999999998,
+      "office": 26505.4,
+      "industrial": 60269.4,
+      "warehouse": 43332.9
+    },
+    "density": 84.234375,
+    "laborForce": 2159,
+    "vacantJobs": 576,
+    "housingInConstruction": 110,
+    "floorDistribution": {
+      "5": 10,
+      "1": 87,
+      "6": 8,
+      "8": 3,
+      "3": 5,
+      "4": 3,
+      "13": 1,
+      "11": 2,
+      "2": 3,
+      "10": 1,
+      "7": 5,
+      "9": 2,
+      "12": 2
+    },
+    "meanBuildingAge": 42.371212121212125,
+    "buildableArea": 766834,
+    "floorRatio": 0.4546401769937909,
+    "builtDensity": 18930.07138227585,
+    "jobDensity": 9603.736826289085,
+    "firms": 101,
+    "firmOpened": 0,
+    "firmClosed": 0,
+    "firmRelocations": 0,
+    "firmProfit": 16539754,
+    "externalDemand": 621.8,
+    "localDemand": 2571.6,
+    "landP10": 461.26,
+    "landP90": 662.326,
+    "rentByUse": {
+      "residential": 16.026129032258066,
+      "office": 31.601111111111113,
+      "commercial": 37.803333333333335,
+      "industrial": 18.04826923076923,
+      "warehouse": 11.977352941176472
+    },
+    "propertyValue": 1019115614,
+    "overburdenedPeople": 0,
+    "commuteMedian": 6.01,
+    "commuteDistance": 529.9813607532672,
+    "meanWait": null,
+    "transfers": 0,
+    "publicJourneys": 0,
+    "mainModeShare": {
+      "walk": 75.66850377628087,
+      "car": 24.331496223719125,
+      "bus": 0.0,
+      "tram": 0.0,
+      "metro": 0.0,
+      "train": 0.0
+    },
+    "tripsByPurpose": {
+      "work": 4318,
+      "shopping": 1524,
+      "leisure": 1904,
+      "school": 1844,
+      "health": 208
+    },
+    "vehicleKm": 2228.2952175782802,
+    "personKm": 5668.89421410021,
+    "constructionCost": 23212469,
+    "fareRevenue": 0,
+    "operationCost": 0,
+    "terrainEngineeringCost": 4089785,
+    "meanSlope": 11.580871934604906,
+    "landscape": 0.25,
+    "lowlandExposure": 0,
+    "pollutionExposure": 0.2953556984715146,
+    "autoRoadKm": 9.347083644934237,
+    "publicSpaceArea": 12450.212771706174,
+    "parks": 5,
+    "plazas": 3,
+    "pathKm": 8.670415523348696
+  },
+  "centers": []
+}

@@ -1,0 +1,45 @@
+test_controlled_access_upgrade_removes_direct_building_access (tests.test_city_v4.RoadGradeTests.test_controlled_access_upgrade_removes_direct_building_access) ... ok
+test_draw_and_change_every_road_grade (tests.test_city_v4.RoadGradeTests.test_draw_and_change_every_road_grade) ... ok
+test_motorway_is_drivable_but_not_walkable_or_a_bus_stop (tests.test_city_v4.RoadGradeTests.test_motorway_is_drivable_but_not_walkable_or_a_bus_stop) ... ok
+test_upgrading_generated_lane_preserves_origin_and_rejects_land_conflict (tests.test_city_v4.RoadGradeTests.test_upgrading_generated_lane_preserves_origin_and_rejects_land_conflict) ... ok
+test_existing_occupied_offices_can_add_floors_before_new_projects (tests.test_city_v4.UrbanFormTests.test_existing_occupied_offices_can_add_floors_before_new_projects) ... ok
+test_large_office_among_houses_is_not_cbd (tests.test_city_v4.UrbanFormTests.test_large_office_among_houses_is_not_cbd) ... ok
+test_multiple_demand_limited_office_projects_instead_of_one_giant (tests.test_city_v4.UrbanFormTests.test_multiple_demand_limited_office_projects_instead_of_one_giant) ... ok
+test_office_cluster_affinity_and_height_gradient (tests.test_city_v4.UrbanFormTests.test_office_cluster_affinity_and_height_gradient) ... ok
+test_public_services_keep_distinct_catchments (tests.test_city_v4.UrbanFormTests.test_public_services_keep_distinct_catchments) ... ok
+test_v3_migration_preserves_existing_geometry_and_calibration (tests.test_city_v4.UrbanFormTests.test_v3_migration_preserves_existing_geometry_and_calibration) ... ok
+test_crossings_and_overpasses (tests.test_city.NetworkTests.test_crossings_and_overpasses) ... ok
+test_frontage_stable_and_closed_blocks (tests.test_city.NetworkTests.test_frontage_stable_and_closed_blocks) ... ok
+test_oneway_and_no_walk_on_highway (tests.test_city.NetworkTests.test_oneway_and_no_walk_on_highway) ... ok
+test_transaction_revision_and_undo (tests.test_city.NetworkTests.test_transaction_revision_and_undo) ... ok
+test_water_requires_structure (tests.test_city.NetworkTests.test_water_requires_structure) ... ok
+test_capacity_and_no_phantom_transfer (tests.test_city.TransitTests.test_capacity_and_no_phantom_transfer) ... ok
+test_deleted_track_invalidates_service (tests.test_city.TransitTests.test_deleted_track_invalidates_service) ... ok
+test_facility_requires_actual_access (tests.test_city.TransitTests.test_facility_requires_actual_access) ... ok
+test_four_modes_infrastructure_service_and_headway (tests.test_city.TransitTests.test_four_modes_infrastructure_service_and_headway) ... ok
+test_curve_uses_real_geometry_cost_and_endpoints (tests.test_urban.TerrainAndCurveTests.test_curve_uses_real_geometry_cost_and_endpoints) ... ok
+test_invalid_road_preview_locates_first_terrain_conflict (tests.test_urban.TerrainAndCurveTests.test_invalid_road_preview_locates_first_terrain_conflict) ... ok
+test_real_frontage_access_does_not_detour_to_road_ends (tests.test_urban.TerrainAndCurveTests.test_real_frontage_access_does_not_detour_to_road_ends) ... ok
+test_terrain_changes_cost_time_land_and_height_limit (tests.test_urban.TerrainAndCurveTests.test_terrain_changes_cost_time_land_and_height_limit) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 9.082s
+
+OK
+✔ curves retain endpoints, interpolate handles and add true curvature (1.002875ms)
+✔ water polygons preserve islands, lakes and map boundary coverage (1.132458ms)
+✔ saddle topology follows scalar values instead of joining diagonal water arbitrarily (0.114166ms)
+✔ one pixel channel remains connected and dry terrain has no water geometry (0.348667ms)
+✔ subsampled contour positions retain original pixel coordinates (0.169625ms)
+✔ metric scale uses 1/2/5 steps and shrinks the distance when zooming (0.120083ms)
+✔ measurement is unchanged by zoom/pan and handles a non-square extent (0.091083ms)
+✔ continuous river banks keep subpixel positions, width variation and shared endpoints (0.494625ms)
+✔ shoreline simplification removes staircase vertices without removing islands (0.229625ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 50.281

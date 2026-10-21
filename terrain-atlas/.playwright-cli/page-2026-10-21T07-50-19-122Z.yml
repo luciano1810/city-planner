@@ -1,0 +1,530 @@
+- generic [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e7]:
+      - text: 山海
+      - generic [ref=f1e8]: SHANHAI
+    - generic [ref=f1e10]: 地形与城市工作台
+    - generic [ref=f1e11]:
+      - generic [ref=f1e12]: Python 地形引擎
+      - button "导出地图 PNG" [ref=f1e14] [cursor=pointer]:
+        - text: 导出地图
+        - generic [ref=f1e17]: PNG
+  - generic [ref=f1e18]:
+    - complementary [ref=f1e293]:
+      - generic [ref=f1e294]:
+        - text: SHANHAI CITY LAB
+        - heading "街区自然生长案例" [level=2] [ref=f1e295]
+        - paragraph [ref=f1e296]: 你画马路，城市顺着地形生长。
+      - navigation "城市工具" [ref=f1e297]:
+        - button "建设" [ref=f1e298] [cursor=pointer]
+        - button "交通" [ref=f1e299] [cursor=pointer]
+        - button "观察" [ref=f1e300] [cursor=pointer]
+      - generic [ref=f1e301]:
+        - heading "地图工具" [level=3] [ref=f1e302]
+        - generic [ref=f1e303]:
+          - button "选择" [ref=f1e304] [cursor=pointer]
+          - button "平移" [ref=f1e308] [cursor=pointer]
+        - heading "道路与轨道" [level=3] [ref=f1e312]
+        - generic [ref=f1e313]:
+          - button "高速公路" [ref=f1e314] [cursor=pointer]
+          - button "快速路" [ref=f1e316] [cursor=pointer]
+          - button "普通路" [pressed] [ref=f1e318] [cursor=pointer]
+          - button "小路" [ref=f1e320] [cursor=pointer]
+          - button "主干道" [ref=f1e322] [cursor=pointer]
+          - button "步道" [ref=f1e324] [cursor=pointer]
+          - button "地铁轨道" [ref=f1e326] [cursor=pointer]
+          - button "铁路" [ref=f1e328] [cursor=pointer]
+          - button "电车轨道" [ref=f1e330] [cursor=pointer]
+          - button "拆除" [ref=f1e332] [cursor=pointer]
+        - paragraph [ref=f1e334]: 普通路 · 14 m 宽 · 35 km/h · 基准 600 辆/h。允许步行和沿街开发。
+        - generic [ref=f1e335]:
+          - generic [ref=f1e336]:
+            - text: 路线形状
+            - combobox "路线形状" [ref=f1e337]:
+              - option "平滑曲线" [selected]
+              - option "直线 / 折线"
+          - generic [ref=f1e338]:
+            - text: 建设层级
+            - combobox "建设层级" [ref=f1e339]:
+              - option "地面" [selected]
+              - option "高架 / 桥梁"
+              - option "地下 / 隧道"
+          - generic [ref=f1e341]:
+            - checkbox "单向道路" [ref=f1e342]
+            - text: 单向道路
+        - generic [ref=f1e343]:
+          - button "完成绘制" [disabled] [ref=f1e344]
+          - button "取消" [ref=f1e345] [cursor=pointer]
+        - paragraph [ref=f1e346]: 逐点绘制，Enter 完成，Esc 取消。按住空格拖动地图。
+        - group [ref=f1e347]:
+          - generic "对象与坐标操作" [active] [ref=f1e348]
+          - generic [ref=f1e539]:
+            - generic [ref=f1e540]:
+              - text: 选择对象
+              - combobox "选择对象" [ref=f1e541]:
+                - option "选择城市对象"
+                - option "弯曲纵街1 · r-1"
+                - option "弯曲纵街2 · r-2"
+                - option "弯曲纵街3 · r-3"
+                - option "弯曲纵街4 · r-4"
+                - option "弯曲纵街5 · r-5"
+                - option "弯曲纵街6 · r-6"
+                - option "弯曲横街1 · r-7"
+                - option "弯曲横街2 · r-8"
+                - option "弯曲横街3 · r-9"
+                - option "弯曲横街4 · r-10"
+                - option "弯曲横街5 · r-11"
+                - option "社区街 2 · r-12"
+                - option "普通路 · r-1604"
+                - option "park · f-13"
+                - option "plaza · f-14"
+                - option "plaza · f-41"
+                - option "plaza · f-42"
+                - option "plaza · f-43"
+                - option "plaza · f-44"
+                - option "plaza · f-45"
+                - option "plaza · f-64"
+                - option "park · f-179"
+                - option "school · f-286"
+                - option "clinic · f-287"
+                - option "plaza · f-532"
+                - option "plaza · f-917"
+                - option "park · f-1884"
+                - option "住宅 · p-42cccb5ce454a2"
+                - option "办公 · p-39c310421b4607"
+                - option "仓储 · p-3a206a733d1a47"
+                - option "工业 · p-8cdc2f83ef3f78"
+                - option "商业 · p-7173025de3b285"
+                - option "仓储 · p-ed11e407c80c1b"
+                - option "工业 · p-083fee3fa204c9"
+                - option "工业 · p-7135aeb87d7d56"
+                - option "仓储 · p-dfcdd50dda93d9"
+                - option "工业 · p-0f38395a536e66"
+                - option "仓储 · p-db2accb2d8bdd2"
+                - option "工业 · p-d9e522ac5fe081"
+                - option "工业 · p-91da1ca4e18405"
+                - option "工业 · p-ecaaa72b6d714d"
+                - option "仓储 · p-cfb760f2fb2f97"
+                - option "住宅 · p-a52c7e528d33c9"
+                - option "地块 · p-632dbb3b84d447"
+                - option "地块 · p-6dfddff1433780"
+                - option "工业 · p-6a40fd75684269"
+                - option "仓储 · p-30ebb74157b3ee"
+                - option "住宅 · block-site-3dc57015ce6ac0"
+                - option "工业 · block-site-b0a74a92c3bd58"
+                - option "地块 · block-site-31714ec812eb9e"
+                - option "工业 · block-site-81a9f94df3ae03"
+                - option "办公 · block-site-9c0d7a073c84d9"
+                - option "住宅 · block-site-9341e4a2a29a90"
+                - option "办公 · block-site-70316cd4769eb8"
+                - option "住宅 · block-site-0e504ec82e9f0b"
+                - option "地块 · block-site-55c3dfe66310d8"
+                - option "地块 · block-site-00e4b32cfc6cd2"
+                - option "住宅 · block-site-ebfddc67cc3227"
+                - option "住宅 · block-site-79c44561986fee"
+                - option "住宅 · block-site-ffc64d0b5db7f3"
+                - option "办公 · block-site-5018dffa238fc2"
+                - option "工业 · block-site-21fefd95a7c9ad"
+                - option "仓储 · block-site-3e0e9496d6a58d"
+                - option "住宅 · block-site-8ee47f6831e45c"
+                - option "工业 · block-site-ec7e808e13e39d"
+                - option "办公 · block-site-4bb11757f8fc95"
+                - option "办公 · block-site-9608c30bb3cbe4"
+                - option "商业 · block-site-f7958c66600b68" [selected]
+                - option "住宅 · block-site-2618d004257822"
+                - option "办公 · block-site-8b6dca3963f1a5"
+                - option "办公 · block-site-2085ebe01de6cf"
+                - option "商业 · block-site-dcc01a776a6218"
+                - option "办公 · block-site-9e7852b53e2508"
+                - option "商业 · block-site-a326ff0abf9a66"
+                - option "办公 · block-site-c068ae81d9add8"
+                - option "仓储 · block-site-176844a34fc9bf"
+                - option "办公 · block-site-9e548253847696"
+                - option "办公 · block-site-3e5f532d15d670"
+                - option "地块 · block-site-d72611870c9ac3"
+                - option "办公 · block-site-386efac89b3813"
+                - option "商业 · block-site-8f0224f0f322da"
+                - option "办公 · block-site-88fabc838176bd"
+                - option "住宅 · block-site-87c0f493aa6547"
+                - option "办公 · block-site-04c7d58c7ac33c"
+                - option "住宅 · block-site-507bb6fc2a5335"
+                - option "住宅 · block-site-8bfe952019b84c"
+                - option "工业 · block-site-ce588e663fd71b"
+                - option "工业 · block-site-4bcf31f7accc9b"
+                - option "商业 · block-site-01fa1371fccb95"
+                - option "仓储 · block-site-75ee1147f961f0"
+                - option "商业 · block-site-a754a16384b5cc"
+                - option "办公 · block-site-24144d08e02279"
+                - option "办公 · block-site-7963920cb263a6"
+                - option "办公 · block-site-4297e3756fc45f"
+                - option "住宅 · block-site-e9dda1b4b14e1d"
+                - option "住宅 · block-site-6a96ce4b35569f"
+                - option "商业 · block-site-42d14217d8a20f"
+                - option "办公 · block-site-b7b09b9a5f0b8b"
+                - option "商业 · block-site-229b60e7de55d3"
+                - option "商业 · block-site-0db419276b1065"
+                - option "办公 · block-site-5174717d1e7d96"
+                - option "办公 · block-site-071e7c7acf4a76"
+                - option "办公 · block-site-29e34cca6f7a9e"
+                - option "商业 · block-site-0edba314bea5cb"
+                - option "住宅 · block-site-5a400ec45fcf64"
+                - option "工业 · block-site-b8de1496ec9289"
+                - option "办公 · block-site-04dd45070c0735"
+                - option "商业 · block-site-bb6d6e09663a7f"
+                - option "办公 · block-site-3697323fe03949"
+                - option "商业 · block-site-399735a3caa600"
+                - option "地块 · block-site-54ac44b78cec0a"
+                - option "工业 · block-site-569a96a7f4ba0a"
+                - option "住宅 · block-site-6abf5bd83a08a8"
+                - option "住宅 · block-site-53736cc9dbfa35"
+                - option "商业 · block-site-3e2439fc875983"
+                - option "商业 · block-site-ed43b1de767966"
+                - option "办公 · block-site-d39f91648978a2"
+                - option "工业 · block-site-64ac8fcf99f8e2"
+                - option "商业 · block-site-13b23900ebbe9b"
+                - option "商业 · block-site-23abf76ac0316b"
+                - option "工业 · block-site-8465b388af7f25"
+                - option "工业 · block-site-f03b27452b989e"
+                - option "住宅 · block-site-748cf61a180892"
+                - option "工业 · block-site-0dc0ea148584be"
+                - option "商业 · block-site-08a66f2dbc4a16"
+                - option "住宅 · block-site-1c7bb769dfb2aa"
+                - option "仓储 · block-site-1495ac36f8bcb8"
+                - option "商业 · block-site-a9eab4271472f1"
+                - option "工业 · block-site-ae5596185a1d67"
+                - option "办公 · block-site-0f61ce417fa059"
+                - option "工业 · block-site-42be7855b92cc6"
+                - option "仓储 · block-site-c561c1a394906b"
+                - option "工业 · block-site-7d728c6047945b"
+                - option "地块 · block-site-ce1191bed59a3a"
+                - option "住宅 · block-site-19be25d059a992"
+                - option "住宅 · block-site-ef8780933062cc"
+                - option "商业 · block-site-f3e76e548e02b5"
+                - option "商业 · block-site-71f66ce0e320b1"
+                - option "住宅 · block-site-da3d3f1396ad38"
+                - option "商业 · block-site-11c4790016fe91"
+                - option "商业 · block-site-78233dc49bd2f1"
+                - option "仓储 · block-site-ca3125bb1f2157"
+                - option "办公 · block-site-7b0b336d731c6b"
+                - option "工业 · block-site-7423fc934dd71f"
+                - option "住宅 · block-site-8fb7b514ab7a7b"
+                - option "住宅 · block-site-7f358c0d57cc52"
+                - option "地块 · block-site-9d7bc35f999787"
+                - option "工业 · block-site-88dd3d6cd20904"
+                - option "工业 · block-site-36beb1be7972c5"
+                - option "工业 · block-site-886ce62aa275f4"
+                - option "工业 · block-site-d7984ffa49da6d"
+                - option "商业 · block-site-23a9f58e19138a"
+                - option "仓储 · block-site-efdc3c9ea9e9a0"
+                - option "住宅 · block-site-e9ea32e98b5ee1"
+                - option "工业 · block-site-40da0905b9f5c5"
+                - option "商业 · block-site-183c77ca54a84a"
+                - option "工业 · block-site-20a8f779697492"
+                - option "住宅 · block-site-16f59454ba4934"
+                - option "工业 · block-site-6b9e58d89d8e4a"
+                - option "工业 · block-site-2257b9da86c60a"
+                - option "住宅 · block-site-832033891c4202"
+                - option "住宅 · block-site-d53c80a3e4dc74"
+                - option "工业 · block-site-6fa5cc7d0d3791"
+                - option "住宅 · block-site-2ac0bfbdb7ec9f"
+                - option "住宅 · block-site-c79860aa1c5c72"
+                - option "工业 · block-site-b3d6cac8b305c5"
+                - option "住宅 · block-site-a2898335d95296"
+                - option "住宅 · block-site-93e5754e6cd225"
+                - option "住宅 · block-site-c7c3631369320a"
+                - option "住宅 · block-site-c3a454e1dc90c1"
+                - option "商业 · block-site-4c718b553a22b3"
+                - option "地块 · block-site-d35e5290a63b0a"
+                - option "仓储 · block-site-de6c42d23f0db6"
+                - option "仓储 · block-site-1f255ddc7ee1a1"
+                - option "工业 · block-site-38402245e34e28"
+                - option "工业 · block-site-e0c6a7153b33e0"
+                - option "住宅 · block-site-e0f8a5fb89aa71"
+                - option "工业 · block-site-9b6067c0af271e"
+                - option "住宅 · block-site-812d37a679c247"
+                - option "住宅 · block-site-3e9f93a6b1ae9e"
+                - option "工业 · block-site-83159ba93045ee"
+                - option "住宅 · block-site-c533d8cd223a48"
+                - option "住宅 · block-site-fa72fae5c832e8"
+                - option "地块 · block-site-b5adb4e8d8ef86"
+                - option "仓储 · block-site-a74fb2e4cfc397"
+                - option "工业 · block-site-8fa249a3fc2307"
+                - option "仓储 · block-site-2df3c8d892abf2"
+                - option "住宅 · block-site-f90cd735c350b8"
+                - option "仓储 · block-site-656c1989d744f4"
+                - option "住宅 · block-site-a5926fc7be2b38"
+                - option "住宅 · block-site-d4084a6d1f18d1"
+                - option "地块 · block-site-e12fb5b62003d4"
+                - option "工业 · block-site-3566b8afd45300"
+                - option "工业 · block-site-4601e746999da4"
+                - option "仓储 · block-site-8b7f76b431b9e6"
+                - option "仓储 · block-site-3c61529b36d37d"
+                - option "仓储 · block-site-a4359846ae9eb8"
+                - option "住宅 · block-site-9bc2ce8c9be9ad"
+                - option "住宅 · block-site-2ca360a1830834"
+                - option "仓储 · block-site-5e87a383fda027"
+                - option "地块 · block-site-e3592edacd7840"
+                - option "仓储 · p-8fcbf4ba324609"
+                - option "仓储 · p-2cb0570e07a72d"
+                - option "工业 · p-bf8528b4299cb1"
+                - option "仓储 · p-56cec3d3650fb7"
+                - option "仓储 · p-609ac3de94d984"
+                - option "工业 · p-e2aed35325923a"
+                - option "地块 · p-ff45d163a390c8"
+                - option "住宅 · p-d5bbbbbc087caa"
+                - option "工业 · p-b2e9f8918d3334"
+                - option "工业 · p-e93cc001773e7a"
+                - option "仓储 · p-228c2337055a02"
+                - option "工业 · p-7b3eef99f679e0"
+                - option "仓储 · p-694e08a3f5a178"
+                - option "工业 · p-38c1e4d3050ca3"
+                - option "住宅 · p-d8afa912627f57"
+                - option "住宅 · p-e4a3c4b4a9fa48"
+                - option "办公 · p-23568374ef606e"
+                - option "住宅 · p-d4d9017a866373"
+                - option "住宅 · p-8b633b646ed27f"
+                - option "住宅 · p-f3104948cc5ae1"
+                - option "住宅 · p-8f3700ceb45dba"
+                - option "住宅 · p-738b0e3cff13ec"
+                - option "住宅 · p-ac8c7365d56bf5"
+                - option "混合城区 · district-7ab8d17319bcb5"
+                - option "商业区 · district-b6d4a2090b5c25"
+                - option "居住区 · district-cde2a5f6dd11fb"
+                - option "混合城区 · district-feccff945f29b7"
+            - generic [ref=f1e542]:
+              - generic [ref=f1e543]:
+                - text: 横坐标 / m
+                - spinbutton "横坐标 / m" [ref=f1e544]: "2084"
+              - generic [ref=f1e545]:
+                - text: 纵坐标 / m
+                - spinbutton "纵坐标 / m" [ref=f1e546]: "2416"
+            - generic [ref=f1e547]:
+              - text: 替换第几个控制点（0 为新增）
+              - spinbutton "替换第几个控制点（0 为新增）" [ref=f1e548]: "0"
+          - button "按当前工具操作坐标" [ref=f1e549] [cursor=pointer]
+          - paragraph [ref=f1e550]: 可用键盘输入坐标绘路、放置站点或设施。选择工具时定位对象。坐标原点在世界左上方。
+        - heading "公共服务" [level=3] [ref=f1e349]
+        - generic [ref=f1e350]:
+          - button "广场" [ref=f1e351] [cursor=pointer]
+          - button "公园" [ref=f1e353] [cursor=pointer]
+          - button "学校" [ref=f1e355] [cursor=pointer]
+          - button "诊所" [ref=f1e357] [cursor=pointer]
+        - heading "街区更新" [level=3] [ref=f1e359]
+        - generic [ref=f1e360]:
+          - button "选择更新地块" [ref=f1e361] [cursor=pointer]
+          - button "清空" [ref=f1e362] [cursor=pointer]
+        - paragraph [ref=f1e363]: 点击地块选择；再次点击取消。
+        - button "预览片区更新方案" [ref=f1e364] [cursor=pointer]
+        - paragraph [ref=f1e687]: 选择闭合街区，将地块改为住宅、商业、办公或产业园区；也可单独翻新旧建筑。
+        - heading "自动生长" [level=3] [ref=f1e367]
+        - generic [ref=f1e370]:
+          - checkbox "自动补充支路、小径与公共配套" [checked] [ref=f1e371]
+          - text: 自动补充支路、小径与公共配套
+        - paragraph [ref=f1e372]: 只需绘制主要道路。社区会按地形和需求补充内部连接、公园与广场。
+        - heading "规划辅助" [level=3] [ref=f1e373]
+        - button "生成示范街区" [ref=f1e374] [cursor=pointer]
+        - button "设置区域货运门户" [ref=f1e375] [cursor=pointer]
+        - paragraph [ref=f1e376]: 仅为空白城市铺设少量道路，建筑和居民由模拟产生。
+      - generic [ref=f1e377]:
+        - button "撤销" [disabled] [ref=f1e378]
+        - button "重做" [disabled] [ref=f1e379]
+        - button "存档" [disabled] [ref=f1e380]
+    - main [ref=f1e176]:
+      - generic [ref=f1e381]:
+        - generic [ref=f1e382]:
+          - text: 2031 年 1 月
+          - generic [ref=f1e688]: 城市演化 · 197 块土地
+        - generic [ref=f1e384]:
+          - button "暂停模拟" [ref=f1e553] [cursor=pointer]
+          - button "＋1 月" [disabled] [ref=f1e386]
+          - button "＋1 年" [disabled] [ref=f1e387]
+          - combobox "模拟速度" [ref=f1e388]:
+            - option "1×" [selected]
+            - option "3×"
+            - option "6×"
+          - button "城市概况" [ref=f1e389] [cursor=pointer]
+          - button "文件" [ref=f1e390] [cursor=pointer]
+      - generic [ref=f1e391]:
+        - generic [ref=f1e392]:
+          - generic [ref=f1e393]: 常住人口
+          - strong [ref=f1e394]: 3,910
+          - text: 本月迁入 79 · 迁出 0
+        - generic [ref=f1e395]:
+          - generic [ref=f1e396]: 就业人数 / 岗位
+          - strong [ref=f1e397]: 1,560 / 2,028
+          - text: 失业率 0%
+        - generic [ref=f1e398]:
+          - generic [ref=f1e399]: 土地估值中位数
+          - strong [ref=f1e400]: "690"
+          - text: 模拟币 / m² 土地
+        - generic [ref=f1e401]:
+          - generic [ref=f1e402]: 平均通勤
+          - strong [ref=f1e403]: 1.8 min
+          - text: P90 3.3 min · 未完成 0 次
+      - region "交互式俯视地形地图" [ref=f1e191]:
+        - generic "俯视地图，滚轮缩放，拖动平移，方向键平移" [ref=f1e192]
+        - generic:
+          - generic: 街区自然生长案例
+          - generic: 2031 年 1 月
+        - generic [ref=f1e193]:
+          - button "两点测距" [ref=f1e194] [cursor=pointer]
+          - button "显示等高线" [pressed] [ref=f1e197] [cursor=pointer]
+          - button "显示坐标网格" [ref=f1e200] [cursor=pointer]
+          - button "全屏地图" [ref=f1e204] [cursor=pointer]
+        - generic: "N"
+        - generic "地图距离标尺":
+          - generic:
+            - generic:
+              - generic: "0"
+              - generic: 100 m
+              - generic: 200 m
+        - generic [ref=f1e207]:
+          - button "缩小" [ref=f1e208] [cursor=pointer]: −
+          - generic [ref=f1e209]: 500%
+          - button "放大" [ref=f1e210] [cursor=pointer]: +
+          - button "适应画布" [ref=f1e212] [cursor=pointer]
+        - generic: 绘制普通路 · 点击添加控制点 · Enter 完成 · Esc 取消
+        - status [ref=f1e689]: 城市引擎正在计算…
+      - generic [ref=f1e404]:
+        - generic [ref=f1e690]: 住宅
+        - generic [ref=f1e692]: 商业
+        - generic [ref=f1e694]: 办公
+        - generic [ref=f1e696]: 工业
+        - generic [ref=f1e698]: 仓储
+      - status [ref=f1e415]: 模拟已更新 · 自动存档已保存
+    - complementary "城市详情" [ref=f1e416]:
+      - heading [level=2] [ref=f1e700]:
+        - text: 商业
+        - button "关闭详情" [ref=f1e701] [cursor=pointer]: ×
+      - paragraph [ref=f1e702]: 30 分钟内可达 2028 个岗位；坡度 0.5%；工程成本 ×1.02；土地估值 740 币/m²
+      - generic [ref=f1e703]:
+        - term [ref=f1e704]: 地块面积
+        - definition [ref=f1e705]: 353 m²
+        - term [ref=f1e706]: 地形高程
+        - definition [ref=f1e707]: 39.1 m
+        - term [ref=f1e708]: 平均坡度
+        - definition [ref=f1e709]: 0.5%
+        - term [ref=f1e710]: 基础工程成本
+        - definition [ref=f1e711]: ×1.02
+        - term [ref=f1e712]: 距水体
+        - definition [ref=f1e713]: 917 m
+        - term [ref=f1e714]: 景观品质指数
+        - definition [ref=f1e715]: "0.07"
+        - term [ref=f1e716]: 低地邻水指数
+        - definition [ref=f1e717]: "0"
+        - term [ref=f1e718]: 可达空缺岗位
+        - definition [ref=f1e719]: "468"
+        - term [ref=f1e720]: 土地单价
+        - definition [ref=f1e721]: 740 币/m²
+        - term [ref=f1e722]: 租金
+        - definition [ref=f1e723]: 36.8 币/m²/月
+        - term [ref=f1e724]: 网络接入
+        - definition [ref=f1e725]: 已接入
+        - term [ref=f1e726]: 街区布局
+        - definition [ref=f1e727]: 连续沿街地块
+        - term [ref=f1e728]: 此处用途
+        - definition [ref=f1e729]: 建筑或配套用地
+        - term [ref=f1e730]: 街区已建 / 建筑用地
+        - definition [ref=f1e731]: 8 / 8
+        - term [ref=f1e732]: 30 分钟可达岗位
+        - definition [ref=f1e733]: 2,028
+        - term [ref=f1e734]: 公交可达岗位
+        - definition [ref=f1e735]: 2,028
+        - term [ref=f1e736]: 货运门户时间
+        - definition [ref=f1e737]: 1 min
+        - term [ref=f1e738]: 状态
+        - definition [ref=f1e739]: 使用中
+        - term [ref=f1e740]: 形态
+        - definition [ref=f1e741]: 商业
+        - term [ref=f1e742]: 楼层
+        - definition [ref=f1e743]: "2"
+        - term [ref=f1e744]: 高度
+        - definition [ref=f1e745]: 8 m
+        - term [ref=f1e746]: 建筑占地
+        - definition [ref=f1e747]: 232 m²
+        - term [ref=f1e748]: 总建筑面积
+        - definition [ref=f1e749]: 464 m²
+        - term [ref=f1e750]: 就业 / 空间容量
+        - definition [ref=f1e751]: 7 / 13
+        - term [ref=f1e752]: 建筑年龄
+        - definition [ref=f1e753]: 42 个月
+        - term [ref=f1e754]: 建筑状况
+        - definition [ref=f1e755]: 99 / 100
+        - term [ref=f1e756]: 物业估值
+        - definition [ref=f1e757]: 2,561,424 币
+      - heading "规划用途偏好" [level=3] [ref=f1e758]
+      - combobox [ref=f1e759]:
+        - option "自动选择" [selected]
+        - option "住宅"
+        - option "商业"
+        - option "办公"
+        - option "工业"
+        - option "仓储"
+        - option "保护，不开发"
+      - generic [ref=f1e760]:
+        - button "应用偏好" [ref=f1e761] [cursor=pointer]
+        - button "从这里出发" [ref=f1e762] [cursor=pointer]
+      - button "翻新建筑" [ref=f1e763] [cursor=pointer]
+      - button "原址重建" [ref=f1e764] [cursor=pointer]
+      - button "街区拆除重建" [ref=f1e765] [cursor=pointer]
+      - button "拆除建筑" [ref=f1e766] [cursor=pointer]
+      - paragraph [ref=f1e767]: 用途偏好影响后续开发，不会立即替换现有建筑。
+      - group [ref=f1e768]:
+        - generic "地价驱动贡献 · 模拟币/m²" [ref=f1e769]
+      - heading "地价与租金历史" [level=3] [ref=f1e770]
+      - table [ref=f1e772]:
+        - rowgroup [ref=f1e773]:
+          - row [ref=f1e774]:
+            - columnheader "月份" [ref=f1e775]
+            - columnheader "地价" [ref=f1e776]
+            - columnheader "租金" [ref=f1e777]
+        - rowgroup [ref=f1e778]:
+          - row [ref=f1e779]:
+            - cell "2031 年 1 月" [ref=f1e780]
+            - cell "740" [ref=f1e781]
+            - cell "36.8" [ref=f1e782]
+          - row [ref=f1e783]:
+            - cell "2030 年 12 月" [ref=f1e784]
+            - cell "738" [ref=f1e785]
+            - cell "36.8" [ref=f1e786]
+          - row [ref=f1e787]:
+            - cell "2030 年 11 月" [ref=f1e788]
+            - cell "737" [ref=f1e789]
+            - cell "36.9" [ref=f1e790]
+          - row [ref=f1e791]:
+            - cell "2030 年 10 月" [ref=f1e792]
+            - cell "735" [ref=f1e793]
+            - cell "36.9" [ref=f1e794]
+          - row [ref=f1e795]:
+            - cell "2030 年 9 月" [ref=f1e796]
+            - cell "733" [ref=f1e797]
+            - cell "37" [ref=f1e798]
+          - row [ref=f1e799]:
+            - cell "2030 年 8 月" [ref=f1e800]
+            - cell "730" [ref=f1e801]
+            - cell "37" [ref=f1e802]
+          - row [ref=f1e803]:
+            - cell "2030 年 7 月" [ref=f1e804]
+            - cell "728" [ref=f1e805]
+            - cell "37" [ref=f1e806]
+          - row [ref=f1e807]:
+            - cell "2030 年 6 月" [ref=f1e808]
+            - cell "727" [ref=f1e809]
+            - cell "37.1" [ref=f1e810]
+          - row [ref=f1e811]:
+            - cell "2030 年 5 月" [ref=f1e812]
+            - cell "725" [ref=f1e813]
+            - cell "37.1" [ref=f1e814]
+          - row [ref=f1e815]:
+            - cell "2030 年 4 月" [ref=f1e816]
+            - cell "726" [ref=f1e817]
+            - cell "37.2" [ref=f1e818]
+          - row [ref=f1e819]:
+            - cell "2030 年 3 月" [ref=f1e820]
+            - cell "726" [ref=f1e821]
+            - cell "37.3" [ref=f1e822]
+          - row [ref=f1e823]:
+            - cell "2030 年 2 月" [ref=f1e824]
+            - cell "728" [ref=f1e825]
+            - cell "37.4" [ref=f1e826]
+  - status: 已迁移到模型 9；保留既有建筑、街区与校准值，新增分期街区更新与建筑翻新

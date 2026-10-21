@@ -1,0 +1,30 @@
+{
+  "model": "shanhai-city-3",
+  "machine": "arm64",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.6",
+  "month": 147,
+  "terrainKm": [
+    6.0,
+    6.0
+  ],
+  "buildings": 151,
+  "parcels": 1014,
+  "roads": 55,
+  "edges": 711,
+  "population": 10826,
+  "households": 4340,
+  "lines": 5,
+  "trafficPeriods": 3,
+  "trafficIterations": 2,
+  "restoreSeconds": 0.7705,
+  "monthSeconds": [
+    8.0739,
+    8.7043,
+    8.329
+  ],
+  "saveEncodeSeconds": 0.6365,
+  "compressedBytes": 1659173,
+  "peakMemoryMiB": 671.9,
+  "limits": "当前快照的单进程实测；界面 FPS/P95 另见同目录 UI 报告，不外推其他规模"
+}

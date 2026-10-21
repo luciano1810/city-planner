@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'">
+<title>山海 · 城市生长工作台</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="city.css">
+<link rel="stylesheet" href="navigation.css">
+</head>
+<body class="menu-mode" data-screen="home">
+<svg class="icon-library" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-mountain" viewBox="0 0 24 24"><path d="m2 20 7-14 5 9 3-6 5 11H2Z"/><path d="m6 12 3 2 2-3"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 6-10 6L2 9l10-6Zm-9 11 9 5 9-5M3 18l9 5 9-5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+<symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 6h3c5 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 4-3 5-6s4-6 7-6h3m-4-4 4 4-4 4"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2Z"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m6-18v18M3 9h18M3 15h18"/></symbol>
+<symbol id="i-contour" viewBox="0 0 24 24"><path d="M4 18C-2 9 10-1 18 4s4 20-5 17-6 1-9-3Z"/><path d="M8 16c-4-5 3-13 8-8s2 11-3 9-4 1-5-1Z"/><path d="M11 13c-1-3 4-4 4-1s-3 3-4 1Z"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8 4 8 8-8 8"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+<symbol id="i-ruler" viewBox="0 0 24 24"><path d="m3 16 13-13 5 5L8 21Zm4-4 3 3m0-6 2 2m1-5 3 3m-6 6 2 2"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/></symbol>
+</defs></svg>
+<header class="topbar">
+  <div class="brand"><div class="brand-mark"><svg><use href="#i-mountain"/></svg></div><span>山海<span class="brand-en">SHANHAI</span></span></div>
+  <div class="top-divider"></div><span class="app-name">地形生成工作台</span>
+  <div class="top-actions"><button class="city-btn" id="back-home" hidden>返回主菜单</button><span class="engine-status"><i></i>本地工作台</span><button class="export-btn" id="export" disabled><svg><use href="#i-download"/></svg>导出地图<span>PNG</span></button></div>
+</header>
+<main class="home-screen" id="home-screen">
+ <div class="home-art" aria-hidden="true"><div class="home-orbit orbit-one"></div><div class="home-orbit orbit-two"></div><div class="home-orbit orbit-three"></div><div class="home-art-caption">山川为底，街巷为笔。</div></div>
+ <section class="home-content" aria-labelledby="home-title">
+  <div class="eyebrow">SHANHAI · A WORLD OF YOUR OWN</div>
+  <h1 id="home-title">山海之间，<br>建一座你的城。</h1>
+  <p>从一片地形开始，让道路延伸，让生活发生。</p>
+  <nav class="home-menu" aria-label="主菜单">
+   <button id="menu-new"><span class="menu-index">01</span><span><strong>新建地图</strong><small>塑造山川，开启新的城市规划</small></span><span aria-hidden="true">↗</span></button>
+   <button id="menu-load"><span class="menu-index">02</span><span><strong>加载地图</strong><small>打开已保存的地图与城市</small></span><span aria-hidden="true">→</span></button>
+   <button id="menu-settings"><span class="menu-index">03</span><span><strong>设置</strong><small>调整默认地图精度与显示偏好</small></span><span aria-hidden="true">→</span></button>
+  </nav>
+  <div class="home-footnote">本地生成 · 自由规划 · 随时保存</div>
+ </section>
+</main>
+<div class="app-layout">
+<aside class="sidebar">
+ <div class="sidebar-scroll">
+  <div class="section-heading"><span><svg><use href="#i-expand"/></svg>地图范围</span><span class="tiny-label">WORLD SIZE</span></div>
+  <div class="extent-inputs"><label>宽度<div><input type="number" id="widthKm" min="1" max="1000" step="1" value="64" aria-label="地图宽度（km）"><span>km</span></div></label><b>×</b><label>高度<div><input type="number" id="heightKm" min="1" max="1000" step="1" value="48" aria-label="地图高度（km）"><span>km</span></div></label></div>
+  <p class="extent-note">实际地理范围 · 长宽比 1:8–8:1</p>
+  <div class="section-separator"></div>
+  <div class="section-heading"><span><svg><use href="#i-layers"/></svg>地貌预设</span><span class="tiny-label">01 — BIOME</span></div>
+  <p class="section-hint">选一种风景，作为世界的起点。</p>
+  <div class="preset-grid" role="group" aria-label="地貌预设">
+   <button class="preset selected" data-preset="island" aria-pressed="true"><canvas width="180" height="82" aria-hidden="true"></canvas><span>海岛<span>ISLAND</span></span><i>✓</i></button>
+   <button class="preset" data-preset="bay" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>海湾<span>COASTAL BAY</span></span><i>✓</i></button>
+   <button class="preset" data-preset="mountains" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>山脉<span>ALPINE</span></span><i>✓</i></button>
+   <button class="preset" data-preset="archipelago" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>群岛<span>ARCHIPELAGO</span></span><i>✓</i></button>
+   <button class="preset" data-preset="desert" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>沙漠<span>DESERT</span></span><i>✓</i></button>
+   <button class="preset" data-preset="hills" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>丘陵<span>HIGHLANDS</span></span><i>✓</i></button>
+   <button class="preset" data-preset="tundra" aria-pressed="false"><canvas width="180" height="82" aria-hidden="true"></canvas><span>冻原<span>TUNDRA</span></span><i>✓</i></button>
+  </div>
+  <div class="section-heading parameters-heading"><span><svg><use href="#i-contour"/></svg>塑造地形</span><button class="text-btn" id="reset" title="恢复当前地貌的默认参数">重置</button></div>
+  <div class="range-control"><label for="elevation">地形起伏 <output id="elevation-value">65<span>%</span></output></label><input type="range" id="elevation" min="15" max="100" value="65"><div class="range-labels"><span>平缓</span><span>险峻</span></div></div>
+  <div class="range-control"><label for="flatness">平整度 <output id="flatness-value">0<span>%</span></output></label><input type="range" id="flatness" min="0" max="100" value="0" title="减少局部起伏并放缓坡度，水系随地形重新计算"><div class="range-labels"><span>保留起伏</span><span>平坦舒缓</span></div></div>
+  <div class="range-control"><label for="sea">海平面 <output id="sea-value">42<span>%</span></output></label><input type="range" id="sea" min="15" max="70" value="42"><div class="range-labels"><span>更多陆地</span><span>更多海洋</span></div></div>
+  <div class="range-control"><label for="roughness">地表细节 <output id="roughness-value">55<span>%</span></output></label><input type="range" id="roughness" min="10" max="100" value="55"><div class="range-labels"><span>柔和</span><span>丰富</span></div></div>
+  <div class="range-control"><label for="moisture">环境湿度 <output id="moisture-value">65<span>%</span></output></label><input type="range" id="moisture" min="0" max="100" value="65"><div class="range-labels"><span>干燥</span><span>湿润</span></div></div>
+  <div class="section-heading parameters-heading"><span><svg><use href="#i-contour"/></svg>河流与湖泊</span><span class="tiny-label">HYDROLOGY</span></div>
+  <div class="range-control"><label for="riverDensity">河流密度 <output id="riverDensity-value">55<span>%</span></output></label><input type="range" id="riverDensity" min="0" max="100" value="55"><div class="range-labels"><span>无河流</span><span>密集水网</span></div></div>
+  <div class="range-control"><label for="riverWidth">河道宽度 <output id="riverWidth-value">90<span>m</span></output></label><input type="range" id="riverWidth" min="10" max="500" step="10" value="90"><div class="range-labels"><span>10 m</span><span>500 m</span></div></div>
+  <div class="range-control"><label for="lakeCount">湖泊数量 <output id="lakeCount-value">3<span>座</span></output></label><input type="range" id="lakeCount" min="0" max="12" value="3"><div class="range-labels"><span>无湖泊</span><span>12 座</span></div></div>
+  <div class="range-control"><label for="lakeSize">湖泊大小 <output id="lakeSize-value">2<span>km</span></output></label><input type="range" id="lakeSize" min="0.2" max="10" step="0.2" value="2"><div class="range-labels"><span>目标直径</span><span>受陆地范围限制</span></div></div>
+  <div class="range-control" id="delta-control"><label for="delta">河口冲积发育 <output id="delta-value">65<span>%</span></output></label><input type="range" id="delta" min="0" max="100" value="65"><div class="range-labels"><span>较少淤积</span><span>平原向海扩展</span></div><p class="control-note">海湾地貌启用 · 需开启河流</p></div>
+  <div class="seed-section"><label for="seed">世界种子 <span class="tiny-label">SEED</span></label><div class="seed-input"><span>#</span><input id="seed" value="SHANHAI-2026" maxlength="80" spellcheck="false" aria-label="世界种子"><button id="shuffle-seed" class="icon-btn" title="随机种子" aria-label="随机种子"><svg><use href="#i-shuffle"/></svg></button></div><p>同一粒种子，相同参数，同一个世界。</p></div>
+  <div class="resolution-row"><label for="resolution">地图精度</label><select id="resolution"><option value="768">标准 · 最长边 768 px</option><option value="1024" selected>精细 · 最长边 1024 px</option><option value="1536">高清 · 最长边 1536 px</option><option value="2048">超清 · 最长边 2048 px</option><option value="4096">4K · 最长边 4096 px</option></select></div>
+ </div>
+ <div class="sidebar-bottom"><button id="generate" class="generate-btn"><svg><use href="#i-spark"/></svg><span>生成地形</span><kbd>↵</kbd></button><span class="local-note"><i></i>本地运算 · 无需联网</span></div>
+</aside>
+<main class="workspace">
+ <div class="workspace-heading"><div><div class="eyebrow">01 / 地形准备 · 02 / 城市规划</div><h1>先让山川成形<span>。</span></h1><p>调整参数并预览地形，确认后自动保存并进入城市规划。</p></div><div class="view-tabs" aria-label="地图样式"><button class="active" data-view="vector" aria-pressed="true">矢量地图</button><button data-view="terrain" aria-pressed="false">自然地貌</button><button data-view="height" aria-pressed="false">高程视图</button></div></div>
+ <section class="map-frame" id="map-frame" aria-label="交互式俯视地形地图">
+  <canvas id="map" tabindex="0" aria-label="俯视地图，滚轮缩放，拖动平移，方向键平移"></canvas>
+  <div class="map-label"><span class="map-label-dot"></span><span id="map-name">翡翠海岛</span><span class="map-label-divider"></span><span id="map-number">NO. 001</span></div>
+  <div class="map-tools"><button id="measure" class="icon-btn" title="两点测距" aria-label="两点测距" aria-pressed="false"><svg><use href="#i-ruler"/></svg></button><button id="contours" class="icon-btn active" title="显示等高线" aria-label="显示等高线" aria-pressed="true"><svg><use href="#i-contour"/></svg></button><button id="grid" class="icon-btn" title="显示坐标网格" aria-label="显示坐标网格" aria-pressed="false"><svg><use href="#i-grid"/></svg></button><span></span><button id="fullscreen" class="icon-btn" title="全屏地图" aria-label="全屏地图"><svg><use href="#i-expand"/></svg></button></div>
+  <div class="compass"><span>N</span><svg viewBox="0 0 40 48" aria-hidden="true"><path d="M20 3 29 38 20 31 11 38Z" fill="#f9fcf7" stroke="#28515a" stroke-width="1.2"/><path d="M20 3v28l-9 7Z" fill="#28515a"/></svg></div>
+  <div class="map-scale" id="map-scale" aria-label="地图距离标尺"><div id="scale-bar"><i></i><div class="scale-labels"><span>0</span><span id="scale-mid"></span><span id="scale-label"></span></div></div></div>
+  <div id="measure-hint" class="measure-hint" role="status" hidden></div>
+  <div class="zoom-control"><button id="zoom-out" aria-label="缩小">−</button><span id="zoom-value">100%</span><button id="zoom-in" aria-label="放大">+</button><span></span><button id="fit" title="适应画布" aria-label="适应画布"><svg><use href="#i-expand"/></svg></button></div>
+  <div id="terrain-empty" class="terrain-empty"><svg><use href="#i-mountain"/></svg><strong>先塑造一片属于你的山海</strong><span>调整左侧参数，点击「生成地形」预览地图。</span></div>
+  <div id="loading" class="loading" hidden><div class="loader"></div><span>山川正在成形…</span><small>正在计算高度、湿度与地表光照</small></div>
+  <div id="map-error" class="map-error" hidden><svg><use href="#i-info"/></svg><strong>地形暂时未能生成</strong><span id="error-message"></span><button id="retry">重新尝试</button></div>
+ </section>
+ <div class="map-bottom"><div class="legend" id="legend"><span class="legend-title">地貌图例</span><span><i class="swatch ocean"></i>深海</span><span><i class="swatch shallow"></i>浅海</span><span><i class="swatch beach"></i>沙滩</span><span><i class="swatch forest"></i>植被</span><span><i class="swatch rock"></i>山岩</span><span><i class="swatch snow"></i>雪峰</span></div><span class="map-hint" id="hydrology-stats">滚轮缩放 · 拖动探索</span></div>
+ <div class="stats"><div><span class="stat-icon"><svg><use href="#i-layers"/></svg></span><div><span>地理范围</span><strong id="stat-size">—<small> km</small></strong></div></div><div><span class="stat-icon"><svg><use href="#i-mountain"/></svg></span><div><span>最高海拔</span><strong id="stat-altitude">—<small> m</small></strong></div></div><div><span class="stat-icon"><svg><use href="#i-pin"/></svg></span><div><span>陆地占比</span><strong id="stat-land">—<small> %</small></strong></div></div><div><span class="stat-icon"><svg><use href="#i-spark"/></svg></span><div><span>生成耗时</span><strong id="stat-time">—<small> s</small></strong></div></div></div>
+ <footer><span>山海之间，皆有可能。</span><span id="footer-status">PROCEDURAL TERRAIN · PYTHON + ELECTRON</span></footer>
+</main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script src="map-geometry.js"></script>
+<script src="app.js"></script>
+<script src="city-geometry.js"></script>
+  <script src="city.js"></script>
+<script src="navigation.js"></script>
+</body></html>

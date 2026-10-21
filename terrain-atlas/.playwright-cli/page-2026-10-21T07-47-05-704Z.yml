@@ -1,0 +1,249 @@
+- generic [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e7]:
+      - text: 山海
+      - generic [ref=f1e8]: SHANHAI
+    - generic [ref=f1e10]: 地形与城市工作台
+    - generic [ref=f1e11]:
+      - generic [ref=f1e12]: Python 地形引擎
+      - button "导出地图 PNG" [ref=f1e14] [cursor=pointer]:
+        - text: 导出地图
+        - generic [ref=f1e17]: PNG
+  - generic [ref=f1e18]:
+    - complementary [ref=f1e19]:
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]:
+          - generic [ref=f1e22]: 地图范围
+          - generic [ref=f1e25]: WORLD SIZE
+        - generic [ref=f1e26]:
+          - generic [ref=f1e27]:
+            - text: 宽度
+            - generic [ref=f1e28]:
+              - spinbutton "地图宽度（km）" [ref=f1e29]: "64"
+              - generic [ref=f1e30]: km
+          - generic [ref=f1e31]: ×
+          - generic [ref=f1e32]:
+            - text: 高度
+            - generic [ref=f1e33]:
+              - spinbutton "地图高度（km）" [ref=f1e34]: "48"
+              - generic [ref=f1e35]: km
+        - paragraph [ref=f1e36]: 实际地理范围 · 长宽比 1:8–8:1
+        - generic [ref=f1e38]:
+          - generic [ref=f1e39]: 地貌预设
+          - generic [ref=f1e42]: 01 — BIOME
+        - paragraph [ref=f1e43]: 选一种风景，作为世界的起点。
+        - group "地貌预设" [ref=f1e44]:
+          - button "海岛 ISLAND" [ref=f1e45] [cursor=pointer]:
+            - generic [ref=f1e47]:
+              - text: 海岛
+              - generic [ref=f1e48]: ISLAND
+          - button "海湾 COASTAL BAY ✓" [pressed] [ref=f1e49] [cursor=pointer]:
+            - generic [ref=f1e51]:
+              - text: 海湾
+              - generic [ref=f1e52]: COASTAL BAY
+            - generic [ref=f1e53]: ✓
+          - button "山脉 ALPINE" [ref=f1e54] [cursor=pointer]:
+            - generic [ref=f1e56]:
+              - text: 山脉
+              - generic [ref=f1e57]: ALPINE
+          - button "群岛 ARCHIPELAGO" [ref=f1e58] [cursor=pointer]:
+            - generic [ref=f1e60]:
+              - text: 群岛
+              - generic [ref=f1e61]: ARCHIPELAGO
+          - button "沙漠 DESERT" [ref=f1e62] [cursor=pointer]:
+            - generic [ref=f1e64]:
+              - text: 沙漠
+              - generic [ref=f1e65]: DESERT
+          - button "丘陵 HIGHLANDS" [ref=f1e66] [cursor=pointer]:
+            - generic [ref=f1e68]:
+              - text: 丘陵
+              - generic [ref=f1e69]: HIGHLANDS
+          - button "冻原 TUNDRA" [ref=f1e70] [cursor=pointer]:
+            - generic [ref=f1e72]:
+              - text: 冻原
+              - generic [ref=f1e73]: TUNDRA
+        - generic [ref=f1e74]:
+          - generic [ref=f1e75]: 塑造地形
+          - button "重置" [ref=f1e78] [cursor=pointer]
+        - generic [ref=f1e79]:
+          - generic [ref=f1e80]:
+            - text: 地形起伏
+            - status [ref=f1e81]: 65%
+          - slider "地形起伏" [ref=f1e82] [cursor=pointer]: "65"
+          - generic [ref=f1e83]:
+            - generic [ref=f1e84]: 平缓
+            - generic [ref=f1e85]: 险峻
+        - generic [ref=f1e86]:
+          - generic [ref=f1e87]:
+            - text: 平整度
+            - status [ref=f1e88]: 0%
+          - slider "平整度" [ref=f1e89] [cursor=pointer]: "0"
+          - generic [ref=f1e90]:
+            - generic [ref=f1e91]: 保留起伏
+            - generic [ref=f1e92]: 平坦舒缓
+        - generic [ref=f1e93]:
+          - generic [ref=f1e94]:
+            - text: 海平面
+            - status [ref=f1e95]: 42%
+          - slider "海平面" [ref=f1e96] [cursor=pointer]: "42"
+          - generic [ref=f1e97]:
+            - generic [ref=f1e98]: 更多陆地
+            - generic [ref=f1e99]: 更多海洋
+        - generic [ref=f1e100]:
+          - generic [ref=f1e101]:
+            - text: 地表细节
+            - status [ref=f1e102]: 55%
+          - slider "地表细节" [ref=f1e103] [cursor=pointer]: "55"
+          - generic [ref=f1e104]:
+            - generic [ref=f1e105]: 柔和
+            - generic [ref=f1e106]: 丰富
+        - generic [ref=f1e107]:
+          - generic [ref=f1e108]:
+            - text: 环境湿度
+            - status [ref=f1e109]: 65%
+          - slider "环境湿度" [ref=f1e110] [cursor=pointer]: "65"
+          - generic [ref=f1e111]:
+            - generic [ref=f1e112]: 干燥
+            - generic [ref=f1e113]: 湿润
+        - generic [ref=f1e114]:
+          - generic [ref=f1e115]: 河流与湖泊
+          - generic [ref=f1e118]: HYDROLOGY
+        - generic [ref=f1e119]:
+          - generic [ref=f1e120]:
+            - text: 河流密度
+            - status [ref=f1e121]: 55%
+          - slider "河流密度" [ref=f1e122] [cursor=pointer]: "55"
+          - generic [ref=f1e123]:
+            - generic [ref=f1e124]: 无河流
+            - generic [ref=f1e125]: 密集水网
+        - generic [ref=f1e126]:
+          - generic [ref=f1e127]:
+            - text: 河道宽度
+            - status [ref=f1e128]: 90m
+          - slider "河道宽度" [ref=f1e129] [cursor=pointer]: "90"
+          - generic [ref=f1e130]:
+            - generic [ref=f1e131]: 10 m
+            - generic [ref=f1e132]: 500 m
+        - generic [ref=f1e133]:
+          - generic [ref=f1e134]:
+            - text: 湖泊数量
+            - status [ref=f1e135]: 3座
+          - slider "湖泊数量" [ref=f1e136] [cursor=pointer]: "3"
+          - generic [ref=f1e137]:
+            - generic [ref=f1e138]: 无湖泊
+            - generic [ref=f1e139]: 12 座
+        - generic [ref=f1e140]:
+          - generic [ref=f1e141]:
+            - text: 湖泊大小
+            - status [ref=f1e142]: 2km
+          - slider "湖泊大小" [ref=f1e143] [cursor=pointer]: "2"
+          - generic [ref=f1e144]:
+            - generic [ref=f1e145]: 目标直径
+            - generic [ref=f1e146]: 受陆地范围限制
+        - generic [ref=f1e147]:
+          - generic [ref=f1e148]:
+            - text: 河口冲积发育
+            - status [ref=f1e149]: 65%
+          - slider "河口冲积发育" [ref=f1e150] [cursor=pointer]: "65"
+          - generic [ref=f1e151]:
+            - generic [ref=f1e152]: 较少淤积
+            - generic [ref=f1e153]: 平原向海扩展
+          - paragraph [ref=f1e154]: 海湾地貌启用 · 需开启河流
+        - generic [ref=f1e155]:
+          - generic [ref=f1e156]:
+            - text: 世界种子
+            - generic [ref=f1e157]: SEED
+          - generic [ref=f1e158]:
+            - generic [ref=f1e159]: "#"
+            - textbox "世界种子" [ref=f1e160]: SHANHAI-2026
+            - button "随机种子" [ref=f1e161] [cursor=pointer]
+          - paragraph [ref=f1e164]: 同一粒种子，相同参数，同一个世界。
+        - generic [ref=f1e165]:
+          - generic [ref=f1e166]: 地图精度
+          - combobox "地图精度" [ref=f1e167]:
+            - option "标准 · 最长边 768 px"
+            - option "精细 · 最长边 1024 px" [selected]
+            - option "高清 · 最长边 1536 px"
+            - option "超清 · 最长边 2048 px"
+            - option "4K · 最长边 4096 px"
+      - generic [ref=f1e168]:
+        - button "生成新世界 ↵" [ref=f1e267] [cursor=pointer]:
+          - generic [ref=f1e172]: 生成新世界
+          - generic [ref=f1e173]: ↵
+        - generic [ref=f1e174]: 本地运算 · 无需联网
+    - main [ref=f1e176]:
+      - generic [ref=f1e177]:
+        - generic [ref=f1e178]:
+          - generic [ref=f1e179]: A LITTLE WORLD, ALL YOURS
+          - heading "让想象，自然生长。" [level=1] [ref=f1e180]
+          - paragraph [ref=f1e181]: 从山脊到海岸，探索每一种可能的地貌。
+          - generic [ref=f1e182]:
+            - button "在此开始建设" [ref=f1e183] [cursor=pointer]
+            - button "体验示范城市" [ref=f1e184] [cursor=pointer]
+            - button "打开城市存档" [ref=f1e185] [cursor=pointer]
+            - button "复杂路网案例" [ref=f1e186] [cursor=pointer]
+        - generic "地图样式" [ref=f1e187]:
+          - button "矢量地图" [pressed] [ref=f1e188] [cursor=pointer]
+          - button "自然地貌" [ref=f1e189] [cursor=pointer]
+          - button "高程视图" [ref=f1e190] [cursor=pointer]
+      - region "交互式俯视地形地图" [ref=f1e191]:
+        - generic "俯视地图，滚轮缩放，拖动平移，方向键平移" [ref=f1e192]
+        - generic:
+          - generic: 碧水海湾
+          - generic: NO. 001
+        - generic [ref=f1e193]:
+          - button "两点测距" [ref=f1e194] [cursor=pointer]
+          - button "显示等高线" [pressed] [ref=f1e197] [cursor=pointer]
+          - button "显示坐标网格" [ref=f1e200] [cursor=pointer]
+          - button "全屏地图" [ref=f1e204] [cursor=pointer]
+        - generic: "N"
+        - generic "地图距离标尺":
+          - generic:
+            - generic:
+              - generic: "0"
+              - generic: 5 km
+              - generic: 10 km
+        - generic [ref=f1e207]:
+          - button "缩小" [disabled] [ref=f1e208]: −
+          - generic [ref=f1e209]: 100%
+          - button "放大" [ref=f1e210] [cursor=pointer]: +
+          - button "适应画布" [ref=f1e212] [cursor=pointer]
+      - generic [ref=f1e219]:
+        - generic [ref=f1e220]:
+          - generic [ref=f1e268]: 地貌图例
+          - generic [ref=f1e269]: 海洋
+          - generic [ref=f1e271]: 河湖
+          - generic [ref=f1e273]: 陆地
+          - generic [ref=f1e275]: 高地
+          - generic [ref=f1e277]: 等高线 · 20 m
+        - generic [ref=f1e234]: 27 段河道 · 0 座湖泊（0 座有出口）
+      - generic [ref=f1e235]:
+        - generic [ref=f1e240]:
+          - generic [ref=f1e241]: 地理范围
+          - strong [ref=f1e242]: 64 × 48 km
+        - generic [ref=f1e247]:
+          - generic [ref=f1e248]: 最高海拔
+          - strong [ref=f1e249]: 333 m
+        - generic [ref=f1e254]:
+          - generic [ref=f1e255]: 陆地占比
+          - strong [ref=f1e256]: 64 %
+        - generic [ref=f1e261]:
+          - generic [ref=f1e262]: 生成耗时
+          - strong [ref=f1e263]: 2.39 s
+      - generic [ref=f1e264]:
+        - generic [ref=f1e265]: 山海之间，皆有可能。
+        - generic [ref=f1e266]: SEED SHANHAI-2026 · PYTHON + ELECTRON
+  - status
+  - dialog [ref=f1e279]:
+    - generic [ref=f1e280]:
+      - heading "城市自然生长案例" [level=2] [ref=f1e281]
+      - paragraph [ref=f1e282]: 双岸河谷：河流、山地、桥梁、曲线主路与四类公共交通。
+      - generic [ref=f1e283]:
+        - button "从空路网开始" [active] [ref=f1e284] [cursor=pointer]
+        - button "打开已生长案例" [ref=f1e285] [cursor=pointer]
+      - heading "小街区布局" [level=3] [ref=f1e286]
+      - paragraph [ref=f1e287]: 曲线街道围合不同形状的街区，观察连续街墙、围合庭院、折转小巷、侧边绿地及少量整块项目。全部由道路和需求自动生长。
+      - generic [ref=f1e288]:
+        - button "从小街区路网开始" [ref=f1e289] [cursor=pointer]
+        - button "查看小街区布局案例" [ref=f1e290] [cursor=pointer]
+    - button "关闭" [ref=f1e292] [cursor=pointer]

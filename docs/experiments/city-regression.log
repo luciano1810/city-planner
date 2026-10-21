@@ -1,0 +1,75 @@
+
+> terrain-atlas@1.0.0 test:city
+> .venv/bin/python -m unittest tests.test_city tests.test_urban tests.test_city_v3 tests.test_terrain.ServerTests -v && node --check electron/main.cjs && node --check electron/preload.cjs && node --check renderer/app.js && node --check renderer/city.js && node --check renderer/city-geometry.js && node --test tests/map-geometry.test.cjs tests/city-geometry.test.cjs
+
+test_crossings_and_overpasses (tests.test_city.NetworkTests.test_crossings_and_overpasses) ... ok
+test_frontage_stable_and_closed_blocks (tests.test_city.NetworkTests.test_frontage_stable_and_closed_blocks) ... ok
+test_oneway_and_no_walk_on_highway (tests.test_city.NetworkTests.test_oneway_and_no_walk_on_highway) ... ok
+test_transaction_revision_and_undo (tests.test_city.NetworkTests.test_transaction_revision_and_undo) ... ok
+test_water_requires_structure (tests.test_city.NetworkTests.test_water_requires_structure) ... ok
+test_atomic_save_load_branch_and_path_validation (tests.test_city.PersistenceTests.test_atomic_save_load_branch_and_path_validation) ... ok
+test_buildings_vary_in_actual_area_and_stay_inside_lots (tests.test_city.SimulationTests.test_buildings_vary_in_actual_area_and_stay_inside_lots) ... ok
+test_construction_does_not_create_people (tests.test_city.SimulationTests.test_construction_does_not_create_people) ... ok
+test_corrupt_import_rejected (tests.test_city.SimulationTests.test_corrupt_import_rejected) ... ok
+test_price_rent_and_supply_are_distinct (tests.test_city.SimulationTests.test_price_rent_and_supply_are_distinct) ... ok
+test_protected_land_and_budget (tests.test_city.SimulationTests.test_protected_land_and_budget) ... ok
+test_real_growth_and_conservation (tests.test_city.SimulationTests.test_real_growth_and_conservation) ... ok
+test_road_demolition_breaks_access_not_building (tests.test_city.SimulationTests.test_road_demolition_breaks_access_not_building) ... ok
+test_save_continuation_deterministic (tests.test_city.SimulationTests.test_save_continuation_deterministic) ... ok
+test_vacancy_accumulates_and_committed_extension_finishes (tests.test_city.SimulationTests.test_vacancy_accumulates_and_committed_extension_finishes) ... ok
+test_capacity_and_no_phantom_transfer (tests.test_city.TransitTests.test_capacity_and_no_phantom_transfer) ... ok
+test_deleted_track_invalidates_service (tests.test_city.TransitTests.test_deleted_track_invalidates_service) ... ok
+test_facility_requires_actual_access (tests.test_city.TransitTests.test_facility_requires_actual_access) ... ok
+test_four_modes_infrastructure_service_and_headway (tests.test_city.TransitTests.test_four_modes_infrastructure_service_and_headway) ... ok
+test_autogrowth_can_pause_and_does_not_cross_water (tests.test_urban.AutonomousCityTests.test_autogrowth_can_pause_and_does_not_cross_water) ... ok
+test_centers_need_sustained_jobs_and_can_have_subcenter (tests.test_urban.AutonomousCityTests.test_centers_need_sustained_jobs_and_can_have_subcenter) ... ok
+test_comparison_reports_conditions_and_isolates_branches (tests.test_urban.AutonomousCityTests.test_comparison_reports_conditions_and_isolates_branches) ... ok
+test_growth_save_continuation_and_area_summary (tests.test_urban.AutonomousCityTests.test_growth_save_continuation_and_area_summary) ... ok
+test_legacy_save_migration_preserves_built_footprint (tests.test_urban.AutonomousCityTests.test_legacy_save_migration_preserves_built_footprint) ... ok
+test_neighbourhood_walkways_are_real_graph_connections (tests.test_urban.AutonomousCityTests.test_neighbourhood_walkways_are_real_graph_connections) ... ok
+test_old_save_keeps_unclassified_historical_construction (tests.test_urban.AutonomousCityTests.test_old_save_keeps_unclassified_historical_construction) ... ok
+test_rejects_corrupt_occupancy_and_queries_station_access (tests.test_urban.AutonomousCityTests.test_rejects_corrupt_occupancy_and_queries_station_access) ... ok
+test_reporting_and_accounts_reconcile_with_authoritative_state (tests.test_urban.AutonomousCityTests.test_reporting_and_accounts_reconcile_with_authoritative_state) ... ok
+test_road_only_creates_lanes_public_spaces_and_entrances (tests.test_urban.AutonomousCityTests.test_road_only_creates_lanes_public_spaces_and_entrances) ... ok
+test_single_large_office_is_not_a_cbd (tests.test_urban.AutonomousCityTests.test_single_large_office_is_not_a_cbd) ... ok
+test_station_maintenance_and_interrupted_line_location (tests.test_urban.AutonomousCityTests.test_station_maintenance_and_interrupted_line_location) ... ok
+test_sustained_events_have_cooldown (tests.test_urban.AutonomousCityTests.test_sustained_events_have_cooldown) ... ok
+test_curve_uses_real_geometry_cost_and_endpoints (tests.test_urban.TerrainAndCurveTests.test_curve_uses_real_geometry_cost_and_endpoints) ... ok
+test_invalid_road_preview_locates_first_terrain_conflict (tests.test_urban.TerrainAndCurveTests.test_invalid_road_preview_locates_first_terrain_conflict) ... ok
+test_real_frontage_access_does_not_detour_to_road_ends (tests.test_urban.TerrainAndCurveTests.test_real_frontage_access_does_not_detour_to_road_ends) ... ok
+test_terrain_changes_cost_time_land_and_height_limit (tests.test_urban.TerrainAndCurveTests.test_terrain_changes_cost_time_land_and_height_limit) ... ok
+test_heavy_uses_assemble_real_land_without_overlaps (tests.test_city_v3.ConnectedGrowthTests.test_heavy_uses_assemble_real_land_without_overlaps) ... ok
+test_local_edit_preserves_remote_parcel_identity_and_price (tests.test_city_v3.ConnectedGrowthTests.test_local_edit_preserves_remote_parcel_identity_and_price) ... ok
+test_reserved_streets_make_loops_without_moving_existing_buildings (tests.test_city_v3.ConnectedGrowthTests.test_reserved_streets_make_loops_without_moving_existing_buildings) ... ok
+test_bridge_changes_network_jobs_and_land_on_two_banks (tests.test_city_v3.ControlledEconomyTests.test_bridge_changes_network_jobs_and_land_on_two_banks) ... ok
+test_calibration_units_validation_and_persistence (tests.test_city_v3.ControlledEconomyTests.test_calibration_units_validation_and_persistence) ... ok
+test_reverse_accessibility_matches_directed_forward_search (tests.test_city_v3.ControlledEconomyTests.test_reverse_accessibility_matches_directed_forward_search) ... ok
+test_sustained_unaffordable_housing_causes_real_population_loss (tests.test_city_v3.ControlledEconomyTests.test_sustained_unaffordable_housing_causes_real_population_loss) ... ok
+test_two_line_transfer_counts_one_complete_journey (tests.test_city_v3.ControlledEconomyTests.test_two_line_transfer_counts_one_complete_journey) ... ok
+test_boundary_and_role_validation (tests.test_city_v3.RegionalRailTests.test_boundary_and_role_validation) ... ok
+test_external_passenger_journey_and_freight_separation (tests.test_city_v3.RegionalRailTests.test_external_passenger_journey_and_freight_separation) ... ok
+test_freight_capacity_drays_cost_and_track_failure (tests.test_city_v3.RegionalRailTests.test_freight_capacity_drays_cost_and_track_failure) ... ok
+test_generation_auth_validation_and_protocol (tests.test_terrain.ServerTests.test_generation_auth_validation_and_protocol) ... ok
+test_health_and_unavailable_static_files (tests.test_terrain.ServerTests.test_health_and_unavailable_static_files) ... ok
+
+----------------------------------------------------------------------
+Ran 49 tests in 20.158s
+
+OK
+✔ curves retain endpoints, interpolate handles and add true curvature (1.031958ms)
+✔ water polygons preserve islands, lakes and map boundary coverage (1.275541ms)
+✔ saddle topology follows scalar values instead of joining diagonal water arbitrarily (0.394709ms)
+✔ one pixel channel remains connected and dry terrain has no water geometry (0.411875ms)
+✔ subsampled contour positions retain original pixel coordinates (0.0955ms)
+✔ metric scale uses 1/2/5 steps and shrinks the distance when zooming (0.246083ms)
+✔ measurement is unchanged by zoom/pan and handles a non-square extent (0.099375ms)
+✔ continuous river banks keep subpixel positions, width variation and shared endpoints (0.407708ms)
+✔ shoreline simplification removes staircase vertices without removing islands (0.182416ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 50.776083

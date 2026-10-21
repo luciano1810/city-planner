@@ -1,0 +1,40 @@
+test_heavy_uses_assemble_real_land_without_overlaps (tests.test_city_v3.ConnectedGrowthTests.test_heavy_uses_assemble_real_land_without_overlaps) ... ok
+test_local_edit_preserves_remote_parcel_identity_and_price (tests.test_city_v3.ConnectedGrowthTests.test_local_edit_preserves_remote_parcel_identity_and_price) ... ok
+test_reserved_streets_make_loops_without_moving_existing_buildings (tests.test_city_v3.ConnectedGrowthTests.test_reserved_streets_make_loops_without_moving_existing_buildings) ... ok
+test_empty_roads_do_not_create_endless_streets_but_filled_blocks_expand (tests.test_city_v5.StreetFrontageTests.test_empty_roads_do_not_create_endless_streets_but_filled_blocks_expand) ... ok
+test_gap_between_existing_frontages_gets_fill_priority (tests.test_city_v5.StreetFrontageTests.test_gap_between_existing_frontages_gets_fill_priority) ... ok
+test_small_floorplates_keep_street_alignment_and_individual_areas (tests.test_city_v5.StreetFrontageTests.test_small_floorplates_keep_street_alignment_and_individual_areas) ... ok
+test_v4_save_keeps_existing_footprints_and_adds_new_policy (tests.test_city_v5.StreetFrontageTests.test_v4_save_keeps_existing_footprints_and_adds_new_policy) ... ok
+test_absolute_shortage_still_starts_projects_below_eight_percent (tests.test_city_v6.BlockLayoutTests.test_absolute_shortage_still_starts_projects_below_eight_percent) ... ok
+test_occupied_legacy_blocks_are_not_replaced (tests.test_city_v6.BlockLayoutTests.test_occupied_legacy_blocks_are_not_replaced) ... ok
+test_partitions_allocate_all_land_without_overlaps (tests.test_city_v6.BlockLayoutTests.test_partitions_allocate_all_land_without_overlaps) ... ok
+test_road_only_layouts_and_rebuild_preserve_geometry (tests.test_city_v6.BlockLayoutTests.test_road_only_layouts_and_rebuild_preserve_geometry) ... ok
+test_two_buildings_share_real_walkable_court_and_restore (tests.test_city_v6.BlockLayoutTests.test_two_buildings_share_real_walkable_court_and_restore) ... ok
+test_whole_block_building_and_whole_block_public_spaces (tests.test_city_v6.BlockLayoutTests.test_whole_block_building_and_whole_block_public_spaces) ... ok
+test_curved_blocks_grow_courts_with_real_access_and_no_collisions (tests.test_city_v7.VariedBlockTests.test_curved_blocks_grow_courts_with_real_access_and_no_collisions) ... ok
+test_dogleg_route_stays_in_reserved_land_and_accounts_for_distance (tests.test_city_v7.VariedBlockTests.test_dogleg_route_stays_in_reserved_land_and_accounts_for_distance) ... ok
+test_footprints_follow_use_and_keep_street_access (tests.test_city_v7.VariedBlockTests.test_footprints_follow_use_and_keep_street_access) ... ok
+test_model_six_occupied_layout_is_preserved (tests.test_city_v7.VariedBlockTests.test_model_six_occupied_layout_is_preserved) ... ok
+test_subdivision_varies_grain_and_conserves_irregular_land (tests.test_city_v7.VariedBlockTests.test_subdivision_varies_grain_and_conserves_irregular_land) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 16.472s
+
+OK
+✔ curves retain endpoints, interpolate handles and add true curvature (0.829542ms)
+✔ water polygons preserve islands, lakes and map boundary coverage (1.080333ms)
+✔ saddle topology follows scalar values instead of joining diagonal water arbitrarily (0.124041ms)
+✔ one pixel channel remains connected and dry terrain has no water geometry (0.352042ms)
+✔ subsampled contour positions retain original pixel coordinates (0.087833ms)
+✔ metric scale uses 1/2/5 steps and shrinks the distance when zooming (0.116791ms)
+✔ measurement is unchanged by zoom/pan and handles a non-square extent (0.092042ms)
+✔ continuous river banks keep subpixel positions, width variation and shared endpoints (0.331542ms)
+✔ shoreline simplification removes staircase vertices without removing islands (0.176792ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.646458

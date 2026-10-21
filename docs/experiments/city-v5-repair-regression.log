@@ -1,0 +1,42 @@
+test_autogrowth_can_pause_and_does_not_cross_water (tests.test_urban.AutonomousCityTests.test_autogrowth_can_pause_and_does_not_cross_water) ... ok
+test_centers_need_sustained_jobs_and_can_have_subcenter (tests.test_urban.AutonomousCityTests.test_centers_need_sustained_jobs_and_can_have_subcenter) ... ok
+test_comparison_reports_conditions_and_isolates_branches (tests.test_urban.AutonomousCityTests.test_comparison_reports_conditions_and_isolates_branches) ... ok
+test_growth_save_continuation_and_area_summary (tests.test_urban.AutonomousCityTests.test_growth_save_continuation_and_area_summary) ... ok
+test_legacy_save_migration_preserves_built_footprint (tests.test_urban.AutonomousCityTests.test_legacy_save_migration_preserves_built_footprint) ... ok
+test_neighbourhood_walkways_are_real_graph_connections (tests.test_urban.AutonomousCityTests.test_neighbourhood_walkways_are_real_graph_connections) ... ok
+test_old_save_keeps_unclassified_historical_construction (tests.test_urban.AutonomousCityTests.test_old_save_keeps_unclassified_historical_construction) ... ok
+test_rejects_corrupt_occupancy_and_queries_station_access (tests.test_urban.AutonomousCityTests.test_rejects_corrupt_occupancy_and_queries_station_access) ... ok
+test_reporting_and_accounts_reconcile_with_authoritative_state (tests.test_urban.AutonomousCityTests.test_reporting_and_accounts_reconcile_with_authoritative_state) ... ok
+test_road_only_creates_lanes_public_spaces_and_entrances (tests.test_urban.AutonomousCityTests.test_road_only_creates_lanes_public_spaces_and_entrances) ... ok
+test_single_large_office_is_not_a_cbd (tests.test_urban.AutonomousCityTests.test_single_large_office_is_not_a_cbd) ... ok
+test_station_maintenance_and_interrupted_line_location (tests.test_urban.AutonomousCityTests.test_station_maintenance_and_interrupted_line_location) ... ok
+test_sustained_events_have_cooldown (tests.test_urban.AutonomousCityTests.test_sustained_events_have_cooldown) ... ok
+test_heavy_uses_assemble_real_land_without_overlaps (tests.test_city_v3.ConnectedGrowthTests.test_heavy_uses_assemble_real_land_without_overlaps) ... ok
+test_local_edit_preserves_remote_parcel_identity_and_price (tests.test_city_v3.ConnectedGrowthTests.test_local_edit_preserves_remote_parcel_identity_and_price) ... ok
+test_reserved_streets_make_loops_without_moving_existing_buildings (tests.test_city_v3.ConnectedGrowthTests.test_reserved_streets_make_loops_without_moving_existing_buildings) ... ok
+test_empty_roads_do_not_create_endless_streets_but_filled_blocks_expand (tests.test_city_v5.StreetFrontageTests.test_empty_roads_do_not_create_endless_streets_but_filled_blocks_expand) ... ok
+test_gap_between_existing_frontages_gets_fill_priority (tests.test_city_v5.StreetFrontageTests.test_gap_between_existing_frontages_gets_fill_priority) ... ok
+test_small_floorplates_keep_street_alignment_and_individual_areas (tests.test_city_v5.StreetFrontageTests.test_small_floorplates_keep_street_alignment_and_individual_areas) ... ok
+test_v4_save_keeps_existing_footprints_and_adds_new_policy (tests.test_city_v5.StreetFrontageTests.test_v4_save_keeps_existing_footprints_and_adds_new_policy) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 19.821s
+
+OK
+✔ curves retain endpoints, interpolate handles and add true curvature (1.071833ms)
+✔ water polygons preserve islands, lakes and map boundary coverage (1.242167ms)
+✔ saddle topology follows scalar values instead of joining diagonal water arbitrarily (0.190375ms)
+✔ one pixel channel remains connected and dry terrain has no water geometry (0.551667ms)
+✔ subsampled contour positions retain original pixel coordinates (0.104125ms)
+✔ metric scale uses 1/2/5 steps and shrinks the distance when zooming (0.189375ms)
+✔ measurement is unchanged by zoom/pan and handles a non-square extent (0.129584ms)
+✔ continuous river banks keep subpixel positions, width variation and shared endpoints (0.505792ms)
+✔ shoreline simplification removes staircase vertices without removing islands (0.228875ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53.241916

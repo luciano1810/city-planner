@@ -1,0 +1,7 @@
+test_two_buildings_share_real_walkable_court_and_restore (tests.test_city_v6.BlockLayoutTests.test_two_buildings_share_real_walkable_court_and_restore) ... ok
+test_curved_blocks_grow_courts_with_real_access_and_no_collisions (tests.test_city_v7.VariedBlockTests.test_curved_blocks_grow_courts_with_real_access_and_no_collisions) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.758s
+
+OK

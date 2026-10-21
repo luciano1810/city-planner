@@ -1,0 +1,1272 @@
+{
+  "model": "shanhai-city-2",
+  "seed": "RIVER-VALLEY-2026",
+  "settings": {
+    "migration": 110,
+    "externalJobs": 900,
+    "growth": 1.6,
+    "fare": 2,
+    "budget": false,
+    "taxRate": 0.06,
+    "maxProjects": 18,
+    "autoGrow": true,
+    "accessBudget": 30
+  },
+  "policy": {
+    "version": "urban-2",
+    "autoLanesPerMonth": 2,
+    "laneMaximumLength": 210,
+    "parkPerBuildings": 28,
+    "plazaPerBuildings": 45,
+    "householdSpace": 75,
+    "walkingMetersPerMinute": 80,
+    "trafficIterations": 2,
+    "priceMonthlyLimit": 0.07,
+    "districtCellMeters": 400,
+    "districtPersistenceMonths": 3,
+    "districtJoinMeters": 220,
+    "cbdMinimumBuildings": 3,
+    "cbdMinimumJobs": 240,
+    "cbdMinimumEmployed": 120,
+    "carCO2KgPerKm": 0.17,
+    "constructionBaseMonths": 2,
+    "relocationStressMonths": 4,
+    "exitStressMonths": 8,
+    "housingBurdenThreshold": 0.5,
+    "eventPersistenceMonths": 3,
+    "eventCooldownMonths": 12,
+    "lowlandProxy": "低海拔邻水指数，非洪水概率"
+  },
+  "months": 72,
+  "machine": "arm64",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "elapsedSeconds": 480.66,
+  "monthSeconds": [
+    1.177,
+    1.225,
+    1.357,
+    1.73,
+    2.122,
+    1.971,
+    2.095,
+    2.111,
+    2.242,
+    2.51,
+    2.989,
+    2.94,
+    3.092,
+    3.017,
+    3.267,
+    3.271,
+    3.79,
+    3.648,
+    3.637,
+    3.884,
+    3.88,
+    4.074,
+    4.25,
+    4.283,
+    4.526,
+    4.531,
+    4.707,
+    4.725,
+    4.937,
+    5.027,
+    5.464,
+    6.164,
+    5.861,
+    6.341,
+    6.234,
+    6.307,
+    6.352,
+    7.004,
+    6.974,
+    7.254,
+    7.113,
+    7.448,
+    7.554,
+    7.872,
+    8.137,
+    8.418,
+    8.513,
+    8.478,
+    9.071,
+    9.493,
+    9.212,
+    9.267,
+    9.658,
+    10.224,
+    9.691,
+    9.86,
+    10.075,
+    10.606,
+    11.27,
+    10.991,
+    11.151,
+    11.279,
+    10.565,
+    11.522,
+    10.686,
+    10.604,
+    11.185,
+    11.106,
+    11.139,
+    11.075,
+    11.191,
+    11.289
+  ],
+  "peakMemoryMiB": 238.5,
+  "morphology": {
+    "buildings": 203,
+    "uses": {
+      "warehouse": 52,
+      "office": 13,
+      "residential": 49,
+      "industrial": 80,
+      "commercial": 9
+    },
+    "floors": {
+      "1": 137,
+      "3": 10,
+      "12": 1,
+      "2": 11,
+      "6": 11,
+      "10": 3,
+      "7": 9,
+      "5": 7,
+      "4": 7,
+      "8": 2,
+      "11": 3,
+      "9": 1,
+      "21": 1
+    },
+    "forms": {
+      "warehouse": 52,
+      "office": 11,
+      "tower": 7,
+      "villa": 17,
+      "factory": 80,
+      "slab": 27,
+      "retail": 9
+    },
+    "footprintRange": [
+      340.40774725536244,
+      2166.38736931711
+    ],
+    "overlapPairs": 0,
+    "roadEncroachments": 0,
+    "waterEncroachments": 0,
+    "disconnectedBuildings": 0,
+    "intersections": 104,
+    "deadEnds": 106,
+    "deadEndShare": 0.505,
+    "meanNearestBuilding": 88.0,
+    "closedBlocks": 35,
+    "districts": [
+      {
+        "kind": "工业仓储区",
+        "buildings": 2,
+        "jobs": 13
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 3,
+        "jobs": 23
+      },
+      {
+        "kind": "商业区",
+        "buildings": 2,
+        "jobs": 140
+      },
+      {
+        "kind": "居住区",
+        "buildings": 7,
+        "jobs": 159
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 2,
+        "jobs": 23
+      },
+      {
+        "kind": "混合城区",
+        "buildings": 21,
+        "jobs": 510
+      },
+      {
+        "kind": "居住区",
+        "buildings": 8,
+        "jobs": 123
+      },
+      {
+        "kind": "居住区",
+        "buildings": 3,
+        "jobs": 18
+      },
+      {
+        "kind": "居住区",
+        "buildings": 6,
+        "jobs": 49
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 15,
+        "jobs": 128
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 14,
+        "jobs": 143
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 11,
+        "jobs": 123
+      },
+      {
+        "kind": "居住区",
+        "buildings": 10,
+        "jobs": 107
+      },
+      {
+        "kind": "居住区",
+        "buildings": 4,
+        "jobs": 96
+      },
+      {
+        "kind": "居住区",
+        "buildings": 4,
+        "jobs": 35
+      },
+      {
+        "kind": "居住区",
+        "buildings": 5,
+        "jobs": 139
+      },
+      {
+        "kind": "居住区",
+        "buildings": 1,
+        "jobs": 0
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 3,
+        "jobs": 29
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 2,
+        "jobs": 29
+      },
+      {
+        "kind": "混合城区",
+        "buildings": 3,
+        "jobs": 86
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 2,
+        "jobs": 17
+      },
+      {
+        "kind": "居住区",
+        "buildings": 2,
+        "jobs": 11
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 1,
+        "jobs": 9
+      },
+      {
+        "kind": "居住区",
+        "buildings": 3,
+        "jobs": 31
+      },
+      {
+        "kind": "居住区",
+        "buildings": 19,
+        "jobs": 157
+      },
+      {
+        "kind": "CBD",
+        "buildings": 8,
+        "jobs": 483
+      },
+      {
+        "kind": "商业区",
+        "buildings": 8,
+        "jobs": 344
+      },
+      {
+        "kind": "办公集聚区",
+        "buildings": 6,
+        "jobs": 220
+      },
+      {
+        "kind": "居住区",
+        "buildings": 3,
+        "jobs": 30
+      },
+      {
+        "kind": "居住区",
+        "buildings": 1,
+        "jobs": 0
+      },
+      {
+        "kind": "商业区",
+        "buildings": 1,
+        "jobs": 36
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 8,
+        "jobs": 105
+      },
+      {
+        "kind": "混合城区",
+        "buildings": 6,
+        "jobs": 268
+      },
+      {
+        "kind": "居住区",
+        "buildings": 2,
+        "jobs": 17
+      },
+      {
+        "kind": "工业仓储区",
+        "buildings": 3,
+        "jobs": 23
+      }
+    ],
+    "validLines": 5,
+    "transitModes": [
+      "bus",
+      "metro",
+      "train",
+      "tram"
+    ]
+  },
+  "stats": {
+    "month": 72,
+    "population": 6999,
+    "households": 2816,
+    "jobs": 3724,
+    "employed": 2816,
+    "unemployment": 0.0,
+    "housing": 2816,
+    "vacancy": 0.0,
+    "buildings": 203,
+    "construction": 4,
+    "roadKm": 46.82628128314661,
+    "railKm": 9.416902679195816,
+    "landValue": 591.0,
+    "rent": 15.75,
+    "trips": 12792,
+    "completedTrips": 12792,
+    "failedTrips": 0,
+    "commute": 6.975578835227273,
+    "commuteP90": 14.31,
+    "modeShare": {
+      "walk": 59.05253283302064,
+      "car": 32.09818636647905,
+      "public": 8.849280800500313
+    },
+    "boardings": 1166,
+    "accessJobs": 3501.4723011363635,
+    "publicJobs": 3251.901278409091,
+    "burden": 18.90326374797078,
+    "combinedBurden": 20.967466689692824,
+    "congestion": 0.25658173873767687,
+    "treasury": -427873265,
+    "maintenance": 2543896,
+    "revenue": 1429118,
+    "movedIn": 0,
+    "movedOut": 0,
+    "relocated": 0,
+    "pendingHousing": 176,
+    "developedArea": 435308.52999999997,
+    "floorArea": 435875.5,
+    "estimatedCO2": 994.77,
+    "freightTrips": 346,
+    "freightKm": 773.1928892685888,
+    "uses": {
+      "residential": 212892.7,
+      "commercial": 34141.5,
+      "office": 41760.1,
+      "industrial": 86238.8,
+      "warehouse": 60842.4
+    },
+    "density": 194.41666666666666,
+    "laborForce": 2816,
+    "vacantJobs": 908,
+    "housingInConstruction": 207,
+    "floorDistribution": {
+      "1": 137,
+      "3": 10,
+      "12": 1,
+      "2": 11,
+      "6": 11,
+      "10": 3,
+      "7": 9,
+      "5": 7,
+      "4": 7,
+      "8": 2,
+      "11": 3,
+      "9": 1,
+      "21": 1
+    },
+    "meanBuildingAge": 47.433497536945815,
+    "buildableArea": 1928158,
+    "floorRatio": 0.23830698839246242,
+    "builtDensity": 16078.2514415695,
+    "jobDensity": 8554.851888613348,
+    "firms": 152,
+    "firmOpened": 0,
+    "firmClosed": 0,
+    "firmRelocations": 0,
+    "firmProfit": 22391157,
+    "externalDemand": 915.0,
+    "localDemand": 3408.6,
+    "landP10": 433.64799999999997,
+    "landP90": 706.668,
+    "rentByUse": {
+      "residential": 15.81795918367347,
+      "office": 30.689230769230768,
+      "commercial": 35.392222222222216,
+      "industrial": 17.807,
+      "warehouse": 11.646153846153847
+    },
+    "propertyValue": 1286697119,
+    "overburdenedPeople": 0,
+    "commuteMedian": 6.475,
+    "commuteDistance": 767.3833203512878,
+    "meanWait": 4.346113074204947,
+    "transfers": 34,
+    "publicJourneys": 1132,
+    "mainModeShare": {
+      "walk": 59.05253283302064,
+      "car": 32.09818636647905,
+      "bus": 2.204502814258912,
+      "tram": 1.0006253908692933,
+      "metro": 5.644152595372107,
+      "train": 0.0
+    },
+    "tripsByPurpose": {
+      "work": 5632,
+      "shopping": 1956,
+      "school": 2434,
+      "leisure": 2506,
+      "health": 264
+    },
+    "vehicleKm": 5851.598484944612,
+    "personKm": 12721.414047531465,
+    "constructionCost": 406358869,
+    "fareRevenue": 49808,
+    "operationCost": 2255661,
+    "terrainEngineeringCost": 235793843,
+    "meanSlope": 2.4540969162995596,
+    "landscape": 0.12359911894273128,
+    "lowlandExposure": 0,
+    "pollutionExposure": 0.18509222514204546,
+    "autoRoadKm": 21.745056975833972,
+    "publicSpaceArea": 21334.757822417345,
+    "parks": 8,
+    "plazas": 5,
+    "pathKm": 14.078850313320824
+  },
+  "history": [
+    {
+      "month": 1,
+      "seconds": 1.177,
+      "population": 0,
+      "buildings": 29,
+      "jobs": 0,
+      "employed": 0,
+      "boardings": 0,
+      "landValue": 79.52,
+      "vacancy": null
+    },
+    {
+      "month": 2,
+      "seconds": 1.225,
+      "population": 0,
+      "buildings": 58,
+      "jobs": 0,
+      "employed": 0,
+      "boardings": 0,
+      "landValue": 80.24,
+      "vacancy": null
+    },
+    {
+      "month": 3,
+      "seconds": 1.357,
+      "population": 21,
+      "buildings": 61,
+      "jobs": 356,
+      "employed": 8,
+      "boardings": 2,
+      "landValue": 85.84,
+      "vacancy": 46.666666666666664
+    },
+    {
+      "month": 4,
+      "seconds": 1.73,
+      "population": 458,
+      "buildings": 65,
+      "jobs": 707,
+      "employed": 184,
+      "boardings": 88,
+      "landValue": 91.755,
+      "vacancy": 19.650655021834062
+    },
+    {
+      "month": 5,
+      "seconds": 2.122,
+      "population": 852,
+      "buildings": 69,
+      "jobs": 951,
+      "employed": 346,
+      "boardings": 234,
+      "landValue": 98.16,
+      "vacancy": 0.0
+    },
+    {
+      "month": 6,
+      "seconds": 1.971,
+      "population": 852,
+      "buildings": 75,
+      "jobs": 1124,
+      "employed": 346,
+      "boardings": 234,
+      "landValue": 105.01,
+      "vacancy": 0.0
+    },
+    {
+      "month": 7,
+      "seconds": 2.095,
+      "population": 960,
+      "buildings": 78,
+      "jobs": 1294,
+      "employed": 387,
+      "boardings": 200,
+      "landValue": 112.34,
+      "vacancy": 0.0
+    },
+    {
+      "month": 8,
+      "seconds": 2.111,
+      "population": 960,
+      "buildings": 79,
+      "jobs": 1294,
+      "employed": 387,
+      "boardings": 200,
+      "landValue": 120.18,
+      "vacancy": 0.0
+    },
+    {
+      "month": 9,
+      "seconds": 2.242,
+      "population": 1000,
+      "buildings": 80,
+      "jobs": 1310,
+      "employed": 402,
+      "boardings": 212,
+      "landValue": 128.5,
+      "vacancy": 0.0
+    },
+    {
+      "month": 10,
+      "seconds": 2.51,
+      "population": 1351,
+      "buildings": 85,
+      "jobs": 1402,
+      "employed": 540,
+      "boardings": 286,
+      "landValue": 137.48,
+      "vacancy": 0.0
+    },
+    {
+      "month": 11,
+      "seconds": 2.989,
+      "population": 1798,
+      "buildings": 91,
+      "jobs": 1575,
+      "employed": 716,
+      "boardings": 332,
+      "landValue": 147.055,
+      "vacancy": 0.9681881051175623
+    },
+    {
+      "month": 12,
+      "seconds": 2.94,
+      "population": 1818,
+      "buildings": 97,
+      "jobs": 1614,
+      "employed": 723,
+      "boardings": 332,
+      "landValue": 157.305,
+      "vacancy": 0.0
+    },
+    {
+      "month": 13,
+      "seconds": 3.092,
+      "population": 1818,
+      "buildings": 97,
+      "jobs": 1635,
+      "employed": 723,
+      "boardings": 360,
+      "landValue": 168.3,
+      "vacancy": 0.0
+    },
+    {
+      "month": 14,
+      "seconds": 3.017,
+      "population": 1818,
+      "buildings": 97,
+      "jobs": 1635,
+      "employed": 723,
+      "boardings": 360,
+      "landValue": 179.96499999999997,
+      "vacancy": 0.0
+    },
+    {
+      "month": 15,
+      "seconds": 3.267,
+      "population": 1987,
+      "buildings": 98,
+      "jobs": 1703,
+      "employed": 796,
+      "boardings": 398,
+      "landValue": 192.495,
+      "vacancy": 0.0
+    },
+    {
+      "month": 16,
+      "seconds": 3.271,
+      "population": 2098,
+      "buildings": 98,
+      "jobs": 1758,
+      "employed": 840,
+      "boardings": 436,
+      "landValue": 205.91,
+      "vacancy": 0.0
+    },
+    {
+      "month": 17,
+      "seconds": 3.79,
+      "population": 2522,
+      "buildings": 98,
+      "jobs": 1906,
+      "employed": 1016,
+      "boardings": 550,
+      "landValue": 220.2,
+      "vacancy": 5.663881151346328
+    },
+    {
+      "month": 18,
+      "seconds": 3.648,
+      "population": 2673,
+      "buildings": 109,
+      "jobs": 1949,
+      "employed": 1077,
+      "boardings": 586,
+      "landValue": 235.54500000000002,
+      "vacancy": 0.0
+    },
+    {
+      "month": 19,
+      "seconds": 3.637,
+      "population": 2673,
+      "buildings": 111,
+      "jobs": 1949,
+      "employed": 1077,
+      "boardings": 586,
+      "landValue": 251.77499999999998,
+      "vacancy": 0.0
+    },
+    {
+      "month": 20,
+      "seconds": 3.884,
+      "population": 2673,
+      "buildings": 111,
+      "jobs": 1979,
+      "employed": 1077,
+      "boardings": 586,
+      "landValue": 269.29,
+      "vacancy": 0.0
+    },
+    {
+      "month": 21,
+      "seconds": 3.88,
+      "population": 2673,
+      "buildings": 111,
+      "jobs": 1978,
+      "employed": 1077,
+      "boardings": 586,
+      "landValue": 287.735,
+      "vacancy": 0.0
+    },
+    {
+      "month": 22,
+      "seconds": 4.074,
+      "population": 2673,
+      "buildings": 111,
+      "jobs": 1979,
+      "employed": 1077,
+      "boardings": 586,
+      "landValue": 307.21,
+      "vacancy": 0.0
+    },
+    {
+      "month": 23,
+      "seconds": 4.25,
+      "population": 2813,
+      "buildings": 111,
+      "jobs": 2032,
+      "employed": 1129,
+      "boardings": 656,
+      "landValue": 325.505,
+      "vacancy": 0.0
+    },
+    {
+      "month": 24,
+      "seconds": 4.283,
+      "population": 2813,
+      "buildings": 111,
+      "jobs": 2048,
+      "employed": 1129,
+      "boardings": 656,
+      "landValue": 340.995,
+      "vacancy": 0.0
+    },
+    {
+      "month": 25,
+      "seconds": 4.526,
+      "population": 3222,
+      "buildings": 111,
+      "jobs": 2170,
+      "employed": 1305,
+      "boardings": 656,
+      "landValue": 355.32,
+      "vacancy": 7.577903682719544
+    },
+    {
+      "month": 26,
+      "seconds": 4.531,
+      "population": 3500,
+      "buildings": 120,
+      "jobs": 2217,
+      "employed": 1412,
+      "boardings": 660,
+      "landValue": 368.36,
+      "vacancy": 0.0
+    },
+    {
+      "month": 27,
+      "seconds": 4.707,
+      "population": 3500,
+      "buildings": 125,
+      "jobs": 2221,
+      "employed": 1412,
+      "boardings": 664,
+      "landValue": 380.06,
+      "vacancy": 0.0
+    },
+    {
+      "month": 28,
+      "seconds": 4.725,
+      "population": 3500,
+      "buildings": 125,
+      "jobs": 2260,
+      "employed": 1412,
+      "boardings": 664,
+      "landValue": 391.35,
+      "vacancy": 0.0
+    },
+    {
+      "month": 29,
+      "seconds": 4.937,
+      "population": 3500,
+      "buildings": 125,
+      "jobs": 2317,
+      "employed": 1412,
+      "boardings": 636,
+      "landValue": 401.03,
+      "vacancy": 0.0
+    },
+    {
+      "month": 30,
+      "seconds": 5.027,
+      "population": 3500,
+      "buildings": 125,
+      "jobs": 2309,
+      "employed": 1412,
+      "boardings": 688,
+      "landValue": 408.93,
+      "vacancy": 0.0
+    },
+    {
+      "month": 31,
+      "seconds": 5.464,
+      "population": 3839,
+      "buildings": 131,
+      "jobs": 2410,
+      "employed": 1556,
+      "boardings": 832,
+      "landValue": 417.83,
+      "vacancy": 0.0
+    },
+    {
+      "month": 32,
+      "seconds": 6.164,
+      "population": 4201,
+      "buildings": 135,
+      "jobs": 2478,
+      "employed": 1692,
+      "boardings": 1024,
+      "landValue": 427.03999999999996,
+      "vacancy": 0.0
+    },
+    {
+      "month": 33,
+      "seconds": 5.861,
+      "population": 4201,
+      "buildings": 145,
+      "jobs": 2591,
+      "employed": 1692,
+      "boardings": 1024,
+      "landValue": 433.4,
+      "vacancy": 0.0
+    },
+    {
+      "month": 34,
+      "seconds": 6.341,
+      "population": 4201,
+      "buildings": 145,
+      "jobs": 2605,
+      "employed": 1692,
+      "boardings": 990,
+      "landValue": 443.245,
+      "vacancy": 0.0
+    },
+    {
+      "month": 35,
+      "seconds": 6.234,
+      "population": 4201,
+      "buildings": 144,
+      "jobs": 2592,
+      "employed": 1692,
+      "boardings": 988,
+      "landValue": 449.94,
+      "vacancy": 0.0
+    },
+    {
+      "month": 36,
+      "seconds": 6.307,
+      "population": 4201,
+      "buildings": 144,
+      "jobs": 2592,
+      "employed": 1692,
+      "boardings": 988,
+      "landValue": 455.33500000000004,
+      "vacancy": 0.0
+    },
+    {
+      "month": 37,
+      "seconds": 6.352,
+      "population": 4201,
+      "buildings": 144,
+      "jobs": 2591,
+      "employed": 1692,
+      "boardings": 990,
+      "landValue": 460.05,
+      "vacancy": 0.0
+    },
+    {
+      "month": 38,
+      "seconds": 7.004,
+      "population": 4639,
+      "buildings": 144,
+      "jobs": 2777,
+      "employed": 1868,
+      "boardings": 1056,
+      "landValue": 465.36,
+      "vacancy": 3.2625582599689285
+    },
+    {
+      "month": 39,
+      "seconds": 6.974,
+      "population": 4808,
+      "buildings": 144,
+      "jobs": 2827,
+      "employed": 1931,
+      "boardings": 1062,
+      "landValue": 469.345,
+      "vacancy": 0.0
+    },
+    {
+      "month": 40,
+      "seconds": 7.254,
+      "population": 4990,
+      "buildings": 152,
+      "jobs": 2879,
+      "employed": 2004,
+      "boardings": 1062,
+      "landValue": 473.22,
+      "vacancy": 0.0
+    },
+    {
+      "month": 41,
+      "seconds": 7.113,
+      "population": 4990,
+      "buildings": 162,
+      "jobs": 2879,
+      "employed": 2004,
+      "boardings": 1062,
+      "landValue": 478.415,
+      "vacancy": 0.0
+    },
+    {
+      "month": 42,
+      "seconds": 7.448,
+      "population": 4990,
+      "buildings": 162,
+      "jobs": 2911,
+      "employed": 2004,
+      "boardings": 1062,
+      "landValue": 481.02,
+      "vacancy": 0.0
+    },
+    {
+      "month": 43,
+      "seconds": 7.554,
+      "population": 4990,
+      "buildings": 162,
+      "jobs": 2906,
+      "employed": 2004,
+      "boardings": 1066,
+      "landValue": 485.58,
+      "vacancy": 0.0
+    },
+    {
+      "month": 44,
+      "seconds": 7.872,
+      "population": 4990,
+      "buildings": 163,
+      "jobs": 2906,
+      "employed": 2004,
+      "boardings": 1066,
+      "landValue": 490.29,
+      "vacancy": 0.0
+    },
+    {
+      "month": 45,
+      "seconds": 8.137,
+      "population": 5270,
+      "buildings": 166,
+      "jobs": 3015,
+      "employed": 2121,
+      "boardings": 1076,
+      "landValue": 495.72,
+      "vacancy": 0.0
+    },
+    {
+      "month": 46,
+      "seconds": 8.418,
+      "population": 5270,
+      "buildings": 166,
+      "jobs": 3010,
+      "employed": 2121,
+      "boardings": 984,
+      "landValue": 502.89,
+      "vacancy": 0.0
+    },
+    {
+      "month": 47,
+      "seconds": 8.513,
+      "population": 5368,
+      "buildings": 166,
+      "jobs": 3057,
+      "employed": 2163,
+      "boardings": 984,
+      "landValue": 504.81,
+      "vacancy": 0.0
+    },
+    {
+      "month": 48,
+      "seconds": 8.478,
+      "population": 5368,
+      "buildings": 167,
+      "jobs": 3057,
+      "employed": 2163,
+      "boardings": 984,
+      "landValue": 506.12,
+      "vacancy": 0.0
+    },
+    {
+      "month": 49,
+      "seconds": 9.071,
+      "population": 5791,
+      "buildings": 167,
+      "jobs": 3238,
+      "employed": 2327,
+      "boardings": 1016,
+      "landValue": 508.405,
+      "vacancy": 0.0
+    },
+    {
+      "month": 50,
+      "seconds": 9.493,
+      "population": 5791,
+      "buildings": 167,
+      "jobs": 3236,
+      "employed": 2327,
+      "boardings": 962,
+      "landValue": 514.38,
+      "vacancy": 0.0
+    },
+    {
+      "month": 51,
+      "seconds": 9.212,
+      "population": 5791,
+      "buildings": 167,
+      "jobs": 3236,
+      "employed": 2327,
+      "boardings": 962,
+      "landValue": 519.46,
+      "vacancy": 0.0
+    },
+    {
+      "month": 52,
+      "seconds": 9.267,
+      "population": 5791,
+      "buildings": 167,
+      "jobs": 3236,
+      "employed": 2327,
+      "boardings": 962,
+      "landValue": 522.7,
+      "vacancy": 0.0
+    },
+    {
+      "month": 53,
+      "seconds": 9.658,
+      "population": 5992,
+      "buildings": 173,
+      "jobs": 3312,
+      "employed": 2409,
+      "boardings": 1000,
+      "landValue": 527.29,
+      "vacancy": 0.0
+    },
+    {
+      "month": 54,
+      "seconds": 10.224,
+      "population": 5992,
+      "buildings": 175,
+      "jobs": 3312,
+      "employed": 2409,
+      "boardings": 1010,
+      "landValue": 532.75,
+      "vacancy": 0.0
+    },
+    {
+      "month": 55,
+      "seconds": 9.691,
+      "population": 5992,
+      "buildings": 175,
+      "jobs": 3325,
+      "employed": 2409,
+      "boardings": 1010,
+      "landValue": 535.91,
+      "vacancy": 0.0
+    },
+    {
+      "month": 56,
+      "seconds": 9.86,
+      "population": 5992,
+      "buildings": 175,
+      "jobs": 3324,
+      "employed": 2409,
+      "boardings": 1012,
+      "landValue": 538.18,
+      "vacancy": 0.0
+    },
+    {
+      "month": 57,
+      "seconds": 10.075,
+      "population": 5992,
+      "buildings": 175,
+      "jobs": 3324,
+      "employed": 2409,
+      "boardings": 1012,
+      "landValue": 541.28,
+      "vacancy": 0.0
+    },
+    {
+      "month": 58,
+      "seconds": 10.606,
+      "population": 6296,
+      "buildings": 181,
+      "jobs": 3413,
+      "employed": 2530,
+      "boardings": 1102,
+      "landValue": 544.985,
+      "vacancy": 0.0
+    },
+    {
+      "month": 59,
+      "seconds": 11.27,
+      "population": 6428,
+      "buildings": 184,
+      "jobs": 3457,
+      "employed": 2583,
+      "boardings": 1114,
+      "landValue": 549.655,
+      "vacancy": 0.0
+    },
+    {
+      "month": 60,
+      "seconds": 10.991,
+      "population": 6428,
+      "buildings": 187,
+      "jobs": 3498,
+      "employed": 2583,
+      "boardings": 1108,
+      "landValue": 554.925,
+      "vacancy": 0.0
+    },
+    {
+      "month": 61,
+      "seconds": 11.151,
+      "population": 6428,
+      "buildings": 187,
+      "jobs": 3497,
+      "employed": 2583,
+      "boardings": 1106,
+      "landValue": 558.19,
+      "vacancy": 0.0
+    },
+    {
+      "month": 62,
+      "seconds": 11.279,
+      "population": 6428,
+      "buildings": 188,
+      "jobs": 3488,
+      "employed": 2583,
+      "boardings": 1104,
+      "landValue": 561.55,
+      "vacancy": 0.0
+    },
+    {
+      "month": 63,
+      "seconds": 10.565,
+      "population": 6428,
+      "buildings": 188,
+      "jobs": 3477,
+      "employed": 2583,
+      "boardings": 1104,
+      "landValue": 565.1,
+      "vacancy": 0.0
+    },
+    {
+      "month": 64,
+      "seconds": 11.522,
+      "population": 6667,
+      "buildings": 188,
+      "jobs": 3588,
+      "employed": 2684,
+      "boardings": 1138,
+      "landValue": 568.775,
+      "vacancy": 0.0
+    },
+    {
+      "month": 65,
+      "seconds": 10.686,
+      "population": 6667,
+      "buildings": 188,
+      "jobs": 3589,
+      "employed": 2684,
+      "boardings": 1138,
+      "landValue": 572.4300000000001,
+      "vacancy": 0.0
+    },
+    {
+      "month": 66,
+      "seconds": 10.604,
+      "population": 6667,
+      "buildings": 185,
+      "jobs": 3588,
+      "employed": 2684,
+      "boardings": 1138,
+      "landValue": 574.575,
+      "vacancy": 0.0
+    },
+    {
+      "month": 67,
+      "seconds": 11.185,
+      "population": 6999,
+      "buildings": 201,
+      "jobs": 3677,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 577.835,
+      "vacancy": 0.0
+    },
+    {
+      "month": 68,
+      "seconds": 11.106,
+      "population": 6999,
+      "buildings": 203,
+      "jobs": 3677,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 580.54,
+      "vacancy": 0.0
+    },
+    {
+      "month": 69,
+      "seconds": 11.139,
+      "population": 6999,
+      "buildings": 203,
+      "jobs": 3706,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 583.27,
+      "vacancy": 0.0
+    },
+    {
+      "month": 70,
+      "seconds": 11.075,
+      "population": 6999,
+      "buildings": 202,
+      "jobs": 3706,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 586.885,
+      "vacancy": 0.0
+    },
+    {
+      "month": 71,
+      "seconds": 11.191,
+      "population": 6999,
+      "buildings": 203,
+      "jobs": 3706,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 588.735,
+      "vacancy": 0.0
+    },
+    {
+      "month": 72,
+      "seconds": 11.289,
+      "population": 6999,
+      "buildings": 203,
+      "jobs": 3724,
+      "employed": 2816,
+      "boardings": 1166,
+      "landValue": 591.0,
+      "vacancy": 0.0
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "model": "shanhai-city-3",
+  "machine": "arm64",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "buildings": 10000,
+  "population": 100000,
+  "households": 40000,
+  "edges": 12180,
+  "roads": 111,
+  "lines": 20,
+  "periods": 3,
+  "precision": "实际家庭；两轮代表日分配",
+  "prepareSeconds": 17.81,
+  "saveSeconds": 2.0,
+  "compressedBytes": 6018026,
+  "status": "prepared"
+}

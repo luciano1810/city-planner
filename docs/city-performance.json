@@ -1,0 +1,30 @@
+{
+  "model": "shanhai-city-2",
+  "machine": "arm64",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.6",
+  "month": 88,
+  "terrainKm": [
+    8.0,
+    8.0
+  ],
+  "buildings": 135,
+  "parcels": 367,
+  "roads": 59,
+  "edges": 317,
+  "population": 5661,
+  "households": 2269,
+  "lines": 0,
+  "trafficPeriods": 3,
+  "trafficIterations": 2,
+  "restoreSeconds": 0.2602,
+  "monthSeconds": [
+    3.0769,
+    3.1033,
+    3.0076
+  ],
+  "saveEncodeSeconds": 0.3185,
+  "compressedBytes": 1755781,
+  "peakMemoryMiB": 245.9,
+  "limits": "单进程实际场景测量；未测界面 FPS/P95；不保证万级建筑性能"
+}

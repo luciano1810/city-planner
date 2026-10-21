@@ -1,0 +1,21 @@
+test_boundary_and_role_validation (tests.test_city_v3.RegionalRailTests.test_boundary_and_role_validation) ... ok
+test_external_passenger_journey_and_freight_separation (tests.test_city_v3.RegionalRailTests.test_external_passenger_journey_and_freight_separation) ... ok
+test_freight_capacity_drays_cost_and_track_failure (tests.test_city_v3.RegionalRailTests.test_freight_capacity_drays_cost_and_track_failure) ... ok
+test_capacity_and_no_phantom_transfer (tests.test_city.TransitTests.test_capacity_and_no_phantom_transfer) ... ok
+test_deleted_track_invalidates_service (tests.test_city.TransitTests.test_deleted_track_invalidates_service) ... ok
+test_facility_requires_actual_access (tests.test_city.TransitTests.test_facility_requires_actual_access) ... ok
+test_four_modes_infrastructure_service_and_headway (tests.test_city.TransitTests.test_four_modes_infrastructure_service_and_headway) ... ok
+test_buildings_vary_in_actual_area_and_stay_inside_lots (tests.test_city.SimulationTests.test_buildings_vary_in_actual_area_and_stay_inside_lots) ... ok
+test_construction_does_not_create_people (tests.test_city.SimulationTests.test_construction_does_not_create_people) ... ok
+test_corrupt_import_rejected (tests.test_city.SimulationTests.test_corrupt_import_rejected) ... ok
+test_price_rent_and_supply_are_distinct (tests.test_city.SimulationTests.test_price_rent_and_supply_are_distinct) ... ok
+test_protected_land_and_budget (tests.test_city.SimulationTests.test_protected_land_and_budget) ... ok
+test_real_growth_and_conservation (tests.test_city.SimulationTests.test_real_growth_and_conservation) ... ok
+test_road_demolition_breaks_access_not_building (tests.test_city.SimulationTests.test_road_demolition_breaks_access_not_building) ... ok
+test_save_continuation_deterministic (tests.test_city.SimulationTests.test_save_continuation_deterministic) ... ok
+test_vacancy_accumulates_and_committed_extension_finishes (tests.test_city.SimulationTests.test_vacancy_accumulates_and_committed_extension_finishes) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 8.720s
+
+OK
