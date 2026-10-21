@@ -1,3 +1,0 @@
-[     199ms] Unexpected token ')'
-[     210ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:60237/favicon.ico:0
-[  358416ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://127.0.0.1:60237/api/city/renewal_preview:0

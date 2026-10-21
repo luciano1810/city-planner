@@ -76,7 +76,7 @@
 - [生长算法回归日志](experiments/city-v4-regression.log)、[道路分级追加回归](experiments/city-v4-road-regression.log)
 - [实现说明与道路规则](city-implementation.md)、[全部需求核对](requirements-audit.md)
 
-在 `terrain-atlas` 目录复现：
+在 `city-planner` 目录复现：
 
 ```sh
 .venv/bin/python scripts/grow_valley.py --months 96 --output ../docs/experiments/valley-v4-replay

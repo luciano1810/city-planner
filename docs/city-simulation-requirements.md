@@ -3,7 +3,7 @@
 版本：0.2（地形与自主生长补充）  
 日期：2026年10月21日  
 状态：需求基线；实际覆盖情况见 [逐项实现核对](requirements-audit.md)  
-适用项目：`../terrain-atlas`
+适用项目：`../city-planner`
 
 用户在地图上绘制道路、铁路、地铁、有轨电车和巴士服务，城市根据交通条件、人口与就业需求、地价和环境逐步发展。建筑沿可通达的路网生成，住宅区、商业区、工业区、CBD 和副中心由持续的发展过程形成。系统通过可解释的地图、统计和历史记录，让用户理解自己的建设如何改变城市。
 
@@ -65,12 +65,12 @@
 
 代码依据：
 
-- [地形生成与数据输出](../terrain-atlas/backend/terrain.py)
-- [水文处理](../terrain-atlas/backend/hydrology.py)
-- [地图显示与交互](../terrain-atlas/renderer/app.js)
-- [几何与距离换算](../terrain-atlas/renderer/map-geometry.js)
-- [本地 HTTP 服务](../terrain-atlas/backend/server.py)
-- [Electron 主进程](../terrain-atlas/electron/main.cjs)
+- [地形生成与数据输出](../city-planner/backend/terrain.py)
+- [水文处理](../city-planner/backend/hydrology.py)
+- [地图显示与交互](../city-planner/renderer/app.js)
+- [几何与距离换算](../city-planner/renderer/map-geometry.js)
+- [本地 HTTP 服务](../city-planner/backend/server.py)
+- [Electron 主进程](../city-planner/electron/main.cjs)
 
 ### 2.2 需要新增的能力
 

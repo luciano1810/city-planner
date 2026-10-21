@@ -1,0 +1,19 @@
+{
+  "name": "city-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "山海 — Python + Electron 程序化地形生成器",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "setup:python": "python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
+    "preview": ".venv/bin/python backend/server.py --port 8765 --preview",
+    "test:workflow": ".venv/bin/python -m unittest tests.test_workflow tests.test_city.PersistenceTests tests.test_terrain.ServerTests -v && node --check electron/main.cjs && node --check renderer/app.js && node --check renderer/city.js && node --check renderer/navigation.js",
+    "test": ".venv/bin/python -m unittest discover -s tests -v && node --check electron/main.cjs && node --check electron/preload.cjs && node --check renderer/app.js && node --check renderer/city.js && node --check renderer/city-geometry.js && node --check renderer/navigation.js && node --test tests/height-format.test.cjs tests/map-geometry.test.cjs tests/city-geometry.test.cjs",
+    "test:city": ".venv/bin/python -m unittest tests.test_city tests.test_urban tests.test_city_v3 tests.test_city_v4 tests.test_city_v5 tests.test_city_v6 tests.test_city_v7 tests.test_city_industrial tests.test_renewal tests.test_terrain.ServerTests -v && node --check electron/main.cjs && node --check electron/preload.cjs && node --check renderer/app.js && node --check renderer/city.js && node --check renderer/city-geometry.js && node --check renderer/navigation.js && node --test tests/height-format.test.cjs tests/map-geometry.test.cjs tests/city-geometry.test.cjs",
+    "setup:electron": "node node_modules/electron/install.js"
+  },
+  "devDependencies": {
+    "electron": "^44.9.1"
+  }
+}

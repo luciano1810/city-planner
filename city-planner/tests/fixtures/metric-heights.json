@@ -1,0 +1,28 @@
+{
+  "data": {
+    "width": 3,
+    "height": 2,
+    "heightEncoding": "float32-le-meters",
+    "grid": {
+      "seaLevelMeters": -10
+    },
+    "elevation": "ACDhwwAAAAAAwN5FgKAMRgCCO0YAY2pG",
+    "water": "AACA/wAAAAAA0N5FAACA/wCEO0YAAID/"
+  },
+  "elevation": [
+    -450.25,
+    0,
+    7128,
+    9000.125,
+    12000.5,
+    15000.75
+  ],
+  "water": [
+    null,
+    0,
+    7130,
+    null,
+    12001,
+    null
+  ]
+}

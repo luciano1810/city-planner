@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+._*
+
+# Node / Electron dependencies and build output
+node_modules/
+dist/
+build/
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration (keep example files)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs and test artifacts
+*.log
+.playwright-cli/
+playwright-report/
+test-results/
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+
+# Generated previews and exports
+/city-planner/output/

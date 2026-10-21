@@ -42,4 +42,4 @@
 
 [移除条纹前的近景](images/industrial-footprints-v8-closeup.png)、[较大范围截图](images/industrial-footprints-v8.png)。
 
-复现：在 `terrain-atlas` 运行 `.venv/bin/python scripts/grow_blocks.py`。当前脚本输出独立的 v8 报告与存档；v7 文件保留作历史对照。
+复现：在 `city-planner` 运行 `.venv/bin/python scripts/grow_blocks.py`。当前脚本输出独立的 v8 报告与存档；v7 文件保留作历史对照。
