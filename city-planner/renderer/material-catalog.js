@@ -48,4 +48,4 @@
   function tree(variant=0){return treeSpecies[((Math.trunc(variant)||0)%treeSpecies.length+treeSpecies.length)%treeSpecies.length];}
   const api={catalog,count,pick,paintColors,treeSpecies,treeMixes,tree};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.SceneMaterials=api;
-})(typeof window==='undefined'?{}:window);
+})(typeof window==='undefined'?(typeof self==='undefined'?{}:self):window);

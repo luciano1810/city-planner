@@ -77,7 +77,10 @@ class Handler(BaseHTTPRequestHandler):
                    '/assets/roof-atlas.png': 'assets/roof-atlas.png', '/assets/ground-atlas.png': 'assets/ground-atlas.png',
                    '/assets/facade-atlas.png': 'assets/facade-atlas.png', '/assets/landscape-atlas.png': 'assets/landscape-atlas.png',
                    '/navigation.js': 'navigation.js', '/navigation.css': 'navigation.css',
-                   '/workspace-ui.js': 'workspace-ui.js', '/workspace-ui.css': 'workspace-ui.css'}
+                   '/workspace-ui.js': 'workspace-ui.js', '/workspace-ui.css': 'workspace-ui.css',
+                   '/frame-scheduler.js': 'frame-scheduler.js',
+                   '/material-jobs.js': 'material-jobs.js', '/material-preparation.js': 'material-preparation.js',
+                   '/material-worker.js': 'material-worker.js'}
         if not self.server.preview or route not in allowed:
             return self.reply(404, {'error': '未找到资源'})
         asset = ROOT / allowed[route]

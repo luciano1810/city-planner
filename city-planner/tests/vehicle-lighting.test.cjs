@@ -56,7 +56,7 @@ test('turning a loaded vehicle and changing the sun reuse all paint, illuminatio
   const document={createElement(){counts.canvases++;const c={width:0,height:0};const ctx=context(c);c.getContext=()=>ctx;return c;}};
   class Image {constructor(){this.width=this.height=1254;images.push(this);}}
   const window={SceneMaterials:require('../renderer/material-catalog.js'),SurfaceVariation:variation,
-    SceneRasterCache:require('../renderer/raster-cache.js')};
+    SceneRasterCache:require('../renderer/raster-cache.js'),SceneMaterialPreparation:require('../renderer/material-preparation.js')};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../renderer/scene-renderer.js'),'utf8'),{window,document,Image});
   for(const image of images)if(image.src.startsWith('assets/vehicles'))image.onload();
   const ctx=context(),car={id:21,point:[10,10],heading:0,speed:4};
@@ -96,7 +96,7 @@ test('rotated building parking keeps the car in its bay while the cast shadow st
   class Image {constructor(){this.width=this.height=1254;images.push(this);}}
   const lot={point:[100,80],width:4,depth:8,angle:0}; // One bay, offset from the lot centre.
   const window={SceneMaterials:require('../renderer/material-catalog.js'),SurfaceVariation:variation,
-    SceneRasterCache:require('../renderer/raster-cache.js'),CityScene3D:{parkingFor:()=>lot},
+    SceneRasterCache:require('../renderer/raster-cache.js'),SceneMaterialPreparation:require('../renderer/material-preparation.js'),CityScene3D:{parkingFor:()=>lot},
     CityGeometry:{buildingMassing:()=>({volumes:[]})}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../renderer/scene-renderer.js'),'utf8'),{window,document,Image});
   for(const image of images)if(image.src.startsWith('assets/vehicles'))image.onload();

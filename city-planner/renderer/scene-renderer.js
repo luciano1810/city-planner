@@ -5,13 +5,47 @@
   const settings={quality:'high',labels:false,renderer:'textures'};
   let effectiveQuality='map';
   let clockSeconds=9*3600;
-  const tiles=new Map(),patterns=new WeakMap(),sprites=new Map(),layouts=new WeakMap(),boundsCache=new WeakMap(),lampCache=new WeakMap(),streetTreeCache=new WeakMap(),treeShadows=new Map();
+  let preview=false;
+  const distantShadowCache=new WeakMap();
+  let patterns=new WeakMap();
+  const tiles=new Map(),sprites=new Map(),layouts=new WeakMap(),boundsCache=new WeakMap(),lampCache=new WeakMap(),streetTreeCache=new WeakMap(),treeShadows=new Map();
   const materialCatalog=typeof module!=='undefined'&&module.exports?require('./material-catalog.js'):root.SceneMaterials;
   const variation=typeof module!=='undefined'&&module.exports?require('./surface-variation.js'):root.SurfaceVariation;
+  const preparation=typeof module!=='undefined'&&module.exports?require('./material-preparation.js'):root.SceneMaterialPreparation;
   const raster=typeof module!=='undefined'&&module.exports?require('./raster-cache.js'):root.SceneRasterCache;
   const objectRasters=raster.create({dispose:item=>{item.image.width=item.image.height=1;}}),vehicleSprites=new Map(),vehicleShadows=new Map(),vehicleAtlases={};
   const vehicleLighting=raster.create({limit:96,budget:12*1024*1024,dispose:item=>{item.image.width=item.image.height=1;}});
-  const atlases={};let assetVersion=0;
+  const atlases={};let assetVersion=0,materialRevision=0,materialGeneration=0;
+  const synchronousMaterials=preparation.create({canvas,atlases});
+  const unpublishedMaterials=new Set(),materialRequests=new Map();
+  let materialViewKey=null,materialViewEpoch=0;
+  // Keep a small real texture when the expanded field leaves the LRU. A
+  // revisit must never replace already textured scenery with a solid colour.
+  // 96 small slots cover every one of the current catalog's 88 variants.
+  const materialFallbacks=raster.create({budget:24*1024*1024,limit:96,dispose:entry=>{entry.image.width=entry.image.height=1;}});
+  const materialFields=raster.create({budget:96*1024*1024,limit:64,dispose:entry=>{
+    unpublishedMaterials.delete(entry.prefix+':field');entry.image.close?.();for(const key of tiles.keys())if(key.startsWith(entry.prefix+':mip:'))tiles.delete(key);
+    patterns=new WeakMap();
+  }});
+  const transferredAtlases=new Set();
+  const materialJobs=typeof Worker!=='undefined'&&typeof OffscreenCanvas!=='undefined'&&typeof createImageBitmap!=='undefined'&&root.SceneMaterialJobs?root.SceneMaterialJobs.create({
+    workerFactory:()=>new Worker('material-worker.js'),
+    async prepareJob({name}){
+      const atlasName=materialCatalog.pick(name).atlas;
+      if(!atlasName||transferredAtlases.has(atlasName))return;
+      // Electron loads the renderer from file://. Transfer the already decoded
+      // local image so workers never need a file:// fetch or a second decode.
+      const atlas=await createImageBitmap(atlases[atlasName]);transferredAtlases.add(atlasName);
+      return {data:{atlasName,atlas},transfer:[atlas]};
+    },
+    onReady(key,image){
+      const small=canvas(Math.min(256,image.width)),ctx=small.getContext('2d');ctx.imageSmoothingQuality='high';ctx.drawImage(image,0,0,small.width,small.height);
+      materialFallbacks.set(key,{image:small},small.width*small.height*4);
+      materialFields.set(key,{image,prefix:key.slice(0,-6),published:false},image.width*image.height*4);unpublishedMaterials.add(key);
+      materialRevision++;root.MapWorkspace?.requestAnimation();
+    },
+    onError(){materialRevision++;root.MapWorkspace?.requestAnimation();}
+  }):null;
   let fountainAtlas=null,fountainTile=null;
   const canopyAtlases={},canopyCells=new WeakMap(),spriteLods=new Map();let shadowLayer=null,spriteHour=-1,contactSprite=null;
   const canopySources={
@@ -23,15 +57,15 @@
   // common street trees different branch structures instead of one round crown.
   const canopyVolumes={0:['volume',0],1:['volume',1],2:['volume',2],3:['volume',3],4:['volume',2],5:['volume',0],6:['volumeSpecies',0],7:['volume',3],8:['volumeSpecies',1],11:['volumeSpecies',2],18:['volumeSpecies',3]};
   if(typeof Image!=='undefined'){
-    const fountainImage=new Image();fountainImage.onload=()=>{fountainAtlas=fountainImage;fountainTile=null;assetVersion++;root.MapWorkspace?.draw();};fountainImage.src='assets/fountain-daylight.png';
+    const fountainImage=new Image();fountainImage.onload=()=>{fountainAtlas=fountainImage;fountainTile=null;assetVersion++;root.MapWorkspace?.requestDraw();};fountainImage.src='assets/fountain-daylight.png';
     for(const name of Object.keys(variation.vehicleAtlases)){
-      const image=new Image();image.onload=()=>{vehicleAtlases[name]=image;assetVersion++;vehicleSprites.clear();vehicleShadows.clear();vehicleLighting.clear();root.MapWorkspace?.draw();};image.src=`assets/${name}-daylight-v2.png`;
+      const image=new Image();image.onload=()=>{vehicleAtlases[name]=image;assetVersion++;vehicleSprites.clear();vehicleShadows.clear();vehicleLighting.clear();root.MapWorkspace?.requestDraw();};image.src=`assets/${name}-daylight-v2.png`;
     }
     for(const [name,{file}] of Object.entries(canopySources)){
-      const atlas=new Image();atlas.onload=()=>{canopyAtlases[name]=atlas;assetVersion++;sprites.clear();spriteLods.clear();treeShadows.clear();root.MapWorkspace?.draw();};atlas.src=`assets/${file}`;
+      const atlas=new Image();atlas.onload=()=>{canopyAtlases[name]=atlas;assetVersion++;sprites.clear();spriteLods.clear();treeShadows.clear();root.MapWorkspace?.requestDraw();};atlas.src=`assets/${file}`;
     }
     for(const name of ['roof','ground','facade','landscape']){
-      const img=new Image();img.onload=()=>{atlases[name]=img;assetVersion++;tiles.clear();root.MapWorkspace?.draw();};img.src=`assets/${name}-atlas.png`;
+      const img=new Image();img.onload=()=>{atlases[name]=img;assetVersion++;tiles.clear();materialFields.clear();materialFallbacks.clear();unpublishedMaterials.clear();materialRequests.clear();materialJobs?.reset();patterns=new WeakMap();materialRevision++;root.MapWorkspace?.requestDraw();};img.src=`assets/${name}-atlas.png`;
     }
   }
   const motorKinds=new Set(['lane','street','avenue','highway','motorway']);
@@ -59,6 +93,10 @@
       strength:.28*smooth(0,13,elevation),warmth:.18*Math.exp(-Math.pow((elevation-6)/12,2))};
   }
   function setTime(seconds){if(Number.isFinite(seconds)&&seconds>=0)clockSeconds=seconds;return lightingAt(clockSeconds);}
+  function withPreview(paint){
+    const previous=preview;preview=true;
+    try{return paint();}finally{preview=previous;}
+  }
   function sun(){return lightingAt(clockSeconds);}
   function shadowOffset(height,light=sun()){
     if(light.elevation<=0)return [0,0];
@@ -79,79 +117,30 @@
     best=Math.min(best,Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy));
   }return best;}
   function canvas(size){const c=document.createElement('canvas');c.width=c.height=size;return c;}
-  function baseTexture(name,variant=0){
-    const cfg=materialCatalog.pick(name,variant),key=name+':'+cfg.index+':source';
-    if(tiles.has(key))return tiles.get(key);
-    const c=canvas(256),ctx=c.getContext('2d'),rng=random(key),im=ctx.createImageData(256,256);
-    const atlas=atlases[cfg.atlas],paver=name==='paving'||name==='pavingWarm';
-    // Road and lawn read as broad continuous surfaces at street scale. The
-    // photographic atlas grain was amplified by resampling into a noisy field.
-    // Build their diffuse colour from smooth world-scale variation instead.
-    if(atlas&&!['asphalt','grass'].includes(name)&&!paver){
-      const size=atlas.width/4;ctx.imageSmoothingQuality='high';ctx.drawImage(atlas,(cfg.cell%4)*size+1,Math.floor(cfg.cell/4)*size+1,size-2,size-2,0,0,256,256);
-      // Restrain source contrast at city scale; the atlas supplies surface
-      // detail while the shared lighting supplies changing sun and shade.
-      const pixels=ctx.getImageData(0,0,256,256),mean=[0,0,0],data=pixels.data;
-      for(let i=0;i<data.length;i+=4)for(let ch=0;ch<3;ch++)mean[ch]+=data[i+ch]/65536;
-      const contrast=name==='asphalt'?.32:name==='roof'?.44:name==='grass'?.62:.65;
-      // Calibrate the atlas to a daylight palette without removing the grain
-      // or the individual stone / roof variants. Done once per cached tile.
-      const calibration={paving:.78,roof:.78,facade:.45,grass:.72,curb:.88,water:.55}[name]||0;
-      for(let i=0;i<data.length;i+=4)for(let ch=0;ch<3;ch++){
-        const target=name==='asphalt'?cfg.rgb[ch]+[0,1.5,-1,1][cfg.index]:mean[ch]*(1-calibration)+cfg.rgb[ch]*calibration;
-        data[i+ch]=target+(data[i+ch]-mean[ch])*contrast;
-      }
-      ctx.putImageData(pixels,0,0);
-      ctx.fillStyle=`rgba(${cfg.rgb.join(',')},${name==='grass'?.24:.08})`;ctx.fillRect(0,0,256,256);
-      tiles.set(key,c);return c;
-    }
-    const fields=[4,8,16].map(size=>({size,values:Array.from({length:size*size},()=>rng()-.5)}));
-    function cloud(x,y,field){const {size,values}=field,gx=x/256*size,gy=y/256*size,ix=Math.floor(gx),iy=Math.floor(gy),fx=(1-Math.cos((gx-ix)*Math.PI))/2,fy=(1-Math.cos((gy-iy)*Math.PI))/2,at=(a,b)=>values[(b%size)*size+a%size];return (at(ix,iy)*(1-fx)+at(ix+1,iy)*fx)*(1-fy)+(at(ix,iy+1)*(1-fx)+at(ix+1,iy+1)*fx)*fy;}
-    for(let y=0;y<256;y++)for(let x=0;x<256;x++){
-      const i=(y*256+x)*4;
-      const broad=cloud(x,y,fields[0])*(name==='grass'?6:name==='asphalt'?4.8:paver?3:14)+cloud(x,y,fields[1])*(name==='asphalt'?1.3:name==='grass'?2:paver?1.5:9)+cloud(x,y,fields[2])*(name==='asphalt'?.5:name==='grass'||paver?.8:4);
-      const noise=(rng()-.5)*(name==='asphalt'?4.2:name==='grass'||paver?3:cfg.grain)+broad;
-      for(let ch=0;ch<3;ch++)im.data[i+ch]=cfg.rgb[ch]+noise;im.data[i+3]=255;
-    }
-    if(name==='asphalt'&&atlas){
-      // Let real aggregate supply the small-scale material response while the
-      // calibrated field controls tone. Prefilter once, before making mipmaps,
-      // so bright stones cannot become screen-space speckle while zooming.
-      const cell=atlas.width/4;ctx.filter='blur(.65px)';ctx.drawImage(atlas,cfg.cell%4*cell+2,Math.floor(cfg.cell/4)*cell+2,cell-4,cell-4,0,0,256,256);ctx.filter='none';
-      const source=ctx.getImageData(0,0,256,256).data;let mean=0;
-      for(let i=0;i<source.length;i+=4)mean+=(source[i]*.2126+source[i+1]*.7152+source[i+2]*.0722)/65536;
-      for(let i=0;i<source.length;i+=4){const grain=Math.max(-12,Math.min(12,(source[i]*.2126+source[i+1]*.7152+source[i+2]*.0722-mean)*.22));for(let ch=0;ch<3;ch++)im.data[i+ch]+=grain;}
-    }
-    ctx.putImageData(im,0,0);
-    // Paving joints are authored once, in world metres, by synthesize().
-    // Repeating a photographed joint grid underneath produced crossed seams.
-    if(name==='grass')for(let i=0;i<2200;i++){
-      const x=rng()*256,y=rng()*256;ctx.strokeStyle=i%3?'#d4cf8b14':'#354e3012';ctx.lineWidth=.5+rng();ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rng()*2-1,y-1-rng()*3);ctx.stroke();
-    }
-    if(name==='gravel')for(let i=0;i<1800;i++){
-      const r=.2+rng()*.8;ctx.fillStyle=i%2?'#d5d7d21c':'#17232c25';ctx.fillRect(rng()*256,rng()*256,r,r);
-    }
-    if(name==='roof'){
-      for(let i=0;i<90;i++){const x=rng()*256,y=rng()*256,r=2+rng()*14,g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,'#5d63571b');g.addColorStop(1,'#5d635700');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
-      ctx.lineWidth=.35;ctx.strokeStyle='#6d736315';for(let i=0;i<10;i++){const x=rng()*256,y=rng()*256;path(ctx,[[x,y],[x+3,y+4],[x+8,y+5]],false);ctx.stroke();}
-    }
-    if(name==='water'){
-      ctx.lineWidth=.7;ctx.strokeStyle='#dcebd936';
-      for(let i=0;i<75;i++){const x=rng()*256,y=rng()*256;ctx.beginPath();ctx.ellipse(x,y,2+rng()*12,.5+rng()*2,-.25,0,Math.PI);ctx.stroke();}
-    }
-    if(name==='marking'||name==='markingYellow'){
-      ctx.fillStyle='#69726b';ctx.globalAlpha=.08+cfg.index*.025;
-      for(let i=0;i<120+cfg.index*40;i++)ctx.fillRect(rng()*256,rng()*256,.8+rng()*2,.6+rng()*2);
-      ctx.globalAlpha=1;
-    }
-    tiles.set(key,c);return c;
-  }
   function materialMeters(name){return materialCatalog.pick(name).meters*variation.profile(name).factor;}
-  function texture(name,variant=0){
+  function commitMaterials(){
+    if(materialGeneration===materialRevision)return;
+    for(const key of unpublishedMaterials){const entry=materialFields.get(key);if(entry){entry.published=true;for(const mip of tiles.keys())if(mip.startsWith(entry.prefix+':mip:'))tiles.delete(mip);}}
+    unpublishedMaterials.clear();materialGeneration=materialRevision;patterns=new WeakMap();
+  }
+  function setMaterialView(g,dpr){
+    const key=[g.left,g.top,g.scale,g.width,g.height,dpr].join(':');
+    if(key===materialViewKey)return;
+    materialViewKey=key;materialViewEpoch++;patterns=new WeakMap();
+  }
+  function texture(name,variant=0,allowAsync=false,requiredSize=Infinity){
     const cfg=materialCatalog.pick(name,variant),key=name+':'+cfg.index+':field';if(tiles.has(key))return tiles.get(key);
-    const base=baseTexture(name,cfg.index),profile=variation.profile(name);if(profile.factor===1)return base;
-    const c=canvas(profile.size),ctx=c.getContext('2d'),data=base.getContext('2d').getImageData(0,0,256,256);
-    const pixels=ctx.createImageData(profile.size,profile.size);pixels.data.set(variation.synthesize(data.data,256,name,cfg.index,seed(key),cfg.meters));ctx.putImageData(pixels,0,0);tiles.set(key,c);return c;
+    const prepared=materialFields.get(key);if(prepared&&(!allowAsync||prepared.published))return prepared.image;
+    if(allowAsync&&materialJobs&&settings.renderer==='textures'){
+      if(cfg.atlas&&!atlases[cfg.atlas])return null;
+      const fallback=materialFallbacks.get(key)?.image;
+      // At most one expansion per material per stable camera view. If its
+      // working set exceeds the field budget, retained textures must converge
+      // instead of continuously regenerating and evicting one another.
+      if(prepared||materialRequests.get(key)===materialViewEpoch||fallback&&fallback.width>=requiredSize)return fallback||null;
+      if(materialJobs.request(key,{name,variant:cfg.index})){materialRequests.set(key,materialViewEpoch);return fallback||null;}
+    }
+    const image=synchronousMaterials.texture(name,cfg.index);tiles.set(key,image);return image;
   }
   function material(ctx,name,variant=0){
     const cfg=materialCatalog.pick(name,variant);
@@ -162,13 +151,14 @@
     const meters=materialMeters(name),maxSize=variation.profile(name).size,t=ctx.getTransform(),pixels=meters*Math.min(Math.hypot(t.a,t.b),Math.hypot(t.c,t.d));
     const size=2**Math.max(2,Math.min(Math.log2(maxSize),Math.ceil(Math.log2(Math.max(1,pixels))))),key=`${name}:${cfg.index}:${assetVersion}:${size}`;
     if(!cache.has(key)){
-      let tile=texture(name,cfg.index);
+      let tile=texture(name,cfg.index,true,size);
+      if(!tile)return `rgb(${cfg.rgb.join(',')})`;
       for(let s=tile.width/2;s>=size;s/=2){
         const lodKey=`${name}:${cfg.index}:mip:${s}`;
         if(!tiles.has(lodKey)){const c=canvas(s),g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(tile,0,0,s,s);tiles.set(lodKey,c);}
         tile=tiles.get(lodKey);
       }
-      const p=ctx.createPattern(tile,'repeat');p.setTransform(new DOMMatrix().scale(meters/size));cache.set(key,p);
+      const p=ctx.createPattern(tile,'repeat');p.setTransform(new DOMMatrix().scale(meters/tile.width));cache.set(key,p);
     }
     return cache.get(key);
   }
@@ -205,17 +195,32 @@
       if(inView([[lot.point[0]-radius,lot.point[1]-radius],[lot.point[0]+radius,lot.point[1]+radius]]))paintParking(ctx,lot,site.id+':front:'+i,scale);
     }
   }
+  function intersectsCanvas(ctx,box){
+    const m=ctx.getTransform(),w=box[2]-box[0],h=box[3]-box[1];
+    const x=m.a*box[0]+m.c*box[1]+m.e,y=m.b*box[0]+m.d*box[1]+m.f;
+    const minX=x+Math.min(0,m.a*w)+Math.min(0,m.c*h),maxX=x+Math.max(0,m.a*w)+Math.max(0,m.c*h);
+    const minY=y+Math.min(0,m.b*w)+Math.min(0,m.d*h),maxY=y+Math.max(0,m.b*w)+Math.max(0,m.d*h);
+    return maxX>=0&&minX<=ctx.canvas.width&&maxY>=0&&minY<=ctx.canvas.height;
+  }
   function parcel(ctx,p,scale){
     const b=p.building;if(!b&&!p.blockCommon&&p.use!=='protected')return;
     // One world-aligned paving material removes the checkerboard of lot grass.
     polygonMaterial(ctx,p.points,b?'paving':'grass',b?0:seed(p.block||p.id));
     if(b&&scale>.28){
-      treesFor(p);
-      for(const bed of layouts.get(p)?.courtyard?.beds||[])rasterObject(ctx,bed,'courtyard-ground',bed.bounds,scale,g=>{
-        path(g,bed.points);g.strokeStyle='#314b3638';g.lineWidth=.85;g.stroke();
-        g.fillStyle=material(g,'grass',0);g.fill();g.strokeStyle='#dedac2';g.lineWidth=.35;g.stroke();
-        g.save();path(g,bed.points);g.clip();g.strokeStyle='#304d3329';g.lineWidth=.9;g.stroke();g.restore();
-      });
+      // The overview already lives in the base snapshot. Always omit tiny
+      // planting beds here, even if a previous close view warmed their layout;
+      // cache history must not change the appearance of a distant parcel.
+      // City visibility includes a broad tree/shadow margin. A refinement tile
+      // only needs garden geometry for parcels touching its actual canvas; the
+      // full affine transform also covers unequal horizontal/vertical scales.
+      if(scale>=1.2&&!preview&&intersectsCanvas(ctx,bounds(p.points))){
+        treesFor(p);
+        for(const bed of layouts.get(p)?.courtyard?.beds||[])rasterObject(ctx,bed,'courtyard-ground',bed.bounds,scale,g=>{
+          path(g,bed.points);g.strokeStyle='#314b3638';g.lineWidth=.85;g.stroke();
+          g.fillStyle=material(g,'grass',0);g.fill();g.strokeStyle='#dedac2';g.lineWidth=.35;g.stroke();
+          g.save();path(g,bed.points);g.clip();g.strokeStyle='#304d3329';g.lineWidth=.9;g.stroke();g.restore();
+        });
+      }
       // Access paths are clipped to the lot so decoration never cuts roads.
       ctx.save();path(ctx,p.points);ctx.clip();ctx.strokeStyle=material(ctx,'pavingWarm',0);ctx.lineWidth=2.6;
       path(ctx,[p.frontage||p.center,p.entrance||b.center||p.center],false);ctx.stroke();ctx.restore();
@@ -249,11 +254,60 @@
   }
   function buildingShadows(ctx,parcels,scale){
     if(sun().elevation<=0||scale<.16)return;
+    if(scale<1.2||preview){
+      if(settings.quality!=='map')distantBuildingShadows(ctx,parcels);
+      return;
+    }
     if(!shadowLayer)shadowLayer=canvas(1);
     if(shadowLayer.width!==ctx.canvas.width||shadowLayer.height!==ctx.canvas.height){shadowLayer.width=ctx.canvas.width;shadowLayer.height=ctx.canvas.height;}
     const layer=shadowLayer.getContext('2d');layer.setTransform(1,0,0,1,0,0);layer.clearRect(0,0,shadowLayer.width,shadowLayer.height);layer.setTransform(ctx.getTransform());
     for(const p of parcels)if(p.building.status!=='construction')buildingShadow(layer,p,scale);
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.filter=`blur(${Math.min(2.2,Math.max(.4,scale*.12))}px)`;ctx.drawImage(shadowLayer,0,0);ctx.restore();
+  }
+  function distantBuildingShadows(ctx,parcels){
+    // Geometry shares the base layer's minute sample. Zooming and redrawing a
+    // strip can reuse each bounded path without rebuilding its extrusion.
+    const minute=Math.floor(clockSeconds/60),light=lightingAt(minute*60);
+    function add(shape,points){
+      let area=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length];area+=a[0]*b[1]-b[0]*a[1];}
+      if(Math.abs(area)<1e-8)return 0;
+      if(area<0)points=points.slice().reverse();
+      points.forEach((p,i)=>i?shape.lineTo(...p):shape.moveTo(...p));shape.closePath();return 1;
+    }
+    ctx.save();ctx.fillStyle=`rgba(26,39,53,${light.strength*1.2})`;
+    for(const p of parcels){
+      if(p.building.status==='construction')continue;
+      const m=root.CityGeometry.buildingMassing(p);let cached=distantShadowCache.get(p.building);
+      if(!cached||cached.massing!==m||cached.minute!==minute){
+        const shape=new Path2D();let count=0;
+        for(const volume of [...(m.podium?[m.podium]:[]),...m.volumes]){
+          const vertices=volume.points,v=shadowOffset(volume.height,light),shifted=vertices.map(([x,y])=>[x+v[0],y+v[1]]);
+          if(volume.rect){
+            // A convex prism's exact ground silhouette is the hull of its base
+            // and translated roof. One small contour replaces overlapping caps
+            // and four side polygons; setbacks remain separate real volumes.
+            count+=add(shape,shadowHull([...vertices,...shifted]));
+          }else{
+            // A legal concave podium must keep its notches and courtyards.
+            count+=add(shape,vertices);count+=add(shape,shifted);
+            for(let i=0;i<vertices.length;i++){
+              const a=vertices[i],b=vertices[(i+1)%vertices.length];
+              count+=add(shape,[a,b,[b[0]+v[0],b[1]+v[1]],[a[0]+v[0],a[1]+v[1]]]);
+            }
+          }
+        }
+        cached={massing:m,minute,shape,count};distantShadowCache.set(p.building,cached);
+      }
+      if(cached.count)ctx.fill(cached.shape);
+    }
+    ctx.restore();
+  }
+  function shadowHull(points){
+    const sorted=points.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const lower=[],upper=[];
+    for(const point of sorted){while(lower.length>1&&cross(lower.at(-2),lower.at(-1),point)<=0)lower.pop();lower.push(point);}
+    for(let i=sorted.length-1;i>=0;i--){const point=sorted[i];while(upper.length>1&&cross(upper.at(-2),upper.at(-1),point)<=0)upper.pop();upper.push(point);}
+    lower.pop();upper.pop();return lower.concat(upper);
   }
   function roofLift(height){return Math.min(85,height*.26);}
   function facadeFaces(volume){
@@ -345,7 +399,7 @@
     // Half-octave buckets stay above display resolution without allocating
     // almost four times the necessary pixels immediately above a zoom boundary.
     const density=Math.min(16,2**(Math.ceil(Math.log2(Math.max(.25,pixels))*2)/2),1536/Math.max(w,h));
-    const key=`${assetVersion}:${Math.floor(sun().hour)}:${density}:${scale>.8}:${stamp}`;
+    const key=`${assetVersion}:${materialGeneration}:${Math.floor(sun().hour)}:${density}:${scale>.8}:${stamp}`;
     let entry=objectRasters.get(object);
     if(!entry||entry.key!==key){
       const image=document.createElement('canvas');image.width=Math.ceil(w*density);image.height=Math.ceil(h*density);
@@ -355,12 +409,36 @@
     ctx.drawImage(entry.image,box[0],box[1],w,h);
   }
   function building(ctx,p,scale){
+    if(scale<1.2||preview){paintDistantBuilding(ctx,p);return;}
     parking(ctx,p,scale);
     if(p.building.status==='construction'){paintBuilding(ctx,p,scale);return;}
     const m=root.CityGeometry.buildingMassing(p),volumes=[...(m.podium?[m.podium]:[]),...m.volumes],box=[Infinity,Infinity,-Infinity,-Infinity];
     for(const volume of volumes){const b=bounds(volume.points);box[0]=Math.min(box[0],b[0]-3);box[1]=Math.min(box[1],b[1]-roofLift(volume.height)-4);box[2]=Math.max(box[2],b[2]+3);box[3]=Math.max(box[3],b[3]+3);}
     if(!volumes.length)return;
     rasterObject(ctx,p,'building:'+(root.CityOrdinaryRoofs?.assetVersion||0),box,scale,g=>paintBuilding(g,p,scale));
+  }
+  function paintDistantBuilding(ctx,p){
+    const b=p.building,lot=root.CityScene3D?.parkingFor(p);
+    if(lot){
+      ctx.save();ctx.translate(...lot.point);ctx.rotate(lot.angle);ctx.fillStyle='#626b70';ctx.fillRect(-lot.width/2,-lot.depth/2,lot.width,lot.depth);ctx.restore();
+    }
+    if(b.status==='construction'){path(ctx,b.footprint);ctx.fillStyle='#8d7857';ctx.fill();return;}
+    const m=root.CityGeometry.buildingMassing(p),light=sun(),angle=light.azimuth*Math.PI/180;
+    const ordered=[...(m.podium?[m.podium]:[]),...m.volumes].sort((a,b)=>(a.base||0)-(b.base||0)||bounds(a.points)[3]-bounds(b.points)[3]||a.height-b.height);
+    const tone=seed(p.id+':roof')%4,roofColor=materialCatalog.pick('roof').rgb,wall=b.use==='office'?[176,188,188]:b.use==='residential'?[187,179,159]:[182,183,168];
+    // Keep the actual massing and projected height. Subpixel windows and roof
+    // equipment do not need separate rasters inside a cached overview image.
+    for(const volume of ordered){
+      const lift=roofLift(volume.height),base=roofLift(volume.base||0);
+      for(const face of facadeFaces(volume)){
+        const {a,z,nx,ny}=face,exposure=Math.max(0,nx*Math.cos(angle)+ny*Math.sin(angle)),shade=.71+exposure*.14;
+        path(ctx,[[a[0],a[1]-base],[z[0],z[1]-base],[z[0],z[1]-lift],[a[0],a[1]-lift]]);
+        ctx.fillStyle=`rgb(${wall.map(v=>Math.round(v*shade)).join(',')})`;ctx.fill();
+      }
+      const roof=volume.points.map(([x,y])=>[x,y-lift]),rgb=volume.type==='terrace'?[218,211,192]:roofColor.map((v,i)=>Math.round(v-5+tone*2+(i===0?12:i===2?-18:0)*light.warmth));
+      path(ctx,roof);ctx.fillStyle=`rgb(${rgb.join(',')})`;ctx.fill();
+      ctx.strokeStyle='#f0efe2b3';ctx.lineWidth=.4;ctx.stroke();
+    }
   }
   function parking(ctx,p,scale){
     const lot=root.CityScene3D?.parkingFor(p);if(lot)paintParking(ctx,lot,p.id,scale);
@@ -404,16 +482,41 @@
       drawBuildingVolume(ctx,p,volume,scale);
     }
   }
-  function treesFor(p){
+  let plantingContext=null;
+  const plantWork={baseLayouts:0,courtyardLayouts:0,overviewBuilds:0,overviewDraws:0};
+  function parcelPlantingContext(facilities,streetside){
+    if(plantingContext&&plantingContext.facilities===facilities&&plantingContext.streetside===streetside)return plantingContext;
+    const courts=new Map();for(const court of streetside?.sites||[])if(!courts.has(court.id))courts.set(court.id,court);
+    const occupied=plantingIndex((facilities||[]).filter(f=>!['park','plaza'].includes(f.kind)&&f.points?.length),f=>{
+      const box=bounds(f.points).slice();
+      if(f.accessPath?.length){const b=bounds(f.accessPath),pad=(f.accessWidth||5)/2;box[0]=Math.min(box[0],b[0]-pad);box[1]=Math.min(box[1],b[1]-pad);box[2]=Math.max(box[2],b[2]+pad);box[3]=Math.max(box[3],b[3]+pad);}
+      return box;
+    });
+    return plantingContext={facilities,streetside,courts,occupied};
+  }
+  function finishCourtyard(p,layout){
+    if(layout.courtyardReady)return layout.trees;
+    const landscaping=root.CityLandscape||(typeof module!=='undefined'&&module.exports?require('./landscape-layout.js'):null);
+    const {occupied,parkingPoints,accessPaths}=layout;
+    layout.courtyard=p.building&&landscaping?.courtyard?.(p,layout.baseTrees,{polygons:[...occupied.map(f=>f.points),...(parkingPoints?[parkingPoints]:[])],paths:[...accessPaths,...occupied.filter(f=>f.accessPath?.length).map(f=>({points:f.accessPath,width:f.accessWidth||5}))]});
+    layout.trees=layout.courtyard?.trees||layout.baseTrees;layout.courtyardReady=true;plantWork.courtyardLayouts++;
+    // The full contour is a near-view refinement. Its extra shrubs and pit
+    // flags cannot change the roots or appearance of an already cached overview.
+    return layout.trees;
+  }
+  function treesFor(p,details=true){
     const facilities=root.CityApp?.state?.facilities,streetside=root.CityApp?.state?.streetside,cached=layouts.get(p);
-    if(cached&&cached.facilities===facilities&&cached.streetside===streetside)return cached.trees;
+    if(cached&&cached.facilities===facilities&&cached.streetside===streetside)return details?finishCourtyard(p,cached):cached.baseTrees;
     const result=[],b=p.building,points=p.points;if(!points)return result;
-    const occupied=(facilities||[]).filter(f=>!['park','plaza'].includes(f.kind)&&f.points?.length);
+    const context=parcelPlantingContext(facilities,streetside),box=bounds(points),occupied=[];
+    // Roots cannot leave their parcel. A generous crown margin finds the same
+    // blockers as the previous city-wide scan, then exact checks stay local.
+    context.occupied.some([(box[0]+box[2])/2,(box[1]+box[3])/2],Math.max(box[2]-box[0],box[3]-box[1])/2+12,f=>{occupied.push(f);return false;});
     const parking=b&&root.CityScene3D?.parkingFor(p),parkingPoints=parking?[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{
       const u=x*parking.width/2,v=y*parking.depth/2;return [parking.point[0]+u*Math.cos(parking.angle)-v*Math.sin(parking.angle),parking.point[1]+u*Math.sin(parking.angle)+v*Math.cos(parking.angle)];
     }):null;
     if(parkingPoints)parkingPoints.push(parkingPoints[0]);
-    const court=streetside?.sites?.find(c=>c.id===p.id),accessPaths=[...(p.accessPath?.length?[{points:p.accessPath,width:p.accessWidth||3}]:[]),...(court?.accessPath?.length?[{points:court.accessPath,width:court.accessWidth||3}]:[])];
+    const court=context.courts.get(p.id),accessPaths=[...(p.accessPath?.length?[{points:p.accessPath,width:p.accessWidth||3}]:[]),...(court?.accessPath?.length?[{points:court.accessPath,width:court.accessWidth||3}]:[])];
     const entrance=p.entrance||b?.entrance||b?.center||p.center;
     if(b&&p.frontage&&entrance)accessPaths.push({points:[p.frontage,entrance],width:3});
     const [x0,y0,x1,y1]=bounds(points),rng=random(p.id||points[0].join(','));
@@ -438,15 +541,13 @@
       if(industrial&&rng()<.35)continue;
       result.push({point,radius,species:type.id,variant:species+Math.floor(rng()*4)*materialCatalog.treeSpecies.length,height:type.height[0]+rng()*(type.height[1]-type.height[0]),street:Boolean(b)});
     }
-    const landscaping=root.CityLandscape||(typeof module!=='undefined'&&module.exports?require('./landscape-layout.js'):null);
-    const courtyard=b&&landscaping?.courtyard?.(p,result,{polygons:[...occupied.map(f=>f.points),...(parkingPoints?[parkingPoints]:[])],paths:[...accessPaths,...occupied.filter(f=>f.accessPath?.length).map(f=>({points:f.accessPath,width:f.accessWidth||5}))]});
-    const trees=courtyard?.trees||result;
-    layouts.set(p,{trees,courtyard,facilities,streetside});return trees;
+    const layout={baseTrees:result,trees:result,courtyard:null,courtyardReady:false,facilities,streetside,occupied,parkingPoints,accessPaths};
+    layouts.set(p,layout);plantWork.baseLayouts++;return details?finishCourtyard(p,layout):result;
   }
   function canopyCell(atlas,columns,tile){
     let cells=canopyCells.get(atlas);if(!cells){cells=new Map();canopyCells.set(atlas,cells);}
     if(!cells.has(tile)){
-      const source=canvas(256),g=source.getContext('2d'),size=atlas.width/columns;g.imageSmoothingQuality='high';
+      const source=canvas(256),g=source.getContext('2d',{willReadFrequently:true}),size=atlas.width/columns;g.imageSmoothingQuality='high';
       g.drawImage(atlas,tile%columns*size+1,Math.floor(tile/columns)*size+1,size-2,size-2,0,0,256,256);
       const pixels=g.getImageData(0,0,256,256);variation.isolateSprite(pixels.data,256,256);g.putImageData(pixels,0,0);
       // Normalize the live alpha silhouette, not its atlas padding. A sparse
@@ -462,14 +563,16 @@
       cells.set(tile,c);
     }return cells.get(tile);
   }
+  const spriteHours=[];
   function plantLightingHour(){
-    const hour=Math.floor(sun().hour);
-    if(hour!==spriteHour){sprites.clear();spriteLods.clear();treeShadows.clear();spriteHour=hour;}
+    const hour=Math.floor(sun().hour);if(hour===spriteHour)return hour;
+    spriteHour=hour;const prior=spriteHours.indexOf(hour);if(prior>=0)spriteHours.splice(prior,1);spriteHours.push(hour);
+    if(spriteHours.length>2){const prefix=spriteHours.shift()+':';for(const cache of [sprites,spriteLods,treeShadows])for(const key of cache.keys())if(key.startsWith(prefix))cache.delete(key);}
     return hour;
   }
   function treeSprite(variant,lit=true,shrub=false){
     const hour=plantLightingHour(),key=hour+':'+variant+':'+lit+':'+shrub;if(sprites.has(key))return sprites.get(key);
-    const c=canvas(256),ctx=c.getContext('2d'),rng=random(variant),angle=sun().azimuth*Math.PI/180,lx=Math.cos(angle),ly=Math.sin(angle);
+    const c=canvas(256),ctx=c.getContext('2d',{willReadFrequently:true}),rng=random(variant),angle=sun().azimuth*Math.PI/180,lx=Math.cos(angle),ly=Math.sin(angle);
     const species=materialCatalog.tree(variant),index=variant%materialCatalog.treeSpecies.length;
     const profile=shrub?(variant<4?['shrubVolume',variant%4]:null):canopyVolumes[index],volume=profile&&canopyAtlases[profile[0]];
     const premium=Boolean(volume||canopyAtlases.garden&&(shrub||index<8)),source=volume?profile[0]:premium?'garden':species.atlas,atlas=canopyAtlases[source];
@@ -547,26 +650,48 @@
       get stats(){return {entries,cells:cells.size,large:large.length,queries:serial,exactChecks:checks};}
     };
   }
-  function streetTreesFor(state){
-    const cached=streetTreeCache.get(state.network);
-    if(cached&&cached.roads===state.roads&&cached.types===state.meta.roadTypes&&cached.facilities===state.facilities&&cached.parcels===state.parcels&&cached.streetside===state.streetside)return cached.trees;
-    const roadRenderer=root.RoadRenderer||(typeof module!=='undefined'&&module.exports?require('./road-renderer.js'):null);
-    const joins=roadRenderer.connections(state.roads,state.network,state.meta.roadTypes).joins;
-    const trees=[],occupied=[...state.parcels.filter(p=>p.building).map(p=>p.building.footprint),...state.facilities.filter(f=>!['park','plaza'].includes(f.kind)&&f.points?.length).map(f=>f.points)];
-    const courts=state.streetside?.sites||[];
-    const driveways=[...state.facilities.filter(f=>f.connected&&f.accessPath?.length),...courts].filter(f=>f.accessPath?.length);
-    const occupiedIndex=plantingIndex(occupied,bounds),joinIndex=plantingIndex(joins,j=>[j.point[0]-j.extent,j.point[1]-j.extent,j.point[0]+j.extent,j.point[1]+j.extent]);
-    const drivewayIndex=plantingIndex(driveways,f=>{const b=bounds(f.accessPath),pad=(f.accessWidth||5)/2;return [b[0]-pad,b[1]-pad,b[2]+pad,b[3]+pad];});
-    const surfaceIndex=plantingIndex(courts.flatMap(c=>c.surfaces||[]),s=>bounds(s.points)),junctionsByRoad=new Map();
-    for(const j of state.network.junctions){
-      const clear=Math.max(...j.approaches.map(q=>q.width))/2+16;
-      for(const a of j.approaches){let list=junctionsByRoad.get(a.road);if(!list){list=[];junctionsByRoad.set(a.road,list);}list.push({distance:a.distance,clear});}
+  function streetTreesFor(state,view){
+    const window=typeof view?.getTransform==='function'?vegetationWindow(view,sun())?.rootBounds:view?.rootBounds||view;
+    const query=Array.isArray(window)&&window.length===4&&window.every(Number.isFinite)?window:null;
+    let cached=streetTreeCache.get(state.network);
+    if(!cached||cached.roads!==state.roads||cached.types!==state.meta.roadTypes||cached.facilities!==state.facilities||cached.parcels!==state.parcels||cached.streetside!==state.streetside){
+      // A cold interaction preview must not construct city-wide obstacle
+      // indices or generate trees before the small refinement tiles begin.
+      if(preview)return [];
+      const roadRenderer=root.RoadRenderer||(typeof module!=='undefined'&&module.exports?require('./road-renderer.js'):null);
+      const joins=roadRenderer.connections(state.roads,state.network,state.meta.roadTypes).joins;
+      const occupied=[...state.parcels.filter(p=>p.building).map(p=>p.building.footprint),...state.facilities.filter(f=>!['park','plaza'].includes(f.kind)&&f.points?.length).map(f=>f.points)];
+      const courts=state.streetside?.sites||[];
+      const driveways=[...state.facilities.filter(f=>f.connected&&f.accessPath?.length),...courts].filter(f=>f.accessPath?.length);
+      const occupiedIndex=plantingIndex(occupied,bounds),joinIndex=plantingIndex(joins,j=>[j.point[0]-j.extent,j.point[1]-j.extent,j.point[0]+j.extent,j.point[1]+j.extent]);
+      const drivewayIndex=plantingIndex(driveways,f=>{const b=bounds(f.accessPath),pad=(f.accessWidth||5)/2;return [b[0]-pad,b[1]-pad,b[2]+pad,b[3]+pad];});
+      const surfaceIndex=plantingIndex(courts.flatMap(c=>c.surfaces||[]),s=>bounds(s.points)),junctionsByRoad=new Map();
+      for(const j of state.network.junctions){
+        const clear=Math.max(...j.approaches.map(q=>q.width))/2+16;
+        for(const a of j.approaches){let list=junctionsByRoad.get(a.road);if(!list){list=[];junctionsByRoad.set(a.road,list);}list.push({distance:a.distance,clear});}
+      }
+      const roadEntries=state.roads.filter(r=>r.level===0&&['street','avenue'].includes(r.kind)).map((road,order)=>{
+        const b=bounds(road.points),offset=state.meta.roadTypes[road.kind].width/2+(road.kind==='avenue'?3.3:2.35);
+        return {road,order,box:[b[0]-offset,b[1]-offset,b[2]+offset,b[3]+offset],trees:null};
+      });
+      const courtEntries=courts.flatMap(c=>c.trees||[]).map((tree,order)=>({tree,order,box:[tree.point[0],tree.point[1],tree.point[0],tree.point[1]],accepted:undefined}));
+      cached={roads:state.roads,types:state.meta.roadTypes,facilities:state.facilities,parcels:state.parcels,streetside:state.streetside,roadRenderer,
+        occupiedIndex,joinIndex,drivewayIndex,surfaceIndex,junctionsByRoad,roadEntries,courtEntries,
+        roadIndex:plantingIndex(roadEntries,e=>e.box),courtIndex:plantingIndex(courtEntries,e=>e.box),trees:null,lastBox:null,lastTrees:null};
+      streetTreeCache.set(state.network,cached);
     }
-    for(const r of state.roads){
-      if(r.level!==0||!['street','avenue'].includes(r.kind))continue;
+    if(!query&&cached.trees)return cached.trees;
+    if(query&&cached.lastBox&&query.every((n,i)=>n===cached.lastBox[i]))return cached.lastTrees;
+    const {roadRenderer,occupiedIndex,joinIndex,drivewayIndex,surfaceIndex,junctionsByRoad}=cached;
+    function roadTrees(entry){
+      if(entry.trees)return entry.trees;
+      if(preview)return [];
+      const r=entry.road,trees=[];
       const cfg=state.meta.roadTypes[r.kind],length=r.points.slice(1).reduce((n,p,i)=>n+Math.hypot(p[0]-r.points[i][0],p[1]-r.points[i][1]),0),rng=random(r.id+':avenue-trees');
       const mix=materialCatalog.treeMixes.street,species=mix[seed(r.id+':species')%mix.length],type=materialCatalog.tree(species);
       const junctions=junctionsByRoad.get(r.id)||[];
+      // Consume the entire original per-road RNG stream, in original order.
+      // A tile never skips candidates within a road and shifts later species.
       for(let d=25;d<length-15;d+=12){
         if(junctions.some(j=>Math.abs(d-j.distance)<j.clear))continue;
         const at=roadRenderer.sample(r.points,d);
@@ -579,9 +704,29 @@
           trees.push({point,radius,species:type.id,variant:species+Math.floor(rng()*4)*materialCatalog.treeSpecies.length,height:type.height[0]*.7+rng()*3,street:true});
         }
       }
+      entry.trees=trees;return trees;
     }
-    trees.push(...courts.flatMap(c=>c.trees).filter(t=>!occupiedIndex.some(t.point,t.radius*.7+1,points=>inside(t.point,points)||edgeDistance(t.point,points)<t.radius*.7+1)));
-    streetTreeCache.set(state.network,{trees,roads:state.roads,types:state.meta.roadTypes,facilities:state.facilities,parcels:state.parcels,streetside:state.streetside});return trees;
+    function candidates(index,all){
+      if(!query)return all;
+      const found=[],center=[(query[0]+query[2])/2,(query[1]+query[3])/2],padding=Math.max(query[2]-query[0],query[3]-query[1])/2;
+      index.some(center,padding,entry=>{const b=entry.box;if(b[0]<=query[2]&&b[2]>=query[0]&&b[1]<=query[3]&&b[3]>=query[1])found.push(entry);return false;});
+      // Grid bucket order must not alter stable scene painter/legacy order.
+      return found.sort((a,b)=>a.order-b.order);
+    }
+    const trees=[],include=tree=>!query||tree.point[0]>=query[0]&&tree.point[0]<=query[2]&&tree.point[1]>=query[1]&&tree.point[1]<=query[3];
+    for(const entry of candidates(cached.roadIndex,cached.roadEntries))for(const tree of roadTrees(entry))if(include(tree))trees.push(tree);
+    for(const entry of candidates(cached.courtIndex,cached.courtEntries)){
+      if(entry.accepted===undefined){
+        if(preview)continue;
+        const t=entry.tree;entry.accepted=!occupiedIndex.some(t.point,t.radius*.7+1,points=>inside(t.point,points)||edgeDistance(t.point,points)<t.radius*.7+1);
+      }
+      if(entry.accepted&&include(entry.tree))trees.push(entry.tree);
+    }
+    if(!preview){
+      if(query){cached.lastBox=query.slice();cached.lastTrees=trees;}
+      else cached.trees=trees;
+    }
+    return trees;
   }
   function treeShadow(variant,shrub=false){
     const key=plantLightingHour()+':'+variant+':'+shrub;if(treeShadows.has(key))return treeShadows.get(key);
@@ -599,17 +744,91 @@
       image=spriteLods.get(key);
     }return image;
   }
+  const overviewStates=new Map();let overviewVersion=-1;
+  function overviewPlantProfile(tree){
+    const shrub=Boolean(tree.shrub),count=shrub?8:materialCatalog.treeSpecies.length,variant=((Math.trunc(tree.variant)||0)%count+count)%count;
+    const type=materialCatalog.tree(variant),lo=shrub?.45:type.height[0]*.65/type.radius[1],hi=shrub?1.5:type.height[1]/type.radius[0];
+    const bucket=Math.max(0,Math.min(4,Math.round((tree.height/tree.radius-lo)/(hi-lo)*4)));
+    return {variant,shrub,ratio:lo+(hi-lo)*bucket/4,key:variant+':'+shrub+':'+bucket};
+  }
+  function overviewPlantLight(){
+    const minute=Math.floor(clockSeconds/60),stamp=assetVersion+':'+minute+':'+settings.quality;
+    if(overviewVersion!==assetVersion){for(const state of overviewStates.values())state.cache.clear();overviewStates.clear();overviewVersion=assetVersion;}
+    let state=overviewStates.get(stamp);
+    if(state)overviewStates.delete(stamp);
+    else{
+      if(overviewStates.size>=2){const oldest=overviewStates.keys().next().value;overviewStates.get(oldest).cache.clear();overviewStates.delete(oldest);}
+      state={light:lightingAt(minute*60),cache:raster.create({limit:160,budget:10*1024*1024,dispose:item=>{item.image.width=item.image.height=1;}})};
+    }
+    overviewStates.set(stamp,state);
+    // The base image samples sunlight once per game minute. Crowns keep their
+    // accepted hourly bake; all small projected shadows share this world sun.
+    return state;
+  }
+  function overviewPlantSprite(tree,state){
+    const {light,cache}=state,profile=overviewPlantProfile(tree),cached=cache.get(profile.key);if(cached)return cached;
+    const {variant,shrub,ratio}=profile;
+    if(preview&&!sprites.has(plantLightingHour()+':'+variant+':true:'+shrub))return null;
+    const cy=-ratio*(shrub?.16:.25),shadow=shadowOffset(ratio,light);
+    // Long low-sun shadows do not need to consume the crown's useful pixels.
+    // This distant-only length cap keeps the same direction and root contact.
+    const distance=Math.hypot(...shadow),shorten=distance>12?12/distance:1,sx=shadow[0]*shorten*.56,sy=shadow[1]*shorten*.56;
+    const shaded=settings.quality!=='map',box=[-1.2,Math.min(-1.2,cy-1.2),1.2,Math.max(1.2,cy+1.2)];
+    if(shaded&&light.elevation>0){box[0]=Math.min(box[0],sx-1.25);box[1]=Math.min(box[1],sy-1.25);box[2]=Math.max(box[2],sx+1.25);box[3]=Math.max(box[3],sy+1.25);}
+    const width=box[2]-box[0],height=box[3]-box[1],density=Math.min(20,128/Math.max(width,height)),image=document.createElement('canvas');
+    image.width=Math.ceil(width*density);image.height=Math.ceil(height*density);
+    const g=image.getContext('2d');g.setTransform(density,0,0,density,-box[0]*density,-box[1]*density);g.imageSmoothingQuality='high';
+    if(shaded){
+      contactShadow(g,0,0,shrub?1.05:.5,shrub?.3:.44);
+      if(light.elevation>0){g.save();g.globalAlpha=light.strength*(shrub?.86:1.12);
+        if(!shrub){g.strokeStyle='#20302d';g.lineCap='round';g.lineWidth=.1;path(g,[[0,0],[sx,sy]],false);g.stroke();}
+        g.drawImage(treeShadow(variant,shrub),sx-1.2,sy-1.2,2.4,2.4);g.restore();}
+    }
+    if(!shrub){g.strokeStyle='#665b44';g.lineWidth=.08;path(g,[[0,0],[0,cy]],false);g.stroke();}
+    g.drawImage(plantSprite(variant,shrub,64),-1.15,cy-1.15,2.3,2.3);
+    plantWork.overviewBuilds++;
+    // 20 species + 8 shrubs, each with five height bands: at most 140 small
+    // rasters, regardless of city size, tree count, zoom level or pan history.
+    return cache.set(profile.key,{image,box},image.width*image.height*4);
+  }
+  function vegetationWindow(ctx,light){
+    const m=ctx.getTransform(),det=m.a*m.d-m.b*m.c,width=ctx.canvas?.width,height=ctx.canvas?.height;
+    if(!det||!Number.isFinite(width)||!Number.isFinite(height))return null;
+    const corners=[[0,0],[width,0],[width,height],[0,height]].map(([x,y])=>[(m.d*(x-m.e)-m.c*(y-m.f))/det,(-m.b*(x-m.e)+m.a*(y-m.f))/det]);
+    const view=[Math.min(...corners.map(p=>p[0])),Math.min(...corners.map(p=>p[1])),Math.max(...corners.map(p=>p[0])),Math.max(...corners.map(p=>p[1]))];
+    const v=shadowOffset(30,light),rootBounds=[view[0]-Math.max(7,v[0]*.56+7),view[1]-Math.max(7,v[1]*.56+7),view[2]-Math.min(-7,v[0]*.56-7),view[3]-Math.min(-15,v[1]*.56-7)];
+    const angle=(light.azimuth+180)*Math.PI/180;
+    return {view,rootBounds,dx:Math.cos(angle),dy:Math.sin(angle),shadow:light.elevation>0?1/Math.tan(light.elevation*Math.PI/180):0};
+  }
+  function plantInWindow(tree,window){
+    if(!window)return true;
+    const {point:[x,y],radius:r,height:h}=tree,{view,dx,dy,shadow}=window;
+    // Extra height tolerance covers the five distant height bands. The actual
+    // crown and its solar shadow can enter a tile even when the root is outside.
+    const d=Math.min(95,h*1.3*shadow)*.56,sx=dx*d,sy=dy*d,cy=-h*(tree.shrub?.21:.33),pad=r*1.3;
+    return x+Math.max(pad,sx+pad)>=view[0]&&x+Math.min(-pad,sx-pad)<=view[2]&&y+Math.max(pad,sy+pad)>=view[1]&&y+Math.min(cy-pad,sy-pad)<=view[3];
+  }
   function vegetation(ctx,objects,scale,visible,streetTrees=[]){
     if(scale<.32)return;
-    const transform=ctx.getTransform(),density=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d)),light=sun();
-    const all=[],append=plants=>{for(const tree of plants||[])if(visible(tree.point))all.push(tree);};
+    const transform=ctx.getTransform(),density=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d)),light=sun(),distant=scale<1.2||preview,window=vegetationWindow(ctx,light);
+    const all=[],append=plants=>{for(const tree of plants||[])if(visible(tree.point)&&plantInWindow(tree,window))all.push(tree);};
     append(streetTrees);
     for(const obj of objects){
+      if(window&&obj.points){const b=bounds(obj.points),w=window.rootBounds;if(b[0]>w[2]||b[2]<w[0]||b[1]>w[3]||b[3]<w[1])continue;}
       const garden=['park','plaza'].includes(obj.kind)&&root.CityLandscape?.plan?.(obj);
       if(garden){append(garden.trees);append(garden.shrubs);}
-      else{append(treesFor(obj));append(layouts.get(obj)?.courtyard?.shrubs);}
+      else{append(treesFor(obj,!distant));if(!distant)append(layouts.get(obj)?.courtyard?.shrubs);}
     }
     if(!all.length)return;
+    if(distant){
+      const sampledLight=overviewPlantLight();ctx.save();ctx.imageSmoothingEnabled=true;
+      for(const tree of all.sort((a,b)=>a.point[1]-b.point[1])){
+        const sprite=overviewPlantSprite(tree,sampledLight);if(!sprite)continue;
+        const {image,box}=sprite,r=tree.radius;
+        ctx.drawImage(image,tree.point[0]+box[0]*r,tree.point[1]+box[1]*r,(box[2]-box[0])*r,(box[3]-box[1])*r);plantWork.overviewDraws++;
+      }
+      ctx.restore();return;
+    }
     for(const t of all){
       if(settings.quality==='map')continue;
       contactShadow(ctx,...t.point,t.radius*(t.shrub?1.05:.5),t.shrub?.3:.44);
@@ -659,7 +878,7 @@
       if(!fountainTile){
         // Crop the isolated sprite once. The complete fountain is then baked
         // into the existing facility raster, with no per-frame pixel access.
-        const source=canvas(512),g=source.getContext('2d');g.drawImage(fountainAtlas,0,0,512,512);
+        const source=canvas(512),g=source.getContext('2d',{willReadFrequently:true});g.drawImage(fountainAtlas,0,0,512,512);
         const pixels=g.getImageData(0,0,512,512);variation.isolateSprite(pixels.data,512,512);g.putImageData(pixels,0,0);
         const box=[512,512,0,0];for(let y=0;y<512;y++)for(let x=0;x<512;x++)if(pixels.data[(y*512+x)*4+3]>48){box[0]=Math.min(box[0],x);box[1]=Math.min(box[1],y);box[2]=Math.max(box[2],x+1);box[3]=Math.max(box[3],y+1);}
         fountainTile={image:source,box};
@@ -898,7 +1117,7 @@
   function vehicleSprite(style){
     const atlas=vehicleAtlases[style.spriteAtlas];if(!atlas)return null;
     const key=style.spriteAtlas+':'+style.spriteCell;if(vehicleSprites.has(key))return vehicleSprites.get(key);
-    const tile=canvas(256),g=tile.getContext('2d'),layout=variation.vehicleAtlases[style.spriteAtlas],cell=style.spriteCell;
+    const tile=canvas(256),g=tile.getContext('2d',{willReadFrequently:true}),layout=variation.vehicleAtlases[style.spriteAtlas],cell=style.spriteCell;
     const width=atlas.width/layout.columns,height=atlas.height/layout.rows;
     g.imageSmoothingQuality='high';g.drawImage(atlas,cell%layout.columns*width+2,Math.floor(cell/layout.columns)*height+2,width-4,height-4,0,0,256,256);
     const pixels=g.getImageData(0,0,256,256),data=pixels.data,box=[256,256,0,0];
@@ -906,7 +1125,7 @@
     for(let y=0;y<256;y++)for(let x=0;x<256;x++)if(data[(y*256+x)*4+3]>64){box[0]=Math.min(box[0],x);box[1]=Math.min(box[1],y);box[2]=Math.max(box[2],x+1);box[3]=Math.max(box[3],y+1);}
     if(box[2]<=box[0])return null;
     const image=document.createElement('canvas');image.width=box[2]-box[0];image.height=box[3]-box[1];
-    const paint=image.getContext('2d');paint.drawImage(tile,...box.slice(0,2),image.width,image.height,0,0,image.width,image.height);
+    const paint=image.getContext('2d',{willReadFrequently:true});paint.drawImage(tile,...box.slice(0,2),image.width,image.height,0,0,image.width,image.height);
     const diffuse=paint.getImageData(0,0,image.width,image.height);diffuse.data.set(variation.vehicleDiffuse(diffuse.data,image.width,image.height,style));paint.putImageData(diffuse,0,0);
     vehicleSprites.set(key,image);return image;
   }
@@ -916,7 +1135,7 @@
     // fixed axes cover all headings/times without creating a bitmap on turns.
     const ratio=Math.min(1,144/sprite.height),width=Math.max(2,Math.round(sprite.width*ratio)),height=Math.max(2,Math.round(sprite.height*ratio));
     const image=document.createElement('canvas');image.width=width;image.height=height;
-    const g=image.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(sprite,0,0,width,height);
+    const g=image.getContext('2d',{willReadFrequently:true});g.imageSmoothingQuality='high';g.drawImage(sprite,0,0,width,height);
     const source=g.getImageData(0,0,width,height),fields=variation.vehicleLightFields(source.data,width,height,style);
     image.width=width*2;image.height=height*2;const pixels=g.createImageData(image.width,image.height);pixels.data.set(fields);g.putImageData(pixels,0,0);
     return vehicleLighting.set(key,{image,width,height},image.width*image.height*4);
@@ -1006,6 +1225,16 @@
     root.RoadRenderer.paintSignals(ctx,root.RoadRenderer.buildPlan(state.roads,state.network,state.meta.roadTypes),{scale,visible,traffic,night});
     ctx.restore();
   }
-  const api={onSurface,streetsideGround,streetsideParking,rasterObject,medians,get stats(){return {engine:'Canvas / texture sprites',vehicleAtlases:Object.keys(vehicleAtlases),vehicleSprites:vehicleSprites.size,vehicleShadows:vehicleShadows.size,vehicleLighting:{...vehicleLighting.stats,limit:96,fieldsPerSprite:4},buildingCache:objectRasters.stats,models:0};},materialMeters,configure,resolveQuality,detailZoom,get effectiveQuality(){return effectiveQuality;},get settings(){return {...settings};},get time(){return clockSeconds;},get assetsReady(){return Object.keys(canopyAtlases).length===Object.keys(canopySources).length&&Object.keys(atlases).length===4&&Boolean(fountainAtlas);},get materialInventory(){return Object.fromEntries(Object.keys(materialCatalog.catalog).map(n=>[n,materialCatalog.count(n)]));},get treeSpecies(){return materialCatalog.treeSpecies;},lightingAt,setTime,shadowOffset,seed,random,inside,edgeDistance,treesFor,streetTreesFor,plantingIndex,material,texture,treeSprite,lampsFor,ground,water,parcel,castShadow,buildingShadow,buildingShadows,facadeFaces,facadeWindows,building,vegetation,facilityGround,bridgeStructure,roadBandBoundary,roadSurfaces,vehicle,atmosphere};
+  const api={onSurface,streetsideGround,streetsideParking,rasterObject,medians,get stats(){return {engine:'Canvas / texture sprites',vehicleAtlases:Object.keys(vehicleAtlases),vehicleSprites:vehicleSprites.size,vehicleShadows:vehicleShadows.size,vehicleLighting:{...vehicleLighting.stats,limit:96,fieldsPerSprite:4},buildingCache:objectRasters.stats,materialPreparation:{...materialJobs?.stats,...materialFields.stats},models:0};},materialMeters,configure,resolveQuality,detailZoom,get effectiveQuality(){return effectiveQuality;},get settings(){return {...settings};},get time(){return clockSeconds;},get assetsReady(){return Object.keys(canopyAtlases).length===Object.keys(canopySources).length&&Object.keys(atlases).length===4&&Boolean(fountainAtlas);},get materialInventory(){return Object.fromEntries(Object.keys(materialCatalog.catalog).map(n=>[n,materialCatalog.count(n)]));},get treeSpecies(){return materialCatalog.treeSpecies;},lightingAt,setTime,shadowOffset,seed,random,inside,edgeDistance,treesFor,streetTreesFor,plantingIndex,material,texture,treeSprite,lampsFor,ground,water,parcel,castShadow,buildingShadow,buildingShadows,facadeFaces,facadeWindows,building,vegetation,facilityGround,bridgeStructure,roadBandBoundary,roadSurfaces,vehicle,atmosphere};
+  api.withPreview=withPreview;
+  Object.defineProperty(api,'preview',{get(){return preview;}});
+  api.commitMaterials=commitMaterials;api.setMaterialView=setMaterialView;
+  Object.defineProperty(api,'materialFallbacks',{get(){return materialFallbacks.stats;}});
+  Object.defineProperty(api,'materialRevision',{get(){return materialRevision;}});
+  Object.defineProperty(api,'materialPreparation',{get(){return {...materialJobs?.stats,...materialFields.stats};}});
+  Object.defineProperty(api,'vegetationStats',{get(){
+    const states=[...overviewStates.values()].map(state=>state.cache.stats);
+    return {...plantWork,overviewStates:states.length,overviewEntries:states.reduce((n,s)=>n+s.entries,0),overviewBytes:states.reduce((n,s)=>n+s.bytes,0),overviewBudget:20*1024*1024,overviewLimit:280,sourceHours:spriteHours.slice(),sourceSprites:sprites.size,sourceMips:spriteLods.size,sourceShadows:treeShadows.size,facilityIndex:plantingContext?.occupied.stats||null};
+  }});
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityScene=api;
 })(typeof window==='undefined'?{}:window);

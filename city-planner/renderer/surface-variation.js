@@ -32,40 +32,89 @@
     const pavers=name==='paving'||name==='pavingWarm',factor=name==='carPaint'?1:organic||pavers?8:4;
     return {factor,size:factor===1?256:factor*128,mode:pavers?'pavers':organic?'organic':'structured'};
   }
+  let synthesisWeights=null;
+  function blendWeights(){
+    if(synthesisWeights)return synthesisWeights;
+    // Every field repeats the same 128-square interpolation phase. Float64
+    // keeps the original arithmetic, including its final byte-rounding ties.
+    const phase=new Float64Array(128),table=new Float64Array(128*128*5);
+    for(let i=0;i<128;i++){const t=i/128;phase[i]=t*t*(3-2*t);}
+    for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+      const fx=phase[x],fy=phase[y],i=(y*128+x)*5;
+      const a=(1-fx)*(1-fy),b=fx*(1-fy),c=(1-fx)*fy,d=fx*fy;
+      let sum=0;sum+=a*a;sum+=b*b;sum+=c*c;sum+=d*d;
+      table[i]=a;table[i+1]=b;table[i+2]=c;table[i+3]=d;table[i+4]=1/Math.sqrt(sum);
+    }
+    synthesisWeights=table;return table;
+  }
   function synthesize(source,sourceSize,name,variant,seed,meters){
     const {factor,size,mode}=profile(name);if(factor===1)return source.slice();
-    const out=new Uint8ClampedArray(size*size*4),patch=128,n=size/patch,period=sourceSize;
-    const mean=[0,0,0];for(let i=0;i<source.length;i+=4)for(let k=0;k<3;k++)mean[k]+=source[i+k]/(source.length/4);
+    const out=new Uint8ClampedArray(size*size*4),patch=128,n=size/patch,period=sourceSize,weights=blendWeights();
+    const structured=mode==='structured',pavers=mode==='pavers',gain=pavers?.46:1,pixels=source.length/4;
+    let meanR=0,meanG=0,meanB=0;
+    for(let i=0;i<source.length;i+=4){meanR+=source[i]/pixels;meanG+=source[i+1]/pixels;meanB+=source[i+2]/pixels;}
     const shadeRange=name==='asphalt'?1.4:name==='grass'?3:5;
     const nodes=Array.from({length:n*n},(_,i)=>{const h=hash(seed+Math.imul(i+1,2654435761));return {x:h%period,y:(h>>>9)%period,r:(h>>>18)%4,shade:(((h>>>20)%256)/255-.5)*shadeRange};});
-    const weight=Array.from({length:patch},(_,i)=>{const t=i/patch;return t*t*(3-2*t);});
-    const cw=[1.6,.8,1.2,1.2,.6,.6,.9,1.2][variant%8],ch=[1.2,1.2,.6,.6,.6,.9,.9,.6][variant%8];
-    const cols=Math.max(2,Math.round(meters*factor/cw)),rows=Math.max(2,Math.round(meters*factor/ch/2)*2),pw=size/cols,ph=size/rows;
-    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-      const ix=x>>7,iy=y>>7,fx=weight[x%patch],fy=weight[y%patch],ws=[(1-fx)*(1-fy),fx*(1-fy),(1-fx)*fy,fx*fy];
-      const indices=[iy*n+ix,iy*n+(ix+1)%n,((iy+1)%n)*n+ix,((iy+1)%n)*n+(ix+1)%n];
-      const rgb=[0,0,0],normal=mode==='structured'?1:1/Math.sqrt(ws.reduce((a,v)=>a+v*v,0));let shade=0;
-      for(let j=0;j<4;j++){
-        const node=nodes[indices[j]];let u=x*2,v=y*2;
-        if(mode!=='structured'){
-          if(node.r===1){const q=u;u=-v;v=q;}else if(node.r===2){u=-u;v=-v;}else if(node.r===3){const q=u;u=v;v=-q;}
-          u+=node.x;v+=node.y;
+    // A rotated sample address is separable into one X and one Y lookup. This
+    // handles arbitrary source sizes and removes four rotations and sixteen
+    // remainder operations from every output pixel.
+    for(let i=0;i<nodes.length;i++){
+      const node=nodes[i];
+      if(structured&&i){node.xs=nodes[0].xs;node.ys=nodes[0].ys;continue;}
+      const swap=!structured&&(node.r===1||node.r===3),xs=node.xs=new Uint32Array(size),ys=node.ys=new Uint32Array(size);
+      const xSign=!structured&&(node.r===2||node.r===3)?-1:1,ySign=!structured&&(node.r===1||node.r===2)?-1:1;
+      const xOffset=structured?0:swap?node.y:node.x,yOffset=structured?0:swap?node.x:node.y;
+      const xStride=swap?period*4:4,yStride=swap?4:period*4;
+      for(let at=0;at<size;at++){
+        const x=xSign*at*2+xOffset,y=ySign*at*2+yOffset;
+        xs[at]=((x%period)+period)%period*xStride;ys[at]=((y%period)+period)%period*yStride;
+      }
+    }
+    let cols=0,even=null,odd=null,rowIds=null,yRemainders=null,yDistances=null,tones=null;
+    if(pavers){
+      const cw=[1.6,.8,1.2,1.2,.6,.6,.9,1.2][variant%8],ch=[1.2,1.2,.6,.6,.6,.9,.9,.6][variant%8];
+      cols=Math.max(2,Math.round(meters*factor/cw));const rows=Math.max(2,Math.round(meters*factor/ch/2)*2),pw=size/cols,ph=size/rows;
+      const columns=shift=>{
+        const ids=new Uint32Array(size),remainders=new Float64Array(size),distances=new Float64Array(size);
+        for(let x=0;x<size;x++){const xx=x+shift,r=xx%pw;ids[x]=Math.floor(xx/pw)%cols;remainders[x]=r;distances[x]=Math.min(r,pw-r);}
+        return {ids,remainders,distances};
+      };
+      even=columns(0);odd=variant%2?columns(pw/2):even;
+      rowIds=new Uint32Array(size);yRemainders=new Float64Array(size);yDistances=new Float64Array(size);
+      for(let y=0;y<size;y++){const r=y%ph;rowIds[y]=Math.floor(y/ph);yRemainders[y]=r;yDistances[y]=Math.min(r,ph-r);}
+      tones=new Float64Array(rows*cols);
+      for(let row=0;row<rows;row++)for(let col=0;col<cols;col++)tones[row*cols+col]=(hash(seed+row*cols+col)%1000/999-.5)*8;
+    }
+    for(let iy=0;iy<n;iy++)for(let ix=0;ix<n;ix++){
+      const nextX=(ix+1)%n,nextY=(iy+1)%n,a=nodes[iy*n+ix],b=nodes[iy*n+nextX],c=nodes[nextY*n+ix],d=nodes[nextY*n+nextX];
+      const x0=ix*patch,x1=x0+patch;
+      for(let localY=0;localY<patch;localY++){
+        const y=iy*patch+localY,ay=a.ys[y],by=b.ys[y],cy=c.ys[y],dy=d.ys[y];
+        const row=pavers?rowIds[y]:0,columns=pavers&&(variant%2&&row%2)?odd:even;
+        const rowOffset=row*cols,yRemainder=pavers?yRemainders[y]:0,yDistance=pavers?yDistances[y]:0;
+        let wi=localY*patch*5,dest=(y*size+x0)*4;
+        for(let x=x0;x<x1;x++,wi+=5,dest+=4){
+          const w0=weights[wi],w1=weights[wi+1],w2=weights[wi+2],w3=weights[wi+3],normal=structured?1:weights[wi+4];
+          const p0=a.xs[x]+ay,p1=b.xs[x]+by,p2=c.xs[x]+cy,p3=d.xs[x]+dy;
+          // Preserve the four-sample addition order: regrouping these terms
+          // can change a clamped byte at a half-integer rounding boundary.
+          let r=0,g=0,blue=0,shade=0;
+          r+=(source[p0]-meanR)*w0;g+=(source[p0+1]-meanG)*w0;blue+=(source[p0+2]-meanB)*w0;shade+=a.shade*w0;
+          r+=(source[p1]-meanR)*w1;g+=(source[p1+1]-meanG)*w1;blue+=(source[p1+2]-meanB)*w1;shade+=b.shade*w1;
+          r+=(source[p2]-meanR)*w2;g+=(source[p2+1]-meanG)*w2;blue+=(source[p2+2]-meanB)*w2;shade+=c.shade*w2;
+          r+=(source[p3]-meanR)*w3;g+=(source[p3+1]-meanG)*w3;blue+=(source[p3+2]-meanB)*w3;shade+=d.shade*w3;
+          let joint=0,paverTone=0,bevel=0;
+          if(pavers){
+            joint=Math.max(0,1-Math.min(columns.distances[x],yDistance)/.5);
+            bevel=Math.max(0,1-Math.abs(Math.min(columns.remainders[x],yRemainder)-.8)/.55);
+            paverTone=tones[rowOffset+columns.ids[x]];
+          }
+          out[dest]=meanR+r*normal*gain+shade+paverTone-joint*15+bevel*4;
+          out[dest+1]=meanG+g*normal*gain+shade+paverTone-joint*15+bevel*4;
+          out[dest+2]=meanB+blue*normal*gain+shade+paverTone-joint*15+bevel*4;
+          out[dest+3]=255;
         }
-        u=((u%period)+period)%period;v=((v%period)+period)%period;const pos=(v*period+u)*4;
-        for(let k=0;k<3;k++)rgb[k]+=(source[pos+k]-mean[k])*ws[j];
-        shade+=node.shade*ws[j];
       }
-      let joint=0,paverTone=0,bevel=0;
-      if(mode==='pavers'){
-        const row=Math.floor(y/ph),xx=x+(variant%2&&row%2?pw/2:0),col=Math.floor(xx/pw)%cols;
-        const dx=Math.min(xx%pw,pw-xx%pw),dy=Math.min(y%ph,ph-y%ph);
-        joint=Math.max(0,1-Math.min(dx,dy)/.5);
-        bevel=Math.max(0,1-Math.abs(Math.min(xx%pw,y%ph)-.8)/.55);
-        paverTone=(hash(seed+row*cols+col)%1000/999-.5)*8;
-      }
-      const dest=(y*size+x)*4;
-      for(let k=0;k<3;k++)out[dest+k]=mean[k]+rgb[k]*normal*(mode==='pavers'?.46:1)+shade+paverTone-joint*15+bevel*4;
-      out[dest+3]=255;
     }
     return out;
   }
@@ -172,4 +221,4 @@
     return [Math.cos(angle)*direct,Math.sin(angle)*direct];
   }
   const api={hash,isolateSprite,profile,synthesize,vehicle,vehicleDiffuse,vehicleLightFields,vehicleLightWeights,realVehicles,sportVehicles,vehicleAtlases};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.SurfaceVariation=api;
-})(typeof window==='undefined'?{}:window);
+})(typeof window==='undefined'?(typeof self==='undefined'?{}:self):window);

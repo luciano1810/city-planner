@@ -197,7 +197,7 @@
   }
   function texture(index){
     if(!atlas)return null;if(cells.has(index))return cells.get(index);
-    const image=document.createElement('canvas');image.width=image.height=128;const g=image.getContext('2d'),size=atlas.width/2;
+    const image=document.createElement('canvas');image.width=image.height=128;const g=image.getContext('2d',{willReadFrequently:true}),size=atlas.width/2;
     g.drawImage(atlas,index%2*size+2,Math.floor(index/2)*size+2,size-4,size-4,0,0,128,128);
     const data=g.getImageData(0,0,128,128);
     if(index===2)isolatePair(data.data,128,128);
@@ -229,8 +229,9 @@
     // bodies inside this tile. The same local section LRU still owns layouts.
     return [view[0]-radius-maxX,view[1]-radius-maxY,view[2]+radius-minX,view[3]+radius-minY];
   }
-  function paint(ctx,state,{scale=1,inView=()=>true,visible=()=>true}={}){
+  function paint(ctx,state,{scale=1,inView=()=>true,visible=()=>true,preview=false}={}){
     painted=0;if(scale<1.1)return;
+    if(preview&&(!active||[state.network,state.roads,state.meta?.roadTypes||state.roadTypes,state.parcels,state.facilities,state.streetside].some((value,i)=>value!==active.refs[i])))return;
     const planner=plannerFor(state),view=viewport(ctx),scene=root.CityScene,light=scene?.lightingAt(scene.time)||{elevation:42,azimuth:45,strength:.28};
     const offsets=definitions.map((def,cell)=>light.elevation>0?shadowPlacement({cell,point:[0,0],heading:0},light,scene?.shadowOffset(def.height,light)).point:[0,0]);
     const items=planner.items(view?shadowQueryBounds(view,offsets):null,inView);

@@ -15,7 +15,7 @@
   function equipmentSprite(type){
     if(!equipmentAtlas||equipmentTypes[type]===undefined)return null;
     if(equipmentCells.has(type))return equipmentCells.get(type);
-    const tile=document.createElement('canvas');tile.width=tile.height=256;const g=tile.getContext('2d'),cell=equipmentTypes[type],q=equipmentAtlas.width/2;
+    const tile=document.createElement('canvas');tile.width=tile.height=256;const g=tile.getContext('2d',{willReadFrequently:true}),cell=equipmentTypes[type],q=equipmentAtlas.width/2;
     g.drawImage(equipmentAtlas,cell%2*q+2,Math.floor(cell/2)*q+2,q-4,q-4,0,0,256,256);
     const pixels=g.getImageData(0,0,256,256);root.SurfaceVariation?.isolateSprite(pixels.data,256,256);g.putImageData(pixels,0,0);
     const b=[256,256,0,0];for(let y=0;y<256;y++)for(let x=0;x<256;x++)if(pixels.data[(y*256+x)*4+3]>48){b[0]=Math.min(b[0],x);b[1]=Math.min(b[1],y);b[2]=Math.max(b[2],x+1);b[3]=Math.max(b[3],y+1);}

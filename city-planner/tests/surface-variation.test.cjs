@@ -1,8 +1,38 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
+const {createHash}=require('node:crypto');
 const surfaces=require('../renderer/surface-variation.js');
 
 function source(){const a=new Uint8ClampedArray(256*256*4);for(let y=0;y<256;y++)for(let x=0;x<256;x++){const i=(y*256+x)*4;a[i]=100+30*Math.sin(x*Math.PI/32)+12*Math.cos(y*Math.PI/64);a[i+1]=a[i]+10;a[i+2]=a[i]+15;a[i+3]=255;}return a;}
+
+test('precomputed material sampling preserves the original bytes across field modes and source periods',()=>{
+  // Captured from the original scalar sampler before moving rotations, blend
+  // weights and paving coordinates out of its million-pixel loop.
+  const cases=[
+    ['asphalt',0,328,5,256,'dd8b683f0361595ac4a2d9ed17de36a658dbe226e83144b3e6ea3dee1949d96a'],
+    ['roof',7,-2147483648,6,256,'de7ce853ddc9ca8b379cc62a79fa9c624b57acc1e033c187917d44182735bb0b'],
+    ['grass',3,4294967295,3.5,256,'793dcced25fd83017c4febf7d431e0e4a6b7dd95d057dc234d45e3838c35a01f'],
+    ['facade',11,-113,2.4,256,'f31370cc74a7d92d53bda49a07d384c4376aa1fd3293547b4428ee6c0e06ad4e'],
+    ['metal',2,0,4,127,'39413055f4f9cb812aa3ec210aeb8c3802860f920ac3ce45fb22e593a43f6a8b'],
+    ['paving',1,-9001,4.8,256,'5036c9bef640b345f5ca761eca58a5404766f656d8812bed418beb01ff423200'],
+    ['pavingWarm',7,42,4.8,73,'95dd3f9ad38d08f65714663cc0257ed209df622027c6754391552aeb275dbed0'],
+    ['gravel',2,991,3,64,'5321a9e629b3319a8fe7982ee9953e928870cf2a5b2c948a21e17091df2c73c8'],
+    ['carPaint',5,-42,3,17,'9a41a9eb4dd0095144dbe3e15129bd7423cbac333776c3cd70254512e1c230af']
+  ];
+  const digest=pixels=>createHash('sha256').update(pixels).digest('hex');
+  for(const [name,variant,seed,meters,size,expected] of cases){
+    const input=new Uint8ClampedArray(size*size*4);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const i=(y*size+x)*4;
+      input[i]=(x*17+y*31+x*y%97)&255;input[i+1]=(x*5^y*23)&255;
+      input[i+2]=(x*x+3*y*y+11*x*y)&255;input[i+3]=(x+y*3)&255;
+    }
+    const before=digest(input),actual=surfaces.synthesize(input,size,name,variant,seed,meters);
+    assert.equal(digest(actual),expected,`${name}, variant ${variant}, seed ${seed}, source ${size}`);
+    assert.equal(digest(input),before,'the source atlas is immutable');
+    assert.notStrictEqual(actual,input,'even the unexpanded material returns an independent image');
+  }
+});
 
 test('atlas sampling discards detached neighbours but preserves the main crown and translucent edge',()=>{
   const pixels=new Uint8ClampedArray(12*12*4),put=(x,y,alpha)=>pixels.set([30,120,50,alpha],(y*12+x)*4);
