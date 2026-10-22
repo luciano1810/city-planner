@@ -19,8 +19,9 @@
       const epoch=this.epoch,rate=this.speed;
       const task=this.queue.then(async()=>{
         if(epoch!==this.epoch)return;
+        const sentAt=this.now();
         const result=await this.request({seconds,speed:rate,...extra});
-        if(epoch===this.epoch)this.apply(result);
+        if(epoch===this.epoch)this.apply(result,{sentAt,receivedAt:this.now()});
         return result;
       });
       this.queue=task.catch(error=>{if(epoch===this.epoch){this.pause();this.onError(error);}});

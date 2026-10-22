@@ -21,6 +21,20 @@
   let state=null, session=null, active=false, working=false;
   let currentSave=null;
   let trafficState=null,scenePreviewMinute=null;
+  const trafficPlayback=new window.CityTrafficPlayback.Playback();
+  let trafficFrame=null;
+  function animateTraffic(){
+    trafficFrame=null;
+    if(!active||!simulation.running||document.hidden)return;
+    workspace.draw();
+    trafficFrame=requestAnimationFrame(animateTraffic);
+  }
+  function syncTrafficAnimation(){
+    trafficPlayback.setPaused(!simulation.running);
+    if(!simulation.running){cancelAnimationFrame(trafficFrame);trafficFrame=null;}
+    else if(trafficFrame===null)trafficFrame=requestAnimationFrame(animateTraffic);
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncTrafficAnimation();});
   let mapHitLabels=[];
   let snapTarget=null, pointerPosition=null;
   const snappedPoints=new WeakMap();
@@ -246,14 +260,16 @@
   }
   const simulation=new window.CitySimulation.Driver({
     request:payload=>api('simulate',{...payload,mode:el('signal-demand').value}),
-    apply:result=>{
+    apply:(result,timing)=>{
       if(result.city)state=result.city;
       state.simulation=result.simulation;state.month=result.month;state.sceneTimeSeconds=result.sceneTimeSeconds;
       trafficState=result.traffic;state.liveTraffic=trafficState;
+      trafficPlayback.push(trafficState,result.trafficAnimation,{reset:result.trafficReset,time:timing?.sentAt});
+      syncTrafficAnimation();
       if(result.city)render();else updateTraffic();
       if(result.saveWarning)status(result.saveWarning,true);
     },
-    onState:()=>{if(state)updateSimulationControls();},
+    onState:()=>{syncTrafficAnimation();if(state)updateSimulationControls();},
     onError:error=>status(error.message,true)
   });
   function pause(){return simulation.pause();}
@@ -331,6 +347,7 @@
     if(!state)return;
     const s=state.stats;
     trafficState=state.liveTraffic||null;
+    if(trafficPlayback.latest!==trafficState){trafficPlayback.reset(trafficState);trafficPlayback.setPaused(!simulation.running);}
     el('signal-green').value=state.policy.signalGreenSeconds;el('signal-yellow').value=state.policy.signalYellowSeconds;el('signal-clearance').value=state.policy.signalClearanceSeconds;
     updateTraffic();
     el('city-name').textContent=state.name;
@@ -670,6 +687,7 @@
 
   function paint(ctx,g) {
     if(!active||!state)return;
+    const trafficState=trafficPlayback.frame();
     if(pointerPosition&&state.meta.roadTypes[tool])hover=magneticPoint(eventPoint(pointerPosition));
     const t=workspace.terrain, scale=t.width*g.scale/state.meta.width, sy=t.height*g.scale/state.meta.height;
     ctx.save();ctx.translate(g.left,g.top);ctx.scale(scale,sy);

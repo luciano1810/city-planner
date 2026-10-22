@@ -60,6 +60,10 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
     before = (copy.deepcopy(city.s), city.rng.getstate(), city.runtime(),
               copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_month else None
     initial_month = city.s['month']
+    previous_live = city.live_traffic
+    def road_signature():
+        return [(r['id'],r['kind'],r['level'],r['oneway'],r['points']) for r in city.s['roads']]
+    previous_roads = copy.deepcopy(road_signature()) if crosses_month and previous_live else None
     try:
         if speed is not None:
             state['speed'] = speed
@@ -77,22 +81,33 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
                 state = city.s['simulation']
         target = state['elapsedSeconds']
         live = city.live_traffic
+        if live is None and previous_live and previous_roads == road_signature():
+            # Frontage and demand can change at settlement without changing
+            # roads. Keep in-flight journeys, reservations and vehicle IDs.
+            from .vehicle_trips import build_demand
+            live = city.live_traffic = previous_live
+            balances = live.balances
+            build_demand(live,live.terminals)
+            live.balances.update({key:balances[key] for key in live.balances if key in balances})
         replaced = live is None or reset or live.mode != mode
         if replaced:
             live = city.live_traffic = LiveTraffic(city, mode)
-        # At fast-forward speeds, retain a bounded, signal-safe traffic sample.
-        # The full elapsed interval still advances the calendar and settlements.
-        sampled = seconds > 10
-        window = min(seconds, 3.) if sampled else seconds
-        if replaced or sampled:
-            live.clock = max(0., target-window)
+        # Traffic has a continuous visual clock. Never jump the signal clock to
+        # a different phase while vehicles are still traversing the junction.
+        # Above 5x, show a bounded 5x sample while the calendar advances fully.
+        rate = state['speed']
+        sampled = rate > 5 or seconds > 10
+        window = min(10., seconds if rate <= 5 else seconds/rate*5)
+        if replaced and not sampled:
+            live.clock = max(0.,target-window)
+            live.signal_clock = live.clock
         live.advance(window)
         live.clock = target
         if seconds:
             state['sampled'] = sampled
         result = dict(simulation=copy.deepcopy(state), sceneTimeSeconds=city.s['sceneTimeSeconds'],
                       month=city.s['month'], monthsAdvanced=city.s['month']-initial_month,
-                      traffic=live.view())
+                      traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
         if result['monthsAdvanced']:
             result['city'] = city.view()
         return result

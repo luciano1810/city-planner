@@ -8,6 +8,8 @@
   let renderer=null,scene=null,camera=null,sun=null,ambient=null,ground=null,staticGroup=null,carsGroup=null,ao=null;
   let carAtlas=null;const carImage=new Image();carImage.onload=()=>{carAtlas=carImage;lastNetwork=null;root.MapWorkspace?.draw();};carImage.src="assets/vehicles.png";
   let failure=null,lastNetwork=null,lastParcels=null,lastRegion='',windows=[],stats={};
+  let ambientOcclusionCanvas=null,ambientOcclusionKey='';
+  let sceneryTarget=null,sceneryScene=null,sceneryCamera=null,sceneryKey='';
   const projection=(p,z=0)=>[p[0],p[1]-z*TILT];
   function start(){
     if(renderer)return true;if(failure||!T)return false;
@@ -21,6 +23,18 @@
       sun=new T.DirectionalLight(0xfff1d7,2.9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.00015;sun.shadow.normalBias=.08;sun.shadow.radius=2.2;scene.add(sun,sun.target);
       ground=new T.Mesh(new T.PlaneGeometry(100000,100000),new T.ShadowMaterial({color:0x182735,opacity:.38}));ground.receiveShadow=true;ground.position.z=.025;scene.add(ground);
       staticGroup=new T.Group();carsGroup=new T.Group();scene.add(staticGroup,carsGroup);
+      sceneryTarget=new T.WebGLRenderTarget(1,1,{depthBuffer:true});
+      sceneryTarget.depthTexture=new T.DepthTexture(1,1,T.UnsignedIntType);
+      sceneryScene=new T.Scene();sceneryCamera=new T.OrthographicCamera(-1,1,1,-1,0,1);
+      const sceneryMaterial=new T.ShaderMaterial({
+        uniforms:{colorTexture:{value:sceneryTarget.texture},depthTexture:{value:sceneryTarget.depthTexture}},
+        vertexShader:'varying vec2 screenUV;void main(){screenUV=uv;gl_Position=vec4(position.xy,0.0,1.0);}',
+        fragmentShader:`uniform sampler2D colorTexture;uniform sampler2D depthTexture;varying vec2 screenUV;
+          void main(){gl_FragColor=texture2D(colorTexture,screenUV);gl_FragDepth=texture2D(depthTexture,screenUV).r;
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          }`,depthTest:true,depthWrite:true});
+      sceneryScene.add(new T.Mesh(new T.PlaneGeometry(2,2),sceneryMaterial));
       ao=new T.SSAOPass(scene,camera,256,256,16);ao.output=T.SSAOPass.OUTPUT.Blur;ao.renderToScreen=true;ao.kernelRadius=3.2;ao.minDistance=.00008;ao.maxDistance=.004;ao.ssaoMaterial.defines.PERSPECTIVE_CAMERA=0;
       renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();failure='WebGL context lost';renderer=null;root.MapWorkspace?.draw();});
       return true;
@@ -334,11 +348,11 @@
     if(!start()||!S.assetsReady)return false;
     const m=ctx.getTransform(),width=ctx.canvas.width,height=ctx.canvas.height,sx=m.a,sy=m.d,cx=(width/2-m.e)/sx,cy=(height/2-m.f)/sy;
     if(sx<.4||sy<.4)return false;
-    if(renderer.domElement.width!==width||renderer.domElement.height!==height){renderer.setSize(width,height,false);ao.setSize(Math.ceil(width*.65),Math.ceil(height*.65));}
+    if(renderer.domElement.width!==width||renderer.domElement.height!==height){renderer.setSize(width,height,false);sceneryTarget.setSize(width,height);sceneryKey='';ao.setSize(Math.ceil(width*.65),Math.ceil(height*.65));}
     const cos=1/Math.sqrt(1+TILT*TILT);camera.left=-width/(2*sx);camera.right=width/(2*sx);camera.top=height/(2*sy)*cos;camera.bottom=-camera.top;
     camera.position.set(cx,-cy-1000*TILT,1000);camera.lookAt(cx,-cy,0);camera.updateProjectionMatrix();
     const region=[cx-width/(2*sx),cy-height/(2*sy),cx+width/(2*sx),cy+height/(2*sy)],regionKey=region.map(n=>Math.floor(n/80)).join(':');
-    if(state.network!==lastNetwork||state.parcels!==lastParcels||regionKey!==lastRegion){rebuild(state,region);lastRegion=regionKey;}
+    if(state.network!==lastNetwork||state.parcels!==lastParcels||regionKey!==lastRegion){rebuild(state,region);lastRegion=regionKey;ambientOcclusionKey='';sceneryKey='';}
     const light=S.lightingAt(S.time),a=light.azimuth*Math.PI/180,elevation=Math.max(12,light.elevation)*Math.PI/180;
     sun.position.set(cx+Math.cos(a)*400,-cy-Math.sin(a)*400,Math.tan(elevation)*400);sun.target.position.set(cx,-cy,0);sun.target.updateMatrixWorld();
     sun.color.set(0xfff1dd).lerp(new T.Color(0xffc785),Math.min(1,light.warmth/.18));sun.intensity=2.8;ambient.intensity=1.5;
@@ -349,25 +363,49 @@
     for(const v of traffic?.vehicles||[])if(!root.RoadRenderer.upperVehicle(v,layout)&&near(v.point))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
     let pedestrians=0;for(const p of traffic?.pedestrians||[])if(near(p.point)){root.CityPedestrians.build3D(batch,p,{solid,cloth});pedestrians++;}
     batch.flush(carsGroup);
-    renderer.render(scene,camera);const beautyCalls=renderer.info.render.calls,beautyTriangles=renderer.info.render.triangles;
+    // Keep stationary color AND depth. Restoring depth before dynamic drawing
+    // preserves building/vehicle occlusion without redrawing every facade,
+    // tree and shadow map at the animation frame rate.
+    const viewKey=[width,height,sx,sy,m.e,m.f,Math.floor(S.time/15)].join(':');
+    if(viewKey!==sceneryKey){
+      carsGroup.visible=false;renderer.shadowMap.autoUpdate=true;
+      renderer.setRenderTarget(sceneryTarget);renderer.render(scene,camera);renderer.setRenderTarget(null);
+      carsGroup.visible=true;sceneryKey=viewKey;
+    }
+    renderer.render(sceneryScene,sceneryCamera);
+    renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;
+    staticGroup.visible=false;ground.visible=false;renderer.render(scene,camera);
+    staticGroup.visible=true;ground.visible=true;renderer.autoClear=true;
+    const beautyCalls=renderer.info.render.calls,beautyTriangles=renderer.info.render.triangles;
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(renderer.domElement,0,0);ctx.restore();
     if(sx>1){
-      const hidden=staticGroup.children.filter(m=>m.userData.foliage);for(const m of hidden)m.visible=false;
-      ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.copy(camera.projectionMatrix);ao.ssaoMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
-      renderer.shadowMap.autoUpdate=false;ao.render(renderer,null,null);renderer.shadowMap.autoUpdate=true;for(const m of hidden)m.visible=true;
-      ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='multiply';ctx.globalAlpha=.58;ctx.drawImage(renderer.domElement,0,0);ctx.restore();
+      // Occlusion belongs to stationary architecture. Reuse it between vehicle
+      // frames instead of running three full-screen SSAO passes every repaint.
+      const key=[width,height,sx,sy,m.e,m.f].join(':');
+      if(key!==ambientOcclusionKey){
+        const hidden=staticGroup.children.filter(m=>m.userData.foliage);for(const mesh of hidden)mesh.visible=false;
+        carsGroup.visible=false;
+        ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.copy(camera.projectionMatrix);ao.ssaoMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
+        renderer.shadowMap.autoUpdate=false;ao.render(renderer,null,null);renderer.shadowMap.autoUpdate=true;
+        carsGroup.visible=true;for(const mesh of hidden)mesh.visible=true;
+        ambientOcclusionCanvas??=document.createElement('canvas');ambientOcclusionCanvas.width=width;ambientOcclusionCanvas.height=height;
+        ambientOcclusionCanvas.getContext('2d').drawImage(renderer.domElement,0,0);ambientOcclusionKey=key;
+      }
+      ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='multiply';ctx.globalAlpha=.58;ctx.drawImage(ambientOcclusionCanvas,0,0);ctx.restore();
     }
     stats={engine:'WebGL / Three.js r180',ambientOcclusion:sx>1,vehicleAtlas:!!carAtlas,pedestrianAtlas:root.CityPedestrians.ready,pedestrians,calls:beautyCalls,triangles:beautyTriangles,meshes:staticGroup.children.length,windows:windows.length};return true;
   }
   function renderUpperTraffic(ctx,state,traffic){
     if(!renderer)return;
     const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes),batch=new Batch();
+    const upper=(traffic?.vehicles||[]).filter(v=>root.RoadRenderer.upperVehicle(v,layout));
+    if(!upper.length)return;
     clear(carsGroup);
-    for(const v of traffic?.vehicles||[])if(root.RoadRenderer.upperVehicle(v,layout))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
+    for(const v of upper)car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
     batch.flush(carsGroup);
     const staticVisible=staticGroup.visible,groundVisible=ground.visible;
     staticGroup.visible=false;ground.visible=false;
-    renderer.render(scene,camera);
+    renderer.shadowMap.autoUpdate=false;renderer.render(scene,camera);
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(renderer.domElement,0,0);ctx.restore();
     staticGroup.visible=staticVisible;ground.visible=groundVisible;
   }

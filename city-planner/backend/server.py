@@ -48,6 +48,7 @@ class Handler(BaseHTTPRequestHandler):
                    '/scene-3d.js': 'scene-3d.js', '/vendor/three.min.js': 'vendor/three.min.js',
                    '/material-catalog.js': 'material-catalog.js',
                    '/surface-variation.js': 'surface-variation.js', '/simulation-driver.js': 'simulation-driver.js',
+                   '/traffic-playback.js': 'traffic-playback.js',
                    '/special-buildings.js': 'special-buildings.js',
                    '/civic-buildings.js': 'civic-buildings.js',
                    '/civic-details.js': 'civic-details.js',
