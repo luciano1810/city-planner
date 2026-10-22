@@ -19,7 +19,7 @@ function fixture({labels=false}={}){
   const parcel=(id,x)=>({id,center:[x,10],points:[[x-10,0],[x+10,0],[x+10,20],[x-10,20]],connected:true,
     building:{use:'office',status:'active',floors:4,name:id,center:[x,10]}});
   const state={meta:{width:1000,height:1000,roadTypes:{}},parcels:[parcel('near',10),parcel('far',410)],
-    roads:[],network:{edges:[]},localPaths:[],lines:[],stops:[],districts:[],flows:[],
+    roads:[],network:{edges:[],junctions:[]},localPaths:[],lines:[],stops:[],districts:[],flows:[],
     facilities:[{id:'hospital',kind:'hospital',name:'Hospital',point:[50,50],depth:20,points:[[40,40],[60,40],[60,60],[40,60]]}]};
   const record=name=>()=>events.push(name);
   const scene={effectiveQuality:'high',settings:{quality:'high',renderer:'textures',labels},time:9*3600,
@@ -137,9 +137,34 @@ test('traffic replies refresh the clock and live overlay without forcing a new s
   const env={updateRoadValidation(){},trafficMetrics:require('../renderer/traffic-metrics.js'),trafficPeriod:'peak',active:true,state:{simulation:{sampled:false}},simulation:{running:true},el,
     trafficState:{mode:'normal',waiting:0,passed:2,signals:[{phase:'green',remaining:5}],vehicles:[],pedestrians:[]},
     updateSceneClock:()=>calls.push('clock'),updateSimulationControls:()=>calls.push('controls'),
+    updateTrafficDetails:()=>calls.push('details'),
     workspace:{requestAnimation:()=>calls.push('animation'),requestDraw:()=>calls.push('invalidate')}};
-  vm.runInNewContext(section('  function updateTraffic() {','  function setTool(')+'\nupdateTraffic();',env);
-  assert.deepEqual(calls,['clock','controls','animation']);
+  vm.runInNewContext(section('  function updateTraffic() {','  function liveTrafficValues(')+'\nupdateTraffic();',env);
+  assert.deepEqual(calls,['clock','controls','details','animation']);
+});
+
+test('traffic details follow the selected junction and clear stale samples',()=>{
+  const elements=new Map(['junction-phase','junction-countdown','junction-signal-dot'].map(id=>[id,{textContent:'',className:''}]));
+  const counts=['vehicles','pedestrians','waiting','passed','pedestrianWaiting','sampling','source'].map(key=>({dataset:{liveTraffic:key},textContent:''}));
+  const env={fmt:String,selected:'second',el:id=>elements.get(id),
+    document:{querySelectorAll:()=>counts,querySelector:()=>null},
+    state:{simulation:{sampled:true},network:{junctions:[{id:'first',signal:{}},{id:'second',signal:{}},{id:'uncontrolled'}]}},
+    trafficState:{mode:'observed',vehicles:[{},{}],pedestrians:[{}],waiting:1,passed:8,pedestrianWaiting:0,
+      signals:[{id:'first',phase:'green',remaining:9},{id:'second',phase:'yellow',remaining:1.2}]}};
+  vm.runInNewContext(section('  function liveTrafficValues(','  function setTool('),env);
+  env.updateTrafficDetails();
+  assert.equal(elements.get('junction-phase').textContent,'黄灯过渡');
+  assert.equal(elements.get('junction-countdown').textContent,'2 秒后切换');
+  assert.deepEqual(counts.map(node=>node.textContent),['2','1','1','8','0','高速抽样','城市交通分配']);
+  env.selected='first';env.updateTrafficDetails();
+  assert.equal(elements.get('junction-phase').textContent,'绿灯放行');
+  assert.equal(elements.get('junction-countdown').textContent,'9 秒后切换');
+  env.trafficState=null;env.updateTrafficDetails();
+  assert.equal(elements.get('junction-phase').textContent,'暂无信号样本');
+  assert.equal(elements.get('junction-countdown').textContent,'—');
+  assert.equal(counts[0].textContent,'—');
+  env.selected='uncontrolled';env.updateTrafficDetails();
+  assert.equal(elements.get('junction-phase').textContent,'无信号灯控制');
 });
 
 test('construction hover and pointer leave update overlays without discarding completed textures',()=>{
