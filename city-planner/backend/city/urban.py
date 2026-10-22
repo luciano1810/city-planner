@@ -1,4 +1,5 @@
 """Terrain-aware neighbourhood growth, economic groups and spatial reporting."""
+from . import construction
 import math
 import random
 from collections import Counter, defaultdict
@@ -162,6 +163,7 @@ def update_entrances(city):
         entry=nearest_points(shape.boundary,Point(p['frontage']))[0]
         p['entrance']=list(entry.coords[0])
         b['entrance']=list(entry.coords[0])
+        if b['status']=='planned':continue
         paths.append(dict(id='entry-'+p['id'],parcel=p['id'],points=[p['frontage'],p['entrance']],width=2.2,kind='entrance'))
         # Courtyard paths are real reserved walking surfaces, outside the building.
         if p.get('terrain',{}).get('slope',0)<.18 and b['use']=='residential':
@@ -170,7 +172,7 @@ def update_entrances(city):
                 paths.append(dict(id='court-'+p['id'],parcel=p['id'],points=[list(q) for q in ring.coords],width=1.5,kind='courtyard'))
     # Connect neighbouring entrances only through dry, unobstructed courtyards.
     # Reject road crossings here: at-grade crossings belong to the road graph.
-    built=[p for p in city.s['parcels'] if p.get('building') and p.get('connected') and p['building']['status']!='construction']
+    built=[p for p in city.s['parcels'] if p.get('building') and p.get('connected') and p['building']['status'] not in ('planned','construction')]
     if built:
         entrances=[Point(p['entrance']) for p in built]
         road_by_id={r['id']:r for r in city.s['roads']}
@@ -204,6 +206,7 @@ def update_entrances(city):
 
 
 def update_firms(city):
+    from .construction import day
     """One explicitly labelled industry group per occupied business building."""
     firms=city.s.setdefault('firms',[])
     by_place={f['parcel']:f for f in firms if f['status']=='active'}
@@ -215,7 +218,7 @@ def update_firms(city):
             continue
         firm=by_place.get(p['id'])
         if not firm and b.get('firmCooldown',0)<=city.s['month']:
-            firm=dict(id=city.uid('firm'),parcel=p['id'],industry=b['use'],status='active',opened=city.s['month'],lossMonths=0,relocations=0)
+            firm=dict(id=city.uid('firm'),parcel=p['id'],industry=b['use'],status='active',opened=city.s['month'],openedDay=int(day(city)),lossMonths=0,relocations=0)
             firms.append(firm)
         if not firm:
             b['businessActive']=False
@@ -230,7 +233,7 @@ def update_firms(city):
         cost=rent+occupied*4200+freight_cost
         firm.update(space=b['floorArea'],capacity=b['capacity'],jobs=b.get('positions',0),employees=occupied,
                     revenue=round(sales),cost=round(cost),profit=round(sales-cost),externalDemand=round(regional,1),localDemand=round(local,1),freightCost=round(freight_cost))
-        firm['lossMonths']=firm['lossMonths']+1 if sales<cost*.6 else max(0,firm['lossMonths']-1)
+        firm['lossMonths']=firm['lossMonths']+getattr(city,'_period_factor',1.) if sales<cost*.6 else max(0,firm['lossMonths']-getattr(city,'_period_factor',1.))
         b['businessActive']=True
         if firm['lossMonths']>=9:
             alternatives=[q for q in city.s['parcels'] if q.get('building') and q['id']!=p['id'] and q['building']['use']==b['use'] and q['building']['status'] in ('active','vacant') and q['connected'] and q['id'] not in by_place and q['rent']<p['rent']*.85]
@@ -241,14 +244,14 @@ def update_firms(city):
                 by_place[new['id']]=firm
                 city.event('产业','经营群组迁往成本较低的空间',new['center'])
             else:
-                firm['status']='closed';firm['closed']=city.s['month']
+                firm['status']='closed';firm['closed']=city.s['month'];firm['closedDay']=int(day(city))
                 city.event('产业','经营群组持续亏损关闭，岗位进入重新匹配',p['center'])
             b['businessActive']=False;b['firmCooldown']=city.s['month']+6
             b['positions']=0;b['employees']=0
     places={p['id'] for p in city.s['parcels'] if p.get('building') and p['connected']}
     for firm in firms:
         if firm['status']=='active' and firm['parcel'] not in places:
-            firm.update(status='closed',closed=city.s['month'])
+            firm.update(status='closed',closed=city.s['month'],closedDay=int(day(city)))
 
 
 def spatial_summary(city,parcels,facilities=None):
@@ -288,7 +291,7 @@ def clustered_districts(city):
     size=city.s['policy']['districtCellMeters']
     cells=defaultdict(list)
     for p in city.s['parcels']:
-        if p.get('building') and p['building']['status']!='construction':
+        if p.get('building') and p['building']['status'] not in ('planned','construction'):
             cells[(int(p['center'][0]//size),int(p['center'][1]//size))].append(p)
     previous=city.s.setdefault('districtCells',{})
     labels={}
@@ -351,7 +354,7 @@ def detailed_metrics(city):
     completed=[t for t in trips if t['completed']]
     commute=[t for t in completed if t['purpose']=='work']
     avg=lambda values:sum(values)/len(values) if values else None
-    developed=sum(p['area'] for p in parcels if p.get('building') and p['building']['status']!='construction')
+    developed=sum(p['area'] for p in parcels if p.get('building') and p['building']['status'] not in ('planned','construction'))
     area=sum(p['area'] for p in parcels)
     population=sum(h['size'] for h in households)
     prices=[p['landValue'] for p in parcels]
@@ -359,11 +362,11 @@ def detailed_metrics(city):
     firms=city.s['firms'];active=[f for f in firms if f['status']=='active']
     traffic_km=sum(t.get('distance',0)/1000 for t in completed if t['mode']=='car')
     return dict(regionalPassengers=sum(t.get('purpose')=='regional' for t in trips),railFreightTonnes=city.s.get('regionalFreight',{}).get('tonnes',0),unservedFreightTonnes=city.s.get('regionalFreight',{}).get('unserved',0),laborForce=len(households),vacantJobs=max(0,city.s['stats']['jobs']-city.s['stats']['employed']),
-        housingInConstruction=sum(b['capacity'] for b in buildings if b['use']=='residential' and b['status']=='construction'),
+        housingInConstruction=sum(b['capacity'] for b in buildings if b['use']=='residential' and b['status'] in ('planned','construction')),
         floorDistribution=dict(Counter(str(b['floors']) for b in buildings)),meanBuildingAge=avg([b['age'] for b in buildings]),
         buildableArea=round(area),floorRatio=sum(b['floorArea'] for b in buildings)/max(1,area),
         builtDensity=population/max(.0001,developed/1e6),jobDensity=city.s['stats']['jobs']/max(.0001,developed/1e6),
-        firms=len(active),firmOpened=sum(f['opened']==city.s['month'] for f in firms),firmClosed=sum(f.get('closed')==city.s['month'] for f in firms),
+        firms=len(active),firmOpened=sum(construction.day(city)-7<f.get('openedDay',-10000)<=construction.day(city) for f in firms),firmClosed=sum(construction.day(city)-7<f.get('closedDay',-10000)<=construction.day(city) for f in firms),
         firmRelocations=sum(f['relocations'] for f in firms),firmProfit=sum(f.get('profit',0) for f in active),
         externalDemand=sum(f.get('externalDemand',0) for f in active),localDemand=sum(f.get('localDemand',0) for f in active),
         landP10=float(np.percentile(prices,10)) if prices else None,landP90=float(np.percentile(prices,90)) if prices else None,

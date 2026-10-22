@@ -15,7 +15,7 @@ const output=path.join(root,'output/playwright/incremental-simulation');fs.mkdir
    server.once('error',reject);server.once('exit',code=>reject(Error(`${code}: ${log}`)));
   });
   browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{})});
-  const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(120000);
+  const page=await browser.newPage({bypassCSP:true,viewport:{width:1440,height:1000}});page.setDefaultTimeout(120000);
   const errors=[],requests=new Map(),responses=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.url().endsWith('/api/city/simulate'))requests.set(r,Date.now());});
@@ -31,7 +31,7 @@ const output=path.join(root,'output/playwright/incremental-simulation');fs.mkdir
   await page.locator('#city-play').click();
   await page.waitForFunction(()=>CityApp.state.settlement?.pending&&CityApp.state.settlement.progress>.03);
   const progress=await page.locator('#city-simulation-note').textContent();
-  assert(progress.includes('月内'));
+  assert(progress.includes('本周'));
   const started=Date.now();await page.locator('#city-play').click();
   await page.waitForFunction(()=>document.getElementById('city-play').textContent==='开始模拟');
   const pauseMs=Date.now()-started;

@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
                    '/material-catalog.js': 'material-catalog.js',
                    '/landscape-layout.js': 'landscape-layout.js',
                    '/surface-variation.js': 'surface-variation.js', '/simulation-driver.js': 'simulation-driver.js',
-                   '/traffic-playback.js': 'traffic-playback.js',
+                   '/traffic-playback.js': 'traffic-playback.js', '/traffic-metrics.js': 'traffic-metrics.js',
                    '/special-buildings.js': 'special-buildings.js',
                    '/civic-buildings.js': 'civic-buildings.js',
                    '/civic-details.js': 'civic-details.js',
@@ -77,6 +77,11 @@ class Handler(BaseHTTPRequestHandler):
                    '/assets/roof-atlas.png': 'assets/roof-atlas.png', '/assets/ground-atlas.png': 'assets/ground-atlas.png',
                    '/assets/facade-atlas.png': 'assets/facade-atlas.png', '/assets/landscape-atlas.png': 'assets/landscape-atlas.png',
                    '/navigation.js': 'navigation.js', '/navigation.css': 'navigation.css',
+                   '/building-previews.js': 'building-previews.js',
+                   '/build-menu.js': 'build-menu.js', '/build-menu.css': 'build-menu.css',
+                   '/block-menu.js': 'block-menu.js', '/block-menu.css': 'block-menu.css',
+                   '/observe-menu.js': 'observe-menu.js', '/observe-menu.css': 'observe-menu.css',
+                   '/service-statistics.js': 'service-statistics.js',
                    '/workspace-ui.js': 'workspace-ui.js', '/workspace-ui.css': 'workspace-ui.css'}
         if not self.server.preview or route not in allowed:
             return self.reply(404, {'error': '未找到资源'})

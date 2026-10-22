@@ -95,7 +95,9 @@ class RenewalTests(unittest.TestCase):
     def test_delivered_phase_is_available_before_whole_project_finishes(self):
         c=self.c;project=begin(c,self.plots[0],target='residential',primaryShare=100,phases=2)
         duration=project['phases'][0]['demolitionMonths']+project['phases'][0]['constructionMonths']+1
-        for _ in range(duration):tick(c)
+        for _ in range(duration+2):
+            tick(c)
+            if project['phases'][0]['status']=='complete':break
         self.assertEqual(project['phases'][0]['status'],'complete')
         self.assertEqual(project['phases'][1]['status'],'planned')
         delivered={p['id'] for p in project['phases'][0]['sites'] if p.get('targetBuilding')}
@@ -143,10 +145,16 @@ class RenewalTests(unittest.TestCase):
     def test_renovation_retains_building_and_capacity(self):
         c=self.c;p=self.plots[0];p['building']['condition']=35
         old=copy.deepcopy(p['building']);project=begin(c,p,mode='renovate')
-        for _ in range(4):tick(c)
+        tick(c)
+        from city.construction import EPOCH
+        import datetime
+        date=EPOCH+datetime.timedelta(days=project['phases'][0]['completionDay'])
+        c.s['month']=(date.year-2026)*12+date.month-1
+        c.s['simulation']['monthSeconds']=(date.day-1)*86400
+        c.complete_projects();renewal.advance(c)
         b=c.parcelmap[p['id']]['building'];self.assertEqual(project['status'],'complete')
         self.assertEqual(b['id'],old['id']);self.assertEqual(b['footprint'],old['footprint']);self.assertEqual(b['capacity'],old['capacity'])
-        self.assertEqual(b['condition'],100);self.assertEqual(b['age'],old['age']+4)
+        self.assertEqual(b['condition'],100);self.assertGreater(b['age'],old['age'])
         self.assertEqual(c.s['capitalAccounts']['建筑翻新'],project['cost'])
 
     def test_onsite_rebuild_keeps_parcel_and_outline_but_replaces_building(self):

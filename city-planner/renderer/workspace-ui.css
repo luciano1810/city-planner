@@ -81,8 +81,6 @@ body:not(.menu-mode) input[type=range]{background:#d9e8fc;accent-color:var(--ui-
 body:not(.menu-mode) input[type=range]::-webkit-slider-thumb{width:16px;height:16px;background:var(--ui-blue);border:2px solid #fff;box-shadow:0 0 0 1px #087bff20}
 body:not(.menu-mode) input[type=range]::-moz-range-thumb{background:var(--ui-blue);border:2px solid white}
 body:not(.menu-mode) :is(button,input,select,canvas,summary):focus-visible{outline:3px solid #087bffa0;outline-offset:3px}
-.environment-layers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.environment-layers .active{background:#e7f1ff;color:var(--ui-blue);border-color:#75b5ff}
 .city-inspector h2{position:sticky;top:0;z-index:2;margin:0 -18px 18px;padding:18px;background:#fffffff5;border-bottom:1px solid var(--ui-line);font-size:18px;gap:10px}
 .city-inspector h2:before{content:'';width:6px;height:25px;border-radius:4px;background:var(--ui-blue);flex-shrink:0}
 .city-inspector h2 .city-btn{margin-left:auto;min-width:30px;min-height:30px;padding:3px;font-size:20px;background:transparent;border:0}
@@ -479,7 +477,7 @@ body.city-mode .workspace-status-tray .city-status.error{color:#ad4338;backgroun
  body.city-mode .workspace-rail{bottom:240px;max-height:calc(100dvh - 432px)}
 }
 /* Single perimeter: shared top context, one right column, one bottom bar. */
-body:not(.menu-mode){--ui-bottom:112px;--ui-mini:210px}
+body:not(.menu-mode){--ui-bottom:112px;--ui-mini:292px}
 body:not(.menu-mode) .city-controlbar{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:9px 12px;min-height:76px}
 body:not(.menu-mode) .city-controlbar>.map-label{grid-column:1/-1}
 body:not(.menu-mode) :is(.city-controlbar,.terrain-context,.workspace-heading)>.map-label{position:static;max-width:none;width:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;backdrop-filter:none;gap:7px;font-size:10px;color:var(--ui-muted);pointer-events:none}
@@ -500,8 +498,11 @@ body:not(.menu-mode) .workspace-view-panel .map-view-switch span{display:block;f
 body.city-mode .workspace-view-panel .city-legend{position:static;display:flex;gap:8px 11px;max-width:none;width:auto;padding:10px 0 3px;margin:0;background:transparent;box-shadow:none;font-size:10px}
 body.city-mode .signal-panel .signal-hud{position:static;display:block;width:auto;margin:0 0 18px;padding:0 0 14px;border:0;border-bottom:1px solid var(--ui-line);border-radius:0;box-shadow:none;background:transparent;color:var(--ui-ink)}
 body.city-mode .signal-panel .signal-hud .signal-hud-stats{grid-template-columns:1fr 1fr;margin-top:12px}
-/* Corner navigation combines overview, map toggles, compass, ruler and zoom. */
-body:not(.menu-mode) .workspace-minimap{position:absolute;right:18px;bottom:18px;width:var(--ui-panel);height:var(--ui-mini);padding:9px 12px 8px;display:flex;flex-direction:column;gap:5px}
+/* The ruler is independent; the overview card fits the map's proportions. */
+.workspace-navigation{position:absolute;right:18px;bottom:18px;width:232px;z-index:7}
+.menu-mode .workspace-navigation{display:none}
+body:not(.menu-mode) .workspace-navigation .map-scale{left:auto;right:calc(100% + 12px);bottom:calc(var(--ui-bottom) + 16px);margin:0;padding:14px 12px 24px;z-index:1}
+body:not(.menu-mode) .workspace-minimap{position:relative;inset:auto;width:100%;height:auto;padding:9px 12px 8px;display:flex;flex-direction:column;gap:5px}
 body:not(.menu-mode) .minimap-heading{height:32px;min-height:32px;margin:0;gap:6px}
 body:not(.menu-mode) .minimap-heading>span{white-space:nowrap;font-size:10px;gap:5px}
 body:not(.menu-mode) .minimap-heading .map-tools{position:static;margin-left:auto;padding:0;gap:0;background:transparent;border:0;box-shadow:none;border-radius:0;backdrop-filter:none}
@@ -510,10 +511,9 @@ body:not(.menu-mode) .minimap-heading .map-tools svg{width:15px;height:15px}
 body:not(.menu-mode) .minimap-heading .map-tools>span{margin:0 3px}
 body:not(.menu-mode) .minimap-heading .compass{position:static;display:flex;flex-direction:column;width:20px;height:32px;padding:0;gap:0;background:transparent;box-shadow:none;border-radius:0;font-size:8px;text-shadow:none}
 body:not(.menu-mode) .minimap-heading .compass svg{width:13px;height:20px;margin:0}
-.minimap-viewport{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;overflow:hidden}
+.minimap-viewport{display:flex;align-items:center;justify-content:center;flex:none;width:100%;aspect-ratio:1;max-height:210px;min-height:0;overflow:hidden}
 body:not(.menu-mode) .workspace-minimap #overview-map{display:block;min-height:0;flex:none;max-width:100%;max-height:100%;border:0;border-radius:8px}
-.minimap-footer{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:35px;padding-top:5px}
-body:not(.menu-mode) .minimap-footer .map-scale{position:static;display:block;padding:0 0 10px;margin:0;background:none;border:0;box-shadow:none;border-radius:0;font-size:9px;transform:none;flex:none;max-width:145px}
+.minimap-footer{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:28px}
 body:not(.menu-mode) .minimap-footer .zoom-control{position:static;display:flex;align-items:center;gap:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;flex:none}
 body:not(.menu-mode) .minimap-footer .zoom-control button{width:24px;height:28px;font-size:17px}
 body:not(.menu-mode) .minimap-footer #zoom-value{min-width:31px;font-size:9px}
@@ -550,7 +550,8 @@ body[data-screen="terrain"] .workspace-bottom #city-start{padding:12px 18px;min-
 body[data-screen="terrain"] .sidebar-scroll footer{position:static;display:flex;flex-direction:column;gap:5px;padding:15px 0 0;font-size:10px;color:var(--ui-muted);max-width:none;background:none}
 body[data-screen="terrain"] .sidebar-scroll footer span:last-child{font-size:10px;overflow-wrap:anywhere;letter-spacing:0}
 .menu-mode .workspace-bottom{display:none}
-body:not(.menu-mode) .map-frame:fullscreen .workspace-minimap{position:absolute;right:18px;bottom:18px;visibility:visible;pointer-events:auto}
+body:not(.menu-mode) .map-frame:fullscreen .workspace-navigation{right:18px;bottom:18px;visibility:visible;pointer-events:auto}
+body:not(.menu-mode) .map-frame:fullscreen .workspace-minimap{position:relative;inset:auto;visibility:visible;pointer-events:auto}
 @media(max-width:1390px) and (min-width:701px){
  body.city-mode .workspace-rail{bottom:calc(var(--ui-bottom) + 34px);max-height:none}
  body:not(.menu-mode) .workspace-bottom{grid-template-columns:205px minmax(0,1fr);column-gap:10px}
@@ -571,7 +572,7 @@ body:not(.menu-mode) .map-frame:fullscreen .workspace-minimap{position:absolute;
  body[data-screen="terrain"] .workspace-bottom #city-start{padding:10px;font-size:11px}
 }
 @media(max-width:700px){
- body:not(.menu-mode){--ui-bottom:120px;--ui-mini:200px}
+ body:not(.menu-mode){--ui-bottom:120px;--ui-mini:292px}
  body:not(.menu-mode) .city-controlbar{grid-template-columns:100px minmax(0,1fr);left:10px;right:10px;top:80px;padding:7px 10px;gap:4px 7px}
  body:not(.menu-mode) .city-controlbar>.map-label{font-size:9px;flex-wrap:wrap;gap:4px}
  body:not(.menu-mode) .city-kpis{top:170px}
@@ -582,7 +583,10 @@ body:not(.menu-mode) .map-frame:fullscreen .workspace-minimap{position:absolute;
  .terrain-context{display:none}
  body[data-screen="terrain"] .workspace-heading>.map-label{margin-top:8px;font-size:9px;flex-wrap:wrap}
  body[data-screen="terrain"] .stats{right:10px}
- body:not(.menu-mode) .workspace-minimap{right:10px;bottom:calc(var(--ui-bottom) + 30px);width:calc(100vw - 100px);height:var(--ui-mini);padding:7px 9px}
+ .workspace-navigation{right:10px;bottom:calc(var(--ui-bottom) + 30px);width:min(232px,calc(100vw - 100px))}
+ body:not(.menu-mode) .workspace-minimap{padding:7px 9px}
+ body:not(.menu-mode) .workspace-navigation .map-scale{right:0;bottom:calc(100% + 10px)}
+ body:not(.panel-collapsed) .workspace-navigation,.show-inspector .workspace-navigation{visibility:hidden;pointer-events:none}
  body:not(.menu-mode) .workspace-bottom{left:10px;right:10px;bottom:10px;height:var(--ui-bottom);grid-template-columns:95px minmax(0,1fr);gap:3px 7px;padding:7px}
  body:not(.menu-mode) .workspace-bottom .workspace-status-tray{padding-right:6px;overflow:auto;scrollbar-width:thin}
  body:not(.menu-mode) .workspace-bottom .selection-card{display:block;min-height:0;padding:0 0 4px}
@@ -781,3 +785,57 @@ body.city-mode .city-kpi[aria-expanded="true"]>span:not(.kpi-symbol)::after{cont
 .metric-explanation{margin:18px 0;padding-top:2px;border-top:1px solid #e8eef6}
 .metric-explanation p{margin:9px 0;font-size:11px;line-height:1.7;color:#687b92}
 .metric-explanation p strong{font-weight:600;color:#394e6e;margin-right:4px}
+
+/* Switch the same KPI row between city indicators and the complete service inventory. */
+body.city-mode .city-kpis{transform:translateY(28px)}
+body.city-mode .city-kpi[hidden]{display:none!important}
+body.city-mode .city-kpis.show-services{display:flex;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity}
+body.city-mode .city-kpis.show-services .city-kpi{flex:0 0 max(190px,calc((100% - 32px)/5));scroll-snap-align:start}
+.metric-toolbar{position:fixed;z-index:6;height:22px;display:flex;justify-content:space-between;gap:8px;color:#657992}
+body:not(.city-mode) .metric-toolbar{display:none}
+.metric-toolbar>div{display:flex;gap:3px;padding:2px;background:#ffffffed;border:1px solid #e6edf7;border-radius:7px}
+.metric-toolbar button{border:0;background:none;color:inherit;padding:0 9px;font-size:10px;line-height:16px;border-radius:4px;cursor:pointer}
+.metric-toolbar button[aria-pressed="true"]{background:#e7f2ff;color:#087bff;font-weight:600}
+.metric-toolbar button:disabled{opacity:.3;cursor:default}
+.metric-toolbar button:focus-visible{outline:2px solid #087bff}
+body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:138px}
+.service-type-counts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.service-type-counts>span{display:flex;justify-content:space-between;gap:8px;background:#f4f7fb;border-radius:7px;padding:9px;font-size:11px;color:#63748d}
+.service-type-counts b{color:#263d60}
+.service-facility-list{display:grid;gap:7px}
+.service-facility{display:grid;gap:6px;width:100%;text-align:left;padding:11px;border:1px solid #e4ebf5;border-radius:8px;background:#fff;color:#294467;cursor:pointer}
+.service-facility:hover{background:#eff6ff;border-color:#88bfff}
+.service-facility strong{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.service-facility small{font-size:10px;color:#72849d;line-height:1.5}
+@media(max-width:1390px) and (min-width:701px){body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:226px}}
+@media(max-width:700px){
+ body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:210px}
+ body.city-mode .city-kpis.show-services .city-kpi{flex-basis:180px}
+}
+
+/* Migrated categories use their dock menus; only transit still uses this sidebar. */
+body.city-mode .city-sidebar:not(:has(#city-transit-panel:not([hidden]))){display:none}
+
+/* The overview opens upward from the city summary, with one data section at a time. */
+body.city-mode .city-inspector.city-overview{position:fixed;top:auto;right:auto;left:var(--overview-left,18px);bottom:var(--overview-bottom,120px);width:min(740px,calc(100vw - 36px));height:fit-content;max-height:var(--overview-max-height,calc(100dvh - 260px));padding:0 18px 18px;z-index:10}
+.city-overview>h2{margin-bottom:10px;padding-top:14px;padding-bottom:14px}
+.city-overview-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.city-overview-cards[hidden],.city-overview-detail[hidden],[data-overview-section][hidden]{display:none!important}
+.overview-stat-card{display:grid;gap:6px;align-content:start;min-width:0;text-align:left;padding:10px 12px;border:1px solid #e3eaf4;border-radius:12px;background:#fff;color:#233753;cursor:pointer;box-shadow:0 2px 8px #16395607}
+.overview-stat-card:hover{border-color:#88bfff;background:#f8fbff}
+.overview-stat-card:focus-visible,.overview-back:focus-visible{outline:2px solid #087bff;outline-offset:2px}
+.overview-card-label{display:flex;align-items:center;gap:7px;color:#687b95;font-size:12px}
+.overview-card-label svg{width:17px;height:17px;color:#087bff;flex-shrink:0}
+.overview-card-label i{margin-left:auto;color:#8b9cb2;font-style:normal;font-size:19px;line-height:16px}
+.overview-stat-card>strong{font-size:20px;line-height:26px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.overview-stat-card>small{font-size:10px;color:#7c8da4;line-height:16px;overflow-wrap:anywhere}
+.overview-back{border:0;border-radius:7px;background:#edf5ff;color:#087bff;padding:8px 11px;font-size:12px;cursor:pointer}
+.city-overview .overview-detail-title{font-size:17px;margin:14px 0 8px;padding:0;border:0}
+.city-overview [data-overview-section]>h3:first-child{margin-top:8px;padding-top:0;border:0}
+.city-overview .city-chart{width:100%}
+.city-overview .city-list-item{width:100%;overflow-wrap:anywhere}
+@media(max-width:700px){
+ body.city-mode .city-inspector.city-overview{width:calc(100vw - 20px);padding:0 12px 12px}
+ .city-overview>h2{margin-left:-12px;margin-right:-12px;padding:12px;font-size:17px}
+ .city-overview-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.overview-stat-card{padding:11px 9px;gap:5px}.overview-stat-card>strong{font-size:17px;line-height:23px}.overview-card-label{font-size:11px;gap:5px}
+}

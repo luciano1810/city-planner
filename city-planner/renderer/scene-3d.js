@@ -185,8 +185,26 @@
   function clear(group){for(const child of [...group.children]){child.geometry?.dispose();group.remove(child);}}
   function local(origin,angle,x,y){return [origin[0]+x*Math.cos(angle)-y*Math.sin(angle),origin[1]+x*Math.sin(angle)+y*Math.cos(angle)];}
   function building(batch,p){
-    const b=p.building;if(b.status==='construction'){batch.polygon(b.footprint,.02,.08,material('soil',S.seed(p.id)));return;}
+    const b=p.building;if(b.status==='planned')return;
+    if(b.status==='construction'){
+      batch.polygon(b.footprint,.02,.08,material('soil',S.seed(p.id)));
+      const progress=b.constructionProgress||0,top=Math.max(0,(progress-.12)/.88)*(b.height||b.floors*3.3);
+      if(top>.15){
+        const layout=root.CityGeometry.buildingMassing(p),concrete=solid(0xa4a49a),slab=solid(0xc6c5b9);
+        for(const v of [...(layout.podium?[layout.podium]:[]),...layout.volumes]){
+          const base=v.base||0,height=Math.min(v.height,top)-base;
+          if(height<=0)continue;
+          batch.polygon(v.points,base,height,concrete,slab);
+          for(let z=base+3.3;z<base+height;z+=3.3)batch.polygon(v.points,z,.16,slab,slab);
+        }
+      }
+      return;
+    }
     const layout=root.CityGeometry.buildingMassing(p),rng=S.random(p.id+':architecture'),pick=S.seed(p.id);
+    if(b.extensionProgress>0){
+      const top=layout.volumes.reduce((a,v)=>!a||v.height>a.height?v:a,null);
+      if(top)batch.polygon(top.points,top.height,(b.height||b.floors*3.3)/b.floors*b.extensionFloors*b.extensionProgress,solid(0xa4a49a),solid(0xc6c5b9));
+    }
     const sides=b.landmark==='cbd_skyscraper'?solid(0x607b8b,.32,.3):material('facade',[0,1,2,3,8,11,2,3,4][pick%9]),roof=material('roof',[0,1,2,3,4,7,0,1,2,3][pick%10]);
     const frame=solid(0xd3d3c6),trim=solid(0xdedccc),glass=material('glass',pick),dark=solid(0x4b5f67,.4,.2);
     let volumes=layout.volumes;
@@ -524,7 +542,7 @@
   function rebuild(state,region){
     clear(staticGroup);windows=[];const batch=new Batch();
     const near=p=>p[0]>=region[0]-120&&p[0]<=region[2]+120&&p[1]>=region[1]-120&&p[1]<=region[3]+120;
-    for(const p of state.parcels)if(p.building&&near(p.center)){building(batch,p);parking(batch,p);gardenBeds(batch,p);}
+    for(const p of state.parcels)if(p.building&&p.building.status!=='planned'&&near(p.center)){building(batch,p);if(p.building.status!=='construction'){parking(batch,p);gardenBeds(batch,p);}}
     for(const f of state.facilities)if(near(f.point)){fountain(batch,f);landscapedSpace(batch,f);}
     for(const site of state.streetside?.sites||[])for(const [i,lot] of site.parking.entries())if(near(lot.point))parking(batch,{id:site.id+':front:'+i},lot);
     streetscape(batch,state,near);
@@ -532,7 +550,7 @@
       const xs=f.points.map(p=>p[0]),ys=f.points.map(p=>p[1]);
       if(Math.max(...xs)>=region[0]&&Math.min(...xs)<=region[2]&&Math.max(...ys)>=region[1]-150&&Math.min(...ys)<=region[3]+150)root.CitySpecialBuildings.build3D(batch,f,{material,solid,tinted,car,tree});
     }
-    const plants=state.parcels.filter(p=>(p.building||p.use==='protected')&&near(p.center)).concat(state.facilities.filter(f=>['park','plaza'].includes(f.kind)&&near(f.point)&&!root.CityLandscape.plan(f)));
+    const plants=state.parcels.filter(p=>((p.building&&!['planned','construction'].includes(p.building.status))||p.use==='protected')&&near(p.center)).concat(state.facilities.filter(f=>['park','plaza'].includes(f.kind)&&near(f.point)&&!root.CityLandscape.plan(f)));
     for(const p of plants)for(const t of p.kind==='plaza'?[]:S.treesFor(p)){
       const lot=p.building?parkingFor(p):null;if(lot){const dx=t.point[0]-lot.point[0],dy=t.point[1]-lot.point[1],u=dx*Math.cos(lot.angle)+dy*Math.sin(lot.angle),v=-dx*Math.sin(lot.angle)+dy*Math.cos(lot.angle);if(Math.abs(u)<lot.width/2+t.radius&&Math.abs(v)<lot.depth/2+t.radius)continue;}
       if(p.building){batch.box(...t.point,.03,1.6,1.6,.02,0,material('soil',3));}

@@ -23,6 +23,14 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   await page.goto(`http://127.0.0.1:${ready.port}`,{waitUntil:'networkidle'});
   const visible=async selector=>{await page.locator(selector).waitFor({state:'visible'});assert(await page.locator(selector).isVisible(),`${selector} must be visible`);};
   const click=async selector=>page.locator(selector).click();
+  const openCategory=async category=>{
+    const dock={roads:'build',buildings:'blocks',data:'observe'}[category];
+    if(dock){
+      const menu=dock==='blocks'?'block':dock;
+      if(!await page.locator(`#workspace-${menu}-menu`).isVisible())await click(`#workspace-${dock}`);
+      if(category==='roads')await click('#build-tab-roads');
+    }else await click(`button[data-category="${category}"]`);
+  };
   await click('#menu-new');
   await visible('#terrain-overview');
   assert.equal(await page.locator('.topbar>.brand').isVisible(),false,'Workspace must use statistics, not branding');
@@ -45,6 +53,8 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   await page.screenshot({animations:'disabled',path:path.join(output,'terrain-final.png')});
   await click('#city-start');await page.waitForFunction(()=>CityApp.active&&!CityApp.working);
   await visible('#city-dashboard');assert.equal(await page.locator('#terrain-overview').isVisible(),false);
+  assert.deepEqual(await page.locator('.city-rail button').evaluateAll(buttons=>buttons.map(b=>b.dataset.category)),['transit']);
+  assert.equal(await page.locator('[data-tool="park"],[data-tool="plaza"],[data-tool="school"],[data-tool="clinic"]').count(),0);
   assert.equal(await page.locator('.overview-button').count(),0,'No upper-left statistics button');
   assert.equal(await page.locator('.workspace-status-tray #city-dashboard').count(),1,'City overview belongs in the lower-left card');
   await click('.city-kpi:nth-child(1)');await visible('.workspace-metric-panel');
@@ -69,31 +79,35 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   await click('.city-kpi:first-child');await click('.city-kpi:nth-child(2)');assert.equal(await page.locator('.metric-heading h2').innerText(),'财政收支');await click('.metric-close');
   await page.locator('.city-kpi').first().focus();await page.keyboard.press('Enter');await visible('.workspace-metric-panel');
   await page.keyboard.press('Escape');await page.keyboard.press('Space');await visible('.workspace-metric-panel');await click('.city-kpi:first-child');
-  for(const [category,ids] of Object.entries({roads:['#city-shape','#city-level','#city-oneway','#city-finish'],buildings:['[data-tool="airport"]','#city-auto-renew','#city-auto-grow','#city-grid-demo'],transit:['#signal-demand','#city-mode','#city-create-line','#city-line-list'],environment:['[data-tool="park"]','[data-tool="plaza"]','[data-environment-layer="pollution"]'],services:['[data-tool="school"]','[data-tool="clinic"]'],data:['#city-render-quality','#city-time-of-day','#city-layer','#city-migration','#city-csv','#city-history']})){
-    await click(`button[data-category="${category}"]`);
+  for(const [category,ids] of Object.entries({roads:['#city-shape','#city-level','#city-oneway','#city-finish'],buildings:['#city-auto-renew','#city-auto-grow','#city-grid-demo'],transit:['#signal-demand','#city-mode','#city-create-line','#city-line-list'],data:['#city-render-quality','#city-time-of-day','[data-observe-layer="use"]']})){
+    await openCategory(category);
+    if(category==='buildings')await click('#block-advanced-toggle');
     for(const id of ids)await visible(id);
     evidence.cityCategories.push(category);
   }
-  await click('button[data-category="environment"]');await click('[data-environment-layer="pollution"]');
+  await click('[data-observe-group="nature"]');await click('[data-observe-layer="pollution"]');
   assert.equal(await page.locator('#city-layer').inputValue(),'pollution');
-  await click('[data-environment-layer="use"]');
-  await click('button[data-category="buildings"]');await click('[data-tool="airport"]');await visible('#city-special-controls');
-  await click('button[data-category="roads"]');await click('.workspace-dock [data-tool="select"]');
+  await click('[data-observe-group="city"]');await click('[data-observe-layer="use"]');
+  await click('#workspace-build');await click('#build-tab-buildings');await click('[data-tool="airport"]');await visible('#city-special-controls');
+  await openCategory('roads');await click('.workspace-dock [data-tool="select"]');
   // Object selection, all inspector data, and contextual road editing.
-  await page.locator('#city-build-panel details summary').click();
+  await openCategory('roads');await click('#build-advanced-toggle');
   const road=await page.evaluate(()=>CityApp.state.roads.find(r=>r.kind==='street')||CityApp.state.roads[0]);
   await page.locator('#city-object-picker').selectOption(road.id);
   await visible('#city-inspector');assert((await page.locator('#city-inspector').innerText()).includes('工程成本'));
   await click('#road-edit-shape');await visible('#city-shape');assert.equal(await page.locator('#city-inspector').isVisible(),false);
   await click('#city-cancel');await click('.workspace-dock [data-tool="select"]');
   await click('#city-dashboard');
-  const detail=await page.locator('#city-inspector').innerText();
-  for(const label of ['住房空置率','城市账目','人口变化','地形与自动生长','完整统计与分布','城市记事'])assert(detail.includes(label),`Missing original information: ${label}`);
+  for(const [key,label] of [['housing','住房空置率'],['finance','城市账目'],['population','人口变化'],['growth','地形与自动生长'],['economy','完整统计与分布'],['events','城市记事']]){
+    await click(`[data-overview-card="${key}"]`);
+    assert((await page.locator('.city-overview-detail').innerText()).includes(label),`Missing original information: ${label}`);
+    await click('.overview-back');
+  }
   await click('#city-close-inspector');
   // Simulation, signals and file dialog remain attached to the original controls.
   await click('#city-play');await page.waitForFunction(()=>document.getElementById('city-play').textContent==='暂停模拟');
   await page.waitForFunction(()=>CityApp.traffic);await click('#city-play');
-  await click('button[data-category="transit"]');await visible('#signal-hud');await click('button[data-category="roads"]');
+  await click('button[data-category="transit"]');await visible('#signal-hud');await openCategory('roads');
   await click('#city-files');await visible('#workspace-settings');
   for(const id of ['#city-undo','#city-redo','#city-save','.workspace-file-menu>summary'])await visible(id);
   assert.equal(await page.locator('.workspace-bottom #city-hint,.workspace-bottom .workspace-files').count(),0);
@@ -104,9 +118,11 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   // Minimap must contain an actual terrain image and change the camera.
   await page.waitForFunction(()=>{const c=document.getElementById('overview-map'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;const colors=new Set();for(let i=0;i<p.length;i+=64)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return colors.size>10;});
   const before=await page.evaluate(()=>MapWorkspace.geometry.left);
-  await page.locator('#overview-map').click({position:{x:120,y:40}});
+  const miniBounds=await page.locator('#overview-map').boundingBox();
+  await page.locator('#overview-map').click({position:{x:miniBounds.width*.75,y:miniBounds.height*.3}});
   const after=await page.evaluate(()=>MapWorkspace.geometry.left);assert.notEqual(before,after,'Minimap should move the viewport');
   await page.evaluate(()=>MapWorkspace.focus([2260,2395],18));
+  await click('button[data-category="transit"]');
   // Every structural region must fit the viewport; major floating regions may not overlap.
   for(const [width,height] of [[1600,1000],[1440,900],[1024,768],[375,812]]){
     await page.setViewportSize({width,height});
@@ -120,7 +136,7 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
     const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
     for(let i=0;i<geometry.regions.length;i++)for(let j=i+1;j<geometry.regions.length;j++)assert(!overlap(geometry.regions[i],geometry.regions[j]),`Overlapping chrome at ${width}: ${geometry.regions[i].selector} / ${geometry.regions[j].selector}`);
     if(width>700){const kpi=geometry.regions[0];assert(!overlap(kpi,geometry.mapTools));assert(!overlap(kpi,geometry.mapLabel));}
-    const heights=await page.locator('.city-kpi,.city-controlbar').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
+    const heights=await page.locator('.city-kpi:visible,.city-controlbar').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
     assert(Math.max(...heights)-Math.min(...heights)<1,`Top cards must share one height at ${width}: ${heights}`);
     evidence.sizes.push({width,height,...geometry});
     assert.equal(await page.evaluate(()=>['.map-label','.map-view-switch','#signal-hud','.map-tools','.compass','.map-scale','.zoom-control','#city-hint','#city-legend'].some(s=>document.querySelector(s).closest('#map-frame'))),false,'Permanent controls must stay in the perimeter containers');
@@ -135,7 +151,7 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   await page.emulateMedia({reducedMotion:'reduce'});
   await click('.city-brand-caption .panel-dismiss');await visible('#overview-map');
   await click('button[data-category="transit"]');await visible('#city-transit-panel');
-  await page.setViewportSize({width:1600,height:1000});await click('button[data-category="roads"]');
+  await page.setViewportSize({width:1600,height:1000});await click('button[data-category="transit"]');
   await click('.workspace-view-panel>summary');await visible('.map-view-switch');await visible('#city-legend');
   await click('.workspace-view-panel>summary');
   await click('#fullscreen');await page.waitForFunction(()=>document.fullscreenElement);await visible('#measure');await click('#fullscreen');await page.waitForFunction(()=>!document.fullscreenElement);

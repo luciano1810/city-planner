@@ -1,6 +1,12 @@
 /* City workspace: quiet editorial chrome surrounding a high-detail live map. */
 :root{--city-ink:#233c36;--city-muted:#60736b;--city-paper:#fbfcf8;--city-line:#dce4da;--city-green:#315e49;--city-soft:#edf2e9;--city-gold:#a47942}
 [hidden]{display:none!important}
+.road-validation{position:fixed;z-index:12;display:flex;gap:10px;box-sizing:border-box;width:310px;max-width:calc(100vw - 24px);padding:14px 16px;border:1px solid #ebc5b9;border-radius:12px;background:#fffaf7;color:#813c2e;box-shadow:0 8px 28px #60372b20;pointer-events:none}
+.road-validation-icon{display:grid;place-items:center;flex:0 0 22px;height:22px;border-radius:50%;background:#b64f3a;color:#fff;font-size:14px;font-weight:700}
+.road-validation strong{display:block;font-size:13px;line-height:22px}
+.road-validation p{margin:5px 0 8px;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.road-validation small{display:block;color:#927065;font-size:10px;line-height:1.6}
+#city-draft-info.error,.build-road-actions #city-draft-info.error{color:#a44232}
 .city-entry{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .city-btn{border:1px solid var(--city-line);background:var(--city-paper);color:var(--city-ink);border-radius:6px;padding:9px 13px;min-height:36px;font-size:12px;cursor:pointer;white-space:nowrap}
 .city-btn:hover{background:#e6eee2;border-color:#aac0a7}

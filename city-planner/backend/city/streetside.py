@@ -113,7 +113,7 @@ def update(city):
         obj.pop('forecourt',None)
         b = obj.get('building')
         if b:
-            if b.get('status')=='construction' or not obj.get('connected'):
+            if b.get('status') in ('planned','construction') or not obj.get('connected'):
                 continue
             site = Polygon(b['footprint']); entry = obj.get('entrance',b.get('center',obj['center']))
             road = roadmap.get(obj.get('road')); width = 3

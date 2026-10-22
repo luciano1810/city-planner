@@ -141,7 +141,7 @@ fs.mkdirSync(output,{recursive:true});
   assert(furniture.sections<=furniture.limit);assert(furniture.spriteCells<=furniture.spriteLimit);
   if(process.env.DETAIL_RENDERER!=='webgl'){assert.equal(textures.webglContexts,0);assert(textures.stats.vehicleSprites>0);assert(textures.stats.buildingCache.hits>0);assert(textures.stats.buildingCache.bytes<=textures.stats.buildingCache.budget);assert(textures.stats.vehicleLighting.bytes<=textures.stats.vehicleLighting.budget);assert(textures.stats.vehicleLighting.entries<=textures.stats.vehicleLighting.limit);}
   // Exercise actual view and clock controls, including night lights.
-  await page.locator('button[data-category="data"]').click();
+  await page.locator('#workspace-observe').click();
   await page.locator('#city-time-of-day').fill('1260');await page.locator('#city-time-of-day').dispatchEvent('input');
   await page.waitForFunction(()=>CityScene.time===21*3600);
   await page.screenshot({path:path.join(output,'night.png'),animations:'disabled'});
@@ -155,7 +155,8 @@ fs.mkdirSync(output,{recursive:true});
   await page.evaluate(()=>{window.detailRender=CityScene3D.render;CityScene3D.render=()=>false;MapWorkspace.draw();});
   await page.screenshot({path:path.join(output,'canvas-fallback.png'),animations:'disabled'});
   await page.evaluate(()=>{CityScene3D.render=window.detailRender;MapWorkspace.draw();});
-  await page.locator('button[data-category="roads"]').click();
+  await page.locator('#workspace-build').click();
+  await page.locator('#build-tab-roads').click();
   const layouts=[];
   for(const [width,height] of [[1024,768],[375,812]]){
    await page.setViewportSize({width,height});await focus(2.1);

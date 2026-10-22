@@ -2,13 +2,13 @@
 (() => {
   'use strict';
   const el = id => document.getElementById(id);
-  const defaults = {resolution:1024, view:'high', contours:false, grid:false};
+  const defaults = {resolution:1024, view:'auto', contours:false, grid:false};
   let preferences = {...defaults};
   try {
     const saved = JSON.parse(localStorage.getItem('shanhai-preferences-v1'));
     if (saved) {
       if ([768,1024,1536,2048,4096].includes(saved.resolution)) preferences.resolution=saved.resolution;
-      if (saved.view) preferences.view=saved.view==='map'?'map':'high';
+      if (['auto','high','map'].includes(saved.view)) preferences.view=saved.view;
       for (const key of ['contours','grid']) if (typeof saved[key]==='boolean') preferences[key]=saved[key];
     }
   } catch { /* Use defaults if optional preferences are unavailable. */ }
@@ -32,7 +32,7 @@
             <option value="768">标准 · 768 px</option><option value="1024">精细 · 1024 px</option>
             <option value="1536">高清 · 1536 px</option><option value="2048">超清 · 2048 px</option><option value="4096">4K · 4096 px</option>
           </select></label>
-          <label>默认地图样式<select class="city-field" id="setting-view"><option value="high">精细视图</option><option value="map">地图视图</option></select></label>
+          <label>默认地图样式<select class="city-field" id="setting-view"><option value="auto">自动切换</option><option value="high">精细视图</option><option value="map">地图视图</option></select></label>
         </div>
         <label class="preference-check"><input type="checkbox" id="setting-contours">显示等高线</label>
         <label class="preference-check"><input type="checkbox" id="setting-grid">显示坐标网格</label>

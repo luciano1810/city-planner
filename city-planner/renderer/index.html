@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="city.css">
 <link rel="stylesheet" href="navigation.css">
 <link rel="stylesheet" href="workspace-ui.css">
+<link rel="stylesheet" href="build-menu.css">
+<link rel="stylesheet" href="block-menu.css">
+<link rel="stylesheet" href="observe-menu.css">
 </head>
 <body class="menu-mode" data-screen="home">
 <svg class="icon-library" xmlns="http://www.w3.org/2000/svg"><defs>
@@ -80,7 +83,7 @@
  <div class="sidebar-bottom"><button id="generate" class="generate-btn"><svg><use href="#i-spark"/></svg><span>生成地形</span><kbd>↵</kbd></button><span class="local-note"><i></i>本地运算 · 无需联网</span></div>
 </aside>
 <main class="workspace">
- <div class="workspace-heading"><div><div class="eyebrow">01 / 地形准备 · 02 / 城市规划</div><h1>先让山川成形<span>。</span></h1><p>调整参数并预览地形，确认后自动保存并进入城市规划。</p></div><div class="view-tabs" aria-label="地图样式"><button data-view="high" aria-pressed="false">精细视图</button><button class="active" data-view="map" aria-pressed="true">地图视图</button></div></div>
+ <div class="workspace-heading"><div><div class="eyebrow">01 / 地形准备 · 02 / 城市规划</div><h1>先让山川成形<span>。</span></h1><p>调整参数并预览地形，确认后自动保存并进入城市规划。</p></div><div class="view-tabs" aria-label="地图样式"><button class="active" data-view="auto" aria-pressed="true">自动</button><button data-view="high" aria-pressed="false">精细视图</button><button data-view="map" aria-pressed="false">地图视图</button></div></div>
  <section class="map-frame" id="map-frame" aria-label="交互式俯视地形地图">
   <canvas id="map" tabindex="0" aria-label="俯视地图，滚轮缩放，拖动平移，方向键平移"></canvas>
   <div class="map-label"><span class="map-label-dot"></span><span id="map-name">翡翠海岛</span><span class="map-label-divider"></span><span id="map-number">NO. 001</span></div>
@@ -123,7 +126,13 @@
 <script src="scene-3d.js"></script>
   <script src="simulation-driver.js"></script>
   <script src="traffic-playback.js"></script>
+  <script src="traffic-metrics.js"></script>
   <script src="city.js"></script>
 <script src="navigation.js"></script>
+<script src="building-previews.js"></script>
+<script src="build-menu.js"></script>
+<script src="block-menu.js"></script>
+<script src="observe-menu.js"></script>
+<script src="service-statistics.js"></script>
 <script src="workspace-ui.js"></script>
 </body></html>
