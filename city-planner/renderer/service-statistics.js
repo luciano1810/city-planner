@@ -42,7 +42,7 @@
   }
   function detail(s,names={}){
     if(s.group.key==='taxi')return '<div class="metric-body taxi-metric-body"></div>';
-    const rows=[['设施总数',s.count+' 处'],['已接入道路',s.connected+' 处'],['待连接道路',(s.count-s.connected-s.unknownConnection)+' 处'],...(s.unknownConnection?[['接入状态未记录',s.unknownConnection+' 处']]:[]),['月维护费',fmt(s.maintenance)+' 币'],['现有设施建设费用',fmt(s.cost)+' 币']];
+    const rows=[['设施总数',s.count+' 处'],['已接入道路',s.connected+' 处'],['待连接道路',(s.count-s.connected-s.unknownConnection)+' 处'],...(s.unknownConnection?[['接入状态未记录',s.unknownConnection+' 处']]:[]),['月维护费',fmt(s.maintenance)+' 元'],['现有设施建设费用',fmt(s.cost)+' 元']];
     if(s.group.key==='parking')rows.push(['规划车位',fmt(s.parkingSpaces)+' 个'],['实际占用率','未模拟']);
     if(s.group.key==='charging')rows.push(['充电车位',fmt(s.chargingSpaces)+' 个'],['实际占用率','未模拟']);
     if(s.rooms>0)rows.push(['客房数',fmt(s.rooms)+' 间']);

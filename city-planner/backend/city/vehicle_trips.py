@@ -4,12 +4,28 @@ from collections import Counter
 from shapely.geometry import Point
 
 from .routing import shortest_paths, reconstruct
+from .transit_management import headway
 
 
 def build_demand(live, terminals):
+    _road_demand(live, terminals)
+    from .bus_vehicles import add_services
+    add_services(live)
+
+
+def _road_demand(live, terminals):
     city, links = live.city, live.links
     live.sources, live.destinations, live.balances, live.journeys = [], {}, {}, {}
     edge_links = {}
+    # Bus road volume is already represented by scheduled line vehicles.
+    bus_volume = Counter()
+    if live.mode == 'observed':
+        line_by_id = {line['id']:line for line in city.s['lines']}
+        for segment in city.line_segments.values():
+            if segment['mode']=='bus':
+                line=line_by_id[segment['key'].split(':')[0]]
+                for edge in segment['path']:
+                    bus_volume[edge.get('ref')]+=60/headway(line)
     for link in links.values():
         for edge in link['edges']:
             edge_links.setdefault(edge, []).append(link)
@@ -88,7 +104,7 @@ def build_demand(live, terminals):
     for link in links.values():
         if terminals and link['a'] not in terminals:
             continue
-        volume = 360 if live.mode == 'test' else link['volume']
+        volume = 360 if live.mode == 'test' else max(0,link['volume']-max((bus_volume[e] for e in link['edges']),default=0))
         if volume <= 0:
             continue
         distances, prev = search(link['b'])

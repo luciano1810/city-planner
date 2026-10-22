@@ -51,8 +51,8 @@ UNITS={
  'exitStressMonths':'月','housingBurdenThreshold':'收入比例','eventPersistenceMonths':'月',
  'eventCooldownMonths':'月','regionalPassengerHouseholds':'户/代表出行户','regionalBoundaryMeters':'m',
  'freightHandlingMinutes':'min','freightTonnesPerWorker':'吨/就业者/典型日','externalRoadMinutes':'min',
- 'truckTonnes':'吨/车','workingDaysPerMonth':'日/月','carCostPerKm':'模拟币/km',
- 'carParkingFee':'模拟币/旅程','developmentPaybackYears':'年','officeClusterRadius':'m',
+ 'truckTonnes':'吨/车','workingDaysPerMonth':'日/月','carCostPerKm':'元/km',
+ 'carParkingFee':'元/旅程','developmentPaybackYears':'年','officeClusterRadius':'m',
  'officeClusterWorkers':'实际就业者','siteInfillRadius':'m','centralitySources':'网络采样源',
  'centralityMinutes':'min','cbdAccessJobs':'岗位',
 }
@@ -141,9 +141,9 @@ USES = {
 }
 
 
-TABLE_UNITS=dict(road=dict(width='m',speed='km/h',capacity='车辆/h',cost='模拟币/m',maxGrade='高差 / 水平距离'),
-    transit=dict(speed='km/h',capacity='人/辆',vehicleCost='模拟币/辆/月',kmCost='模拟币/车·km'),
-    use=dict(rent='模拟币/m²/月',cost='模拟币/m²',space='m²/户或岗位'))
+TABLE_UNITS=dict(road=dict(width='m',speed='km/h',capacity='车辆/h',cost='元/m',maxGrade='高差 / 水平距离'),
+    transit=dict(speed='km/h',capacity='人/辆',vehicleCost='元/辆/月',kmCost='元/车·km'),
+    use=dict(rent='元/m²/月',cost='元/m²',space='m²/户或岗位'))
 
 def catalog(policy):
     import copy

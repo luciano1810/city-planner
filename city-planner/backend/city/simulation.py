@@ -108,15 +108,21 @@ def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
     from .construction import day
     ensure_calendar(city)
     state=city.s['simulation'];remaining=float(seconds);settlements=0;days=0
-    while remaining > 1e-9:
+    while remaining > 0:
         duration=month_days(city.s['month'])*DAY
         midnight=(int(state['monthSeconds']//DAY)+1)*DAY
         chunk=min(remaining,midnight-state['monthSeconds'])
+        from . import rail_runtime
+        rail_runtime.advance(city,chunk)
         state['monthSeconds']+=chunk
         state['elapsedSeconds']+=chunk
         city.s['sceneTimeSeconds']+=daylight_seconds*chunk/seconds
         remaining=max(0.,remaining-chunk)
         if state['monthSeconds'] >= midnight-1e-8:
+            # Fractional UI ticks can leave less than a nanosecond before
+            # midnight. Consume and snap that remainder so incremental mode
+            # cannot repeatedly accept a tiny step without changing the day.
+            state['monthSeconds'] = midnight
             month_changed=state['monthSeconds'] >= duration-1e-8
             if month_changed:
                 state['monthSeconds']=0.
@@ -202,7 +208,7 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
             state['sampled'] = sampled
         result = dict(simulation=copy.deepcopy(state), sceneTimeSeconds=city.s['sceneTimeSeconds'],
                       month=city.s['month'], monthsAdvanced=city.s['month']-initial_month, daysAdvanced=days, settlementsAdvanced=settlements,
-                      traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
+                      railRuntime=__import__('city.rail_runtime',fromlist=['view']).view(city),traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
         if days:result['city']=city.view()
         return result
     except Exception:

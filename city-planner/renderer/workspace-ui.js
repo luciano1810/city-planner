@@ -34,7 +34,7 @@
   ];
   const rail = document.createElement('nav');
   rail.className='workspace-rail'; rail.setAttribute('aria-label','工作台分类');
-  const railCategories=cityCategories.filter(([key])=>key==='transit');
+  const railCategories=[];
   rail.innerHTML=`<div class="city-rail">${railCategories.map(([key,label,image])=>`<button data-category="${key}" aria-pressed="false" title="${label}">${icon(image)}<span>${label}</span></button>`).join('')}</div>
     <div class="terrain-rail">${terrainCategories.map(([key,label,image])=>`<button data-terrain-category="${key}" aria-pressed="false">${icon(image)}<span>${label}</span></button>`).join('')}</div>`;
   one('.app-layout').append(rail);
@@ -62,13 +62,14 @@
   const togglePanel=()=>document.body.classList.toggle('panel-collapsed');
   caption.querySelector('.panel-dismiss').onclick=togglePanel;
   let category='roads';
-  let buildMenu=null,blockMenu=null,observeMenu=null;
+  let buildMenu=null,blockMenu=null,observeMenu=null,transitMenu=null;
   function showCategory(next,{fromEngine=false}={}) {
     closeMetric();category=next;
     if(next==='roads'&&buildMenu){buildMenu.open('roads');return;}
     if(next==='buildings'&&blockMenu&&CityApp.active){blockMenu.open();return;}
     if(next==='data'&&observeMenu&&CityApp.active){observeMenu.open();return;}
-    buildMenu?.close();blockMenu?.close();observeMenu?.close();
+    if(next==='transit'&&transitMenu&&CityApp.active){transitMenu.open();return;}
+    buildMenu?.close();blockMenu?.close();observeMenu?.close();transitMenu?.close();
     document.body.classList.remove('show-inspector','panel-collapsed');
     const parent=next==='transit'?'transit':next==='data'?'data':'build';
     if(!fromEngine)one(`.city-nav [data-panel="${parent}"]`).click();
@@ -95,21 +96,23 @@
     if(key==='roads')button.id='workspace-build';
     if(key==='buildings')button.id='workspace-blocks';
     if(key==='data')button.id='workspace-observe';
-    button.onclick=()=>{if(key==='roads'){buildMenu.toggle();return;}if(key==='buildings'){blockMenu.toggle();return;}if(key==='data'){observeMenu.toggle();return;}routing=true;showCategory(key);routing=false;if(tool){one(`[data-tool="${tool}"]`).click();one(`[data-tool="${tool}"]`).scrollIntoView({block:'nearest'});}};
+    if(key==='transit')button.id='workspace-transit';
+    button.onclick=()=>{if(key==='roads'){buildMenu.toggle();return;}if(key==='buildings'){blockMenu.toggle();return;}if(key==='data'){observeMenu.toggle();return;}if(key==='transit'){transitMenu.toggle();return;}routing=true;showCategory(key);routing=false;if(tool){one(`[data-tool="${tool}"]`).click();one(`[data-tool="${tool}"]`).scrollIntoView({block:'nearest'});}};
     dock.append(button);
   }
   one('.app-layout').append(dock);
-  buildMenu=window.CityBuildMenu.create({button:$('workspace-build'),dock,onOpen:()=>{closeMetric();blockMenu?.close();observeMenu?.close();}});
-  blockMenu=window.CityBlockMenu.create({button:$('workspace-blocks'),dock,onOpen:()=>{closeMetric();buildMenu.close();observeMenu?.close();}});
-  observeMenu=window.CityObserveMenu.create({button:$('workspace-observe'),dock,onOpen:()=>{closeMetric();buildMenu.close();blockMenu.close();}});
+  buildMenu=window.CityBuildMenu.create({button:$('workspace-build'),dock,onOpen:()=>{closeMetric();blockMenu?.close();observeMenu?.close();transitMenu?.close();}});
+  blockMenu=window.CityBlockMenu.create({button:$('workspace-blocks'),dock,onOpen:()=>{closeMetric();buildMenu.close();observeMenu?.close();transitMenu?.close();}});
+  observeMenu=window.CityObserveMenu.create({button:$('workspace-observe'),dock,onOpen:()=>{closeMetric();buildMenu.close();blockMenu.close();transitMenu?.close();}});
+  transitMenu=window.CityTransitMenu.create({button:$('workspace-transit'),dock,onOpen:()=>{closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();}});
   // Existing listeners toggle active state on the original tool buttons.
-  one('.city-kpi').insertAdjacentHTML('afterend','<div class="city-kpi"><span>可用财政 / 币</span><strong id="ck-treasury">—</strong><small id="ck-treasury-sub">日收入 — 币</small></div>');
+  one('.city-kpi').insertAdjacentHTML('afterend','<div class="city-kpi"><span>可用财政 / 元</span><strong id="ck-treasury">—</strong><small id="ck-treasury-sub">日收入 — 元</small></div>');
   const kpiIcons=['service','grid','building','grid','bus'];
   all('.city-kpi').forEach((card,i)=>card.insertAdjacentHTML('afterbegin',`<span class="kpi-symbol">${icon(kpiIcons[i])}</span>`));
   const overview=$('city-dashboard');overview.className='city-overview-button';
   overview.innerHTML=`<span class="overview-symbol">${icon('chart')}</span><span class="overview-copy"><small>城市概况</small><strong id="overview-city-name">我的城市</strong></span><span class="overview-arrow" aria-hidden="true">↗</span><span id="overview-city-meta" class="overview-meta">查看城市统计与发展记录</span>`;
   const openCityOverview=overview.onclick;
-  overview.onclick=()=>{activeOverview=null;closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();document.body.classList.remove('panel-collapsed');openCityOverview();};
+  overview.onclick=()=>{activeOverview=null;closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();transitMenu?.close();document.body.classList.remove('panel-collapsed');openCityOverview();};
   one('.city-sidebar-foot').classList.add('workspace-files');
   one('.app-layout').append(one('.city-sidebar-foot'));
   $('city-simulation-note').hidden=true;
@@ -120,7 +123,8 @@
   const statusTray=document.createElement('section');statusTray.className='workspace-status-tray';statusTray.setAttribute('aria-label','选择与操作状态');
   const demandPanel=document.createElement('section');demandPanel.className='city-demand-panel';demandPanel.setAttribute('aria-label','建筑实时需求');
   const demandUses=[['residential','住宅','#57966e'],['commercial','商业','#c99546'],['office','办公','#528fab'],['industrial','工业','#a080a5'],['warehouse','仓储','#9a9169']];
-  demandPanel.innerHTML='<header><strong>实时需求</strong><small>未满足缺口</small></header><div class="city-demand-grid">'+demandUses.map(([use,name,color])=>`<div class="city-demand-item" data-demand-use="${use}" style="--demand-color:${color}"><span>${name}</span><strong>—</strong><div class="city-demand-track" role="meter" aria-label="${name}未满足需求占比" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>`).join('')+'</div><p>住宅按户 · 其他按岗位容量</p>';
+  demandPanel.innerHTML='<header><strong>实时需求</strong><small>未满足缺口</small></header><div class="city-demand-grid">'+demandUses.map(([use,name])=>`<div class="city-demand-item" data-demand-use="${use}"><span>${name}</span><strong>—</strong><div class="city-demand-track" role="meter" aria-label="${name}未满足需求占比" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>`).join('')+'</div><p>住宅按户 · 其他按岗位容量</p>';
+  for(const [use,,color] of demandUses)demandPanel.querySelector(`[data-demand-use="${use}"]`).style.setProperty('--demand-color',color);
   demandPanel.title='显示可达就业对应的住房缺口与各类经营空间缺口；已扣除现有及待开工、在建供应。需求随城市结算与建设编辑更新，不代表可立即开工的建筑栋数。';
   function refreshDemand(){
     const demand=window.CityApp.state?.developmentDemand;
@@ -156,7 +160,7 @@
       {key:'population',title:'人口与迁移',icon:'service',value:number(s.population)+' 人',note:`今日迁入 ${number(s.movedIn)} · 迁出 ${number(s.movedOut)}`},
       {key:'travel',title:'出行与可达性',icon:'bus',value:number(s.commute)+' 分钟',note:`平均通勤 · 完成 ${number(s.completedTrips)} 次旅程`},
       {key:'liveTraffic',title:'实时交通',icon:'road',value:CityApp.traffic?`${number(CityApp.traffic.vehicles?.length)} 辆车 · ${number(CityApp.traffic.pedestrians?.length)} 位行人`:'暂无样本',note:CityApp.traffic?`${state.simulation?.sampled?'高速抽样':'精细人车'} · ${CityApp.traffic.mode==='test'?'验证人车流':'城市交通分配'}`:'等待交通样本'},
-      {key:'finance',title:'财政与账目',icon:'grid',value:number(s.treasury)+' 币',note:`日收入 ${number(s.revenue)} · 分项收支`},
+      {key:'finance',title:'财政与账目',icon:'grid',value:number(s.treasury)+' 元',note:`日收入 ${number(s.revenue)} · 分项收支`},
       {key:'growth',title:'地形与生长',icon:'mountain',value:number(s.autoRoadKm)+' km',note:`自动支路 · 公共空间 ${number(s.publicSpaceArea)} m²`},
       {key:'economy',title:'产业与分布',icon:'chart',value:number(s.firms)+' 个企业群组',note:`空缺岗位 ${number(s.vacantJobs)} · 建筑与交通分布`},
       {key:'districts',title:'城区与中心',icon:'grid',value:state.districts.length+' 个城区',note:`${(state.growthCenters||[]).filter(c=>c.rank).length} 处发展中心 · 点击城区定位`},
@@ -401,9 +405,9 @@
   // Expand a KPI directly below its card, keeping the tool panel available.
   const metricConfigs=[
     {key:'population',title:'人口与迁移',unit:'人',icon:'service',series:[['population','常住人口','#087bff']],rows:[['households','家庭数量','户'],['movedIn','今日迁入','人'],['movedOut','今日迁出','人'],['pendingHousing','等待迁入','户'],['vacancy','住房空置率','%']]},
-    {key:'treasury',title:'财政收支',unit:'币',icon:'grid',series:[['treasury','可用资金','#e89423']],rows:[['revenue','日收入','币'],['maintenance','日维护与运营','币'],['constructionCost','累计建设费用','币']]},
+    {key:'treasury',title:'财政收支',unit:'元',icon:'grid',series:[['treasury','可用资金','#e89423']],rows:[['revenue','日收入','元'],['maintenance','日维护与运营','元'],['constructionCost','累计建设费用','元']]},
     {key:'jobs',title:'就业与岗位',unit:'个 / 人',icon:'building',series:[['jobs','岗位','#087bff'],['employed','就业人数','#21a27b']],rows:[['employed','就业人数','人'],['jobs','岗位数量','个'],['vacantJobs','空缺岗位','个'],['unemployment','失业率','%'],['accessJobs','可达岗位均值','个']]},
-    {key:'landValue',title:'土地价格',unit:'币 / m²',icon:'grid',series:[['landValue','中位数','#8c69df'],['landP10','P10','#a9b4c7'],['landP90','P90','#e89423']],rows:[['landValue','土地估值中位数','币/m²'],['landP10','土地估值 P10','币/m²'],['landP90','土地估值 P90','币/m²'],['rent','住宅租金中位数','币/m²/月'],['floorRatio','容积率','']]},
+    {key:'landValue',title:'土地价格',unit:'元 / m²',icon:'grid',series:[['landValue','中位数','#8c69df'],['landP10','P10','#a9b4c7'],['landP90','P90','#e89423']],rows:[['landValue','土地估值中位数','元/m²'],['landP10','土地估值 P10','元/m²'],['landP90','土地估值 P90','元/m²'],['rent','住宅租金中位数','元/m²/月'],['floorRatio','容积率','']]},
     {key:'commute',title:'通勤与出行',unit:'分钟',icon:'bus',series:[['commute','平均通勤','#21a27b'],['commuteP90','90% 通勤用时','#e89423']],rows:[['commute','平均通勤','分钟'],['commuteP90','90% 通勤不超过','分钟'],['completedTrips','已完成旅程','次'],['failedTrips','出行失败（典型工作日）','次'],['meanWait','平均候车','分钟']]}
   ];
   const serviceStats=window.CityServiceStatistics,metricStrip=one('.city-kpis');
@@ -500,7 +504,7 @@
       if(config.key==='taxi')metricPanel.querySelector('.taxi-metric-body').append(taxiControls);
       metricPanel.querySelectorAll('[data-service-facility]').forEach(button=>button.onclick=()=>{
         const picker=$('city-object-picker');if(![...picker.options].some(o=>o.value===button.dataset.serviceFacility))return;
-        picker.value=button.dataset.serviceFacility;closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();picker.dispatchEvent(new Event('change'));
+        picker.value=button.dataset.serviceFacility;closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();transitMenu.close();picker.dispatchEvent(new Event('change'));
       });return;
     }
     const rows=metricHistory(state),s=state.stats;
@@ -533,5 +537,5 @@
   placeChrome();
   showCategory('buildings',{fromEngine:true});showTerrainCategory('biome');
   // Clear temporary drawer state when moving between home, terrain and city.
-  new MutationObserver(records=>{if(records.some(r=>r.attributeName==='data-screen')){buildMenu.close();blockMenu.close();observeMenu.close();document.body.classList.remove('panel-collapsed','show-inspector');setSettings(false);closeMetric();viewPanel.open=false;refreshServices();positionMetricToolbar();placeChrome();cachedTerrain=null;paintMinimap();}}).observe(document.body,{attributes:true,attributeFilter:['data-screen']});
+  new MutationObserver(records=>{if(records.some(r=>r.attributeName==='data-screen')){buildMenu.close();blockMenu.close();observeMenu.close();transitMenu?.close();document.body.classList.remove('panel-collapsed','show-inspector');setSettings(false);closeMetric();viewPanel.open=false;refreshServices();positionMetricToolbar();placeChrome();cachedTerrain=null;paintMinimap();}}).observe(document.body,{attributes:true,attributeFilter:['data-screen']});
 })();

@@ -32,7 +32,8 @@ from . import housing
 from .employment import facility_workplaces, sync_facilities, facility_capacity
 from .business import BusinessMarket, workplace_supply
 from . import special_buildings, auto_facilities
-from . import road_clearance, taxis
+from . import road_clearance, bus_transit, transit_management, taxis
+from . import rail_infrastructure, rail_services, rail_runtime
 
 MODEL_VERSION = 'shanhai-city-12'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
@@ -76,6 +77,8 @@ class City:
         self.s['dailyHistory']=[]
         self.s.update(firms=[], localPaths=[], growthAttempts=[], laneCadenceVersion=2, districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
         self.s.update(streetPlans=[],plannedBlocks=0,regionalServices=[],regionalFlows=[],growthCenters=[],blockLayouts=[],renewals=[])
+        rail_infrastructure.ensure(self)
+        rail_runtime.ensure(self)
         self.undo, self.redo = [], []
         self.network = make_network([], [], self.terrain)
         self.paths, self.line_segments, self.graphs = [], {}, {}
@@ -193,11 +196,13 @@ class City:
             s['policy']['version']=POLICY['version']
             s['migrationNote']='已迁移到模型 12；保留既有建筑、街区与校准值，施工改为逐日推进，财政与市场改为每日结算'
             s['policy']['version']=POLICY['version']
-        required = set(city.s) - {'calendar','dailyHistory','developmentDemand'}
+        required = set(city.s) - {'calendar','dailyHistory','developmentDemand','railInfrastructure','railRules','railRuntime'}
         if not required <= set(s) or s['version'] != MODEL_VERSION:
             raise ValueError('存档缺少必要字段')
         if any(not isinstance(s[k], list) for k in ['roads','stops','lines','parcels','households','facilities','events','history']):
             raise ValueError('存档集合格式无效')
+        for line in s['lines']:
+            transit_management.validate(line)
         if len(s['roads']) > 2000 or len(s['parcels']) > 30000 or len(s['households']) > 100000:
             raise ValueError('存档超过本版本支持规模')
         for road in s['roads']:
@@ -229,6 +234,10 @@ class City:
             if len(object_ids)!=len(set(object_ids)):
                 raise ValueError('存档对象编号重复')
         for stop in s['stops']:
+            if stop.get('curb'):
+                if stop['mode'] != 'bus' or not isinstance(stop.get('road'), str) or isinstance(stop.get('side'), bool) or stop.get('side') not in (-1, 1):
+                    raise ValueError('存档公交站点的道路或路侧无效')
+                city.point(stop.get('anchor'))
             if stop.get('role','passenger') not in ('passenger','freight') or stop.get('role')=='freight' and stop['mode']!='train':raise ValueError('存档车站设施角色无效')
         for service in s['regionalServices']:
             number(service['trainsPerDay'],1,48,'每日货列',True)
@@ -252,6 +261,8 @@ class City:
             if p.get('building') and not Polygon(p['points']).buffer(.01).covers(Polygon(p['building']['footprint'])):
                 raise ValueError('存档建筑超出地块')
         city.s = s
+        rail_infrastructure.ensure(city)
+        rail_runtime.ensure(city)
         if 'calendar' not in s:
             # A legacy monthly amount is not a completed daily cashflow.
             s['legacyMonthlyAccounts']={key:s.get(key,0) for key in ('revenue','maintenance','movedIn','movedOut','relocated')}
@@ -264,6 +275,8 @@ class City:
         city.parcelmap = pm
         renewal.validate(city)
         special_buildings.validate(city)
+        rail_infrastructure.validate(city)
+        rail_runtime.validate(city)
         for facility in s['facilities']:
             if facility['kind'] in auto_facilities.CATALOG:
                 auto_facilities.facility_architecture.ensure(facility)
@@ -300,14 +313,23 @@ class City:
             self._parcel_roads=current
             self.s['geometryUpdate']=dict(changedRoads=len(changed),recomputedRoads=len(affected),totalRoads=len(current))
         special_buildings.reserve(self)
-        self.network = make_network(self.s['roads'], self.s['stops'], self.terrain,self.s['parcels'])
+        projections=rail_infrastructure.prepare_network(self)
+        topology=(tuple((r['id'],r['kind'],r['level'],r['oneway'],tuple(map(tuple,r['points'])),repr(r.get('connections')),repr(r.get('railJunctions')),r.get('railManaged')) for r in self.s['roads']),
+                  tuple(repr(s) for s in projections),tuple((p['road'],tuple(p['frontage'])) for p in self.s['parcels']),
+                  tuple((e.get('road'),tuple(e.get('accessPoint',e['point']))) for s in self.s['stops'] for e in s.get('entrances',[])))
+        if getattr(self,'_topology_signature',None)!=topology:
+            self._topology_base=make_network(self.s['roads'],projections,self.terrain,self.s['parcels'],self.s['stops'])
+            self._topology_signature=topology
+        self.network=copy.deepcopy(self._topology_base)
         signals.configure(self.network,self.s['policy'])
         self.live_traffic = None
         for stop in self.s['stops']:
+            if stop.get('railStation'): continue
             attachment = self.network['stops'].get(stop['id'])
             stop['connected'] = bool(attachment and attachment['access'])
             if attachment:
-                stop['point'] = attachment['point']
+                stop['point'] = attachment.get('curbPoint', attachment['point'])
+                if stop.get('curb'): stop['anchor'] = attachment['point']
         for f in self.s['facilities']:
             if f.get('stop'):
                 f['railConnected'] = bool(self.network['stops'].get(f['stop']))
@@ -361,7 +383,7 @@ class City:
                     delay=e.get('signalDelayReverse',0)
                     self.add(drive,e['b'],e['a'],e['time']+delay,'car',e['id'],length=e['length'],signalDelay=delay)
             if e['kind'] in rails:
-                for a,b in [(e['a'],e['b']), (e['b'],e['a'])]:
+                for a,b in [(e['a'],e['b'])]+([] if e['oneway'] else [(e['b'],e['a'])]):
                     for mode in (('train','metro') if e['kind'] in ('train','metro') else ('tram',)):
                         self.add(rails[mode],a,b,e['time'],e['kind'],e['id'],length=e['length'])
         for p in self.s['parcels']:
@@ -434,6 +456,8 @@ class City:
             candidate=min(ground_nodes,key=lambda n:math.dist(ground_nodes[n],self.s['gateway']))
             if math.dist(ground_nodes[candidate],self.s['gateway'])<20:
                 self.gateway_node=candidate
+        rail_infrastructure.reserve(self)
+        rail_infrastructure.attach(self,walk)
         public = copy.deepcopy(walk)
         for stop in self.s['stops']:
             att = self.network['stops'].get(stop['id'])
@@ -443,8 +467,10 @@ class City:
                     self.add(walk,a,b,(att['access']['minutes']-1)*80/self.s['policy']['walkingMetersPerMinute']+1,'walk')
         self.line_segments = {}
         stopmap = {s['id']: s for s in self.s['stops']}
+        bus_graph = bus_transit.road_graph(self.network) if any(l.get('curbRouting') for l in self.s['lines']) else None
         for line in self.s['lines']:
-            line.update(valid=False, reason='', paths=[], fleet=0, operatingCost=0, length=0, cycle=0,breakPoints=[])
+            if line['mode'] in ('metro','train'): continue
+            line.update(valid=False, reason='', paths=[], fleet=0, operatingCost=0, length=0, cycle=0,breakPoints=[],serviceHeadway=line['headway'])
             if not line['enabled']:
                 line['reason'] = '已停运'
                 continue
@@ -456,20 +482,31 @@ class City:
                 line['reason'] = '站点方式不兼容'
                 continue
             graph = drive if line['mode'] == 'bus' else rails[line['mode']]
+            if line.get('depot'):
+                try:
+                    bus_transit.depot_for(self, self.network, bus_graph, [stopmap[s] for s in line['stops']], line['depot'])
+                except ValueError as error:
+                    line['reason'] = str(error)
+                    continue
             segments, failure = [], False
             orders=[line['stops']] if line.get('oneway') else [line['stops'],list(reversed(line['stops']))]
             for direction, order in enumerate(orders):
                 for index, (a,b) in enumerate(zip(order, order[1:])):
                     source = self.network['stops'][a]['node']
                     target = self.network['stops'][b]['node']
-                    distances, prev = shortest_paths(graph, source)
-                    if target not in distances:
+                    if line.get('curbRouting'):
+                        path = bus_transit.segment(self.network, bus_graph, stopmap[a], stopmap[b], direction)
+                        travel_time = sum(e['time'] for e in path) if path else None
+                    else:
+                        distances, prev = shortest_paths(graph, source)
+                        path = reconstruct(prev, source, target) if target in distances else None
+                        travel_time = distances.get(target)
+                    if path is None:
                         failure = True
                         line['breakPoints']=[stopmap[a]['point'],stopmap[b]['point']]
                         break
-                    path = reconstruct(prev, source, target)
                     length = sum(e.get('length',0) for e in path)
-                    running = max(distances[target],length/1000/line.get('speed',TRANSIT_TYPES[line['mode']]['speed'])*60) + line.get('dwell',.6)
+                    running = max(travel_time,length/1000/line.get('speed',TRANSIT_TYPES[line['mode']]['speed'])*60) + line.get('dwell',.6)
                     # Tram mixed running inherits nearby road congestion.
                     if line['mode'] == 'tram' and line.get('mixed'):
                         running *= 1 + .3 * self.s.get('stats',{}).get('congestion',0)
@@ -485,13 +522,12 @@ class City:
             line['valid'] = True
             line['cycle'] = sum(e['time'] for e in segments) + 8
             line['length'] = sum(e['length'] for e in segments)/len(orders)
-            line['fleet'] = max(1, math.ceil(line['cycle']/line['headway']))
-            cfg = TRANSIT_TYPES[line['mode']]
-            daily_km = line['length']*2/1000*60/line['headway']*line['hours']
-            line['operatingCost'] = line['fleet']*cfg['vehicleCost'] + daily_km*cfg['kmCost']*30
+            transit_management.service(line, segments, len(orders), TRANSIT_TYPES[line['mode']])
             for seg in segments:
                 self.line_segments[seg['key']] = seg
-                line['paths'].append(dict(key=seg['key'],points=self.path_points(seg['path']),direction=seg['direction']))
+                points = (bus_transit.display_path(self.network,seg['path'],stopmap[seg['a']],stopmap[seg['b']],seg['direction'])
+                          if line.get('curbRouting') else self.path_points(seg['path']))
+                line['paths'].append(dict(key=seg['key'],points=points,direction=seg['direction']))
                 a = f"{line['id']}:{seg['direction']}:{seg['a']}"
                 b = f"{line['id']}:{seg['direction']}:{seg['b']}"
                 self.add(public,a,b,seg['time'],'ride',line['id'],segment=seg['key'],mode=line['mode'],length=seg['length'])
@@ -499,8 +535,10 @@ class City:
                 for sid in line['stops']:
                     onboard=f"{line['id']}:{direction}:{sid}"
                     # Initial wait is headway-based; transfers pay it again, riding through does not.
-                    self.add(public,sid,onboard,line['headway']/2+self.s['policy']['boardingMinutes'],'board',line['id'],mode=line['mode'])
+                    self.add(public,sid,onboard,transit_management.headway(line)/2+self.s['policy']['boardingMinutes'],'board',line['id'],mode=line['mode'])
                     self.add(public,onboard,sid,self.s['policy']['alightingMinutes'],'alight',line['id'],mode=line['mode'])
+        self.rail_graph=rails['train']
+        rail_services.build(self,public,self.rail_graph)
         rebuild_regional(self,rails,drive)
         self.graphs = dict(walk=walk, car=drive, public=public)
         sync_facilities(self)
@@ -652,12 +690,16 @@ class City:
                         if not operating(line,elapsed):
                             unavailable=True
                             break
-                        if line['headway']>=self.s['policy']['lowFrequencyHeadway']:
-                            scheduled=(line['headway']-(elapsed-start)%line['headway'])%line['headway']
-                            adjustment=scheduled-line['headway']/2
+                        interval=transit_management.headway(line)
+                        if interval>=self.s['policy']['lowFrequencyHeadway']:
+                            scheduled=(interval-(elapsed-start)%interval)%interval
+                            adjustment=scheduled-interval/2
                             extra_wait+=adjustment
                             elapsed+=adjustment
                     elapsed+=e['time']
+                    if e['kind']=='board' and not operating(line,elapsed):
+                        unavailable=True
+                        break
                 if unavailable:
                     continue
                 minutes+=extra_wait
@@ -700,8 +742,12 @@ class City:
             source,target=(self.undo,self.redo) if op=='undo' else (self.redo,self.undo)
             if not source:
                 raise ValueError('没有可撤销的操作')
+            candidate=source[-1][0]
+            if candidate['simulation']!=self.s['simulation'] or candidate['sceneTimeSeconds']!=self.s['sceneTimeSeconds']:
+                rail_runtime.validate_restore(self,candidate)
             target.append((copy.deepcopy(self.s),self.rng.getstate(),self.runtime()))
             revision=self.s['revision']+1
+            rail_state=copy.deepcopy(self.s.get('railRuntime'))
             clock=copy.deepcopy(self.s['simulation'])
             daylight=self.s['sceneTimeSeconds']
             self.s,random_state,runtime=source.pop()
@@ -709,6 +755,7 @@ class City:
             self.s['simulation']=clock
             self.s['sceneTimeSeconds']=daylight
             if clock_changed:
+                if rail_state is not None:self.s['railRuntime']=rail_state
                 runtime=copy.deepcopy(runtime)
                 runtime['liveTraffic']=None
             self.rng.setstate(random_state)
@@ -719,6 +766,11 @@ class City:
         checkpoint=self.checkpoint()
         before=(checkpoint['s'],checkpoint['rng'].getstate(),self.runtime())
         try:
+            if op in ('delete','road_edit','road_update'):
+                rid=cmd.get('id')
+                for train in self.s.get('railRuntime',{}).get('trains',[]):
+                    if train['status']=='running' and any(e['ref'].rsplit(':',1)[0]==rid for e in train['route'][train['index']]['path']):
+                        raise ValueError('该轨道正在被列车占用，请待列车离开后编辑')
             if op in ('delete','zone'):
                 if any(project['status'] not in renewal.TERMINAL and any(p['id'] in project['preservedIds'] and cmd.get('id') in (p['id'],p.get('openSpace')) for p in self.s['parcels']) for project in self.s['renewals']):
                     raise ValueError('此用地是更新项目保留的公共空间或保护地，请等待项目结束')
@@ -739,14 +791,27 @@ class City:
                 road=next((r for r in self.s['roads'] if r['id']==cmd.get('id')),None)
                 if not road:
                     raise ValueError('道路不存在')
+                if road.get('platform'):raise ValueError('站台轨道属于车站，请通过车站编辑调整')
                 self.s['roads'].remove(road)
-                clearance=self.add_road(dict(cmd,kind=road['kind'],level=road['level'],oneway=road['oneway'],name=road['name']),demolish=True)
+                clearance=self.add_road(dict(cmd,kind=road['kind'],level=road['level'],oneway=road['oneway'],name=road['name'],railManaged=road.get('railManaged',False)),demolish=True)
                 new=self.s['roads'][-1]
                 new['id']=road['id']
-                for key in ('generated','parent','growthKey'):
+                for key in ('generated','parent','growthKey','bypassFor'):
                     if key in road: new[key]=road[key]
                 self.rebuild(regenerate=True)
                 road_clearance.resettle(self,clearance)
+            elif op=='rail_rules':
+                for key in ('transferMeters',):
+                    if key in cmd:self.s['railRules'][key]=number(cmd[key],1,2000,key)
+                self.rebuild()
+            elif op=='rail_station':
+                rail_infrastructure.construct(self,cmd)
+            elif op=='rail_passage':
+                rail_infrastructure.passage_command(self,cmd)
+            elif op=='rail_entry':
+                rail_infrastructure.edit_entry(self,cmd)
+            elif op=='rail_facility':
+                rail_infrastructure.build_facility(self,cmd)
             elif op=='stop':
                 mode=cmd.get('mode','bus')
                 if mode not in TRANSIT_TYPES:
@@ -774,13 +839,17 @@ class City:
                 if 'trainsPerDay' in cmd:service['trainsPerDay']=number(cmd['trainsPerDay'],1,48,'每日货列',True)
                 if 'tonnesPerTrain' in cmd:service['tonnesPerTrain']=number(cmd['tonnesPerTrain'],10,5000,'每列吨数')
                 self.rebuild()
+            elif op=='bus_line':
+                bus_transit.create(self,cmd)
             elif op=='line':
                 self.add_line(cmd)
             elif op=='line_update':
                 line=next((l for l in self.s['lines'] if l['id']==cmd.get('id')),None)
                 if line is None:
                     raise ValueError('线路不存在')
-                for k,lo,hi in [('headway',2,120),('capacity',10,2000),('hours',4,24)]:
+                old_operating=rail_services.operating_signature(line) if line['mode'] in ('metro','train') else None
+                old_enabled=line['enabled']
+                for k,lo,hi in [('headway',1 if line['mode'] in ('metro','train') else 2,120),('capacity',10,2000),('hours',.25,24)]:
                     if k in cmd:
                         line[k]=number(cmd[k],lo,hi,k)
                 if 'enabled' in cmd:
@@ -795,11 +864,19 @@ class City:
                     if not isinstance(ids,list) or len(ids)<2 or len(ids)!=len(set(ids)):
                         raise ValueError('停站顺序需要至少两个不重复站点')
                     line['stops']=ids
-                for key,lo,hi in [('dwell',.1,10),('speed',5,180),('startHour',0,23)]:
+                    if line['mode'] in ('metro','train'):
+                        for field in ('platforms','stopPattern','via'):
+                            if field not in cmd:line[field]={k:v for k,v in line.get(field,{}).items() if k in ids}
+                for key,lo,hi in [('dwell',.1,10),('speed',5,180),('startHour',0,23+59/60)]:
                     if key in cmd: line[key]=number(cmd[key],lo,hi,key)
                 if 'oneway' in cmd: line['oneway']=bool(cmd['oneway'])
+                (rail_services.configure if line['mode'] in ('metro','train') else transit_management.configure)(line,cmd)
+                validate_route=line['mode'] not in ('metro','train') or rail_services.operating_signature(line)!=old_operating or line['enabled'] and not old_enabled
+                if line['mode'] in ('metro','train') and validate_route:
+                    checked=rail_services.preview(self,dict(cmd,stops=line['stops']))
+                    if not checked['valid']:raise ValueError(checked['reason'])
                 self.rebuild()
-                if line['enabled'] and not line['valid']: raise ValueError(line['reason'])
+                if validate_route and line['enabled'] and not line['valid']: raise ValueError(line['reason'])
             elif op=='stop_update':
                 stop=next((s for s in self.s['stops'] if s['id']==cmd.get('id')),None)
                 if not stop: raise ValueError('站点不存在')
@@ -807,8 +884,8 @@ class City:
                 if 'enabled' in cmd: stop['enabled']=bool(cmd['enabled'])
                 self.rebuild()
             elif op=='delete':
+                found=rail_infrastructure.remove(self,cmd.get('id'))
                 special_buildings.remove(self,cmd.get('id'))
-                found=False
                 for parcel in self.s['parcels']:
                     if parcel.get('openSpace')==cmd.get('id'):
                         parcel.pop('openSpace',None)
@@ -925,7 +1002,7 @@ class City:
             self.s['revision']+=1
             self.s['commands'].append(dict(month=self.s['month'],command=copy.deepcopy(cmd)))
             self.s['commands']=self.s['commands'][-1000:]
-            if op not in ('zone','settings') and self.s['households']:
+            if op not in ('zone','settings') and (self.s['households'] or op in ('line_update','line','bus_line')):
                 self.match_jobs()
                 self.assign_traffic()
             self.summarize()
@@ -1023,6 +1100,16 @@ class City:
                     raise RoadConflict('道路与公共空间或保护用地冲突',occupied.intersection(Polygon(parcel['points'])).representative_point().coords[0])
         if len(self.s['roads'])>=2000:
             raise ValueError('已达到本版本 2000 条道路上限')
+        if kind in ('metro','train') and cmd.get('railManaged'):
+            for a,b,c in zip(pts,pts[1:],pts[2:]):
+                ab,bc,ac=math.dist(a,b),math.dist(b,c),math.dist(a,c)
+                cross=abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))
+                if cross>1e-8 and ab*bc*ac/(2*cross)<rail_infrastructure.RULES['minimumRadius']:
+                    raise ValueError('轨道弯曲半径不足 30 米，请放缓曲线')
+            for contact in cmd.get('connections',[]):
+                target=next((r for r in self.s['roads'] if r['id']==contact.get('road')),None)
+                if target and target['level']!=level and shape.length<abs(level-target['level'])*rail_infrastructure.RULES['levelHeight']/rail_infrastructure.RULES['maxGrade']:
+                    raise ValueError('层级转换坡道过短；每层至少需要 134 米过渡长度')
         connections=[]
         for contact in cmd.get('connections', []):
             target=next((r for r in self.s['roads'] if r['id']==contact.get('road')), None)
@@ -1041,7 +1128,7 @@ class City:
         self.spend(cost,'轨道工程' if kind in ('metro','train','tram') else '道路工程')
         self.s['roads'].append(dict(id=self.uid('r'),kind=kind,level=level,points=pts,
                                    controls=controls,shape=shape_mode,terrainAdjusted=adjusted,profile=profile,constructionCost=round(cost),
-                                   exactPlacement=cmd.get('snap') is False,
+                                   exactPlacement=cmd.get('snap') is False,railManaged=bool(cmd.get('railManaged',False)),
                                    connections=connections,
                                    oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name') or ROAD_TYPES[kind]['name']),
                                    length=shape.length))
@@ -1066,6 +1153,10 @@ class City:
 
     def query(self,params):
         kind=params.get('kind','area')
+        if kind=='rail':
+            return rail_services.details(self,params.get('line'))
+        if kind=='transit':
+            return transit_management.details(self,params.get('line'))
         facilities=None
         if kind=='area':
             a,b=[self.point(p) for p in params['bounds']]
@@ -1092,13 +1183,16 @@ class City:
         if mode not in TRANSIT_TYPES or not isinstance(stops,list) or not 2<=len(stops)<=80 or len(stops)!=len(set(stops)):
             raise ValueError('线路需要至少两个不重复的兼容站点')
         line=dict(id=self.uid('l'),name=text(cmd.get('name') or TRANSIT_TYPES[mode]['name']+'线'),mode=mode,
-                  stops=stops,headway=number(cmd.get('headway',10),2,120,'发车间隔'),
+                  stops=stops,headway=number(cmd.get('headway',10),1 if mode in ('metro','train') else 2,120,'发车间隔'),
                   capacity=number(cmd.get('capacity',TRANSIT_TYPES[mode]['capacity']),10,2000,'容量'),
-                  hours=number(cmd.get('hours',16),4,24,'运营小时'),enabled=True,mixed=bool(cmd.get('mixed',False)),
-                  startHour=number(cmd.get('startHour',6),0,23,'首班小时'),dwell=number(cmd.get('dwell',.6),.1,10,'停站分钟'),
+                  hours=number(cmd.get('hours',16),.25,24,'运营小时'),enabled=True,mixed=bool(cmd.get('mixed',False)),
+                  startHour=number(cmd.get('startHour',6),0,23+59/60,'首班小时'),dwell=number(cmd.get('dwell',.6),.1,10,'停站分钟'),
                   speed=number(cmd.get('speed',TRANSIT_TYPES[mode]['speed']),5,180,'车辆限速'),oneway=bool(cmd.get('oneway',False)),
                   boardings=0,load=0, color=['#387e8c','#b67848','#7869a2','#b75b67'][len(self.s['lines'])%4])
         naming.name_object(self,'lines',line)
+        if mode == 'bus' and cmd.get('curbRouting'):
+            line.update(depot=cmd['depot'], curbRouting=True)
+        (rail_services.configure if mode in ('metro','train') else transit_management.configure)(line,cmd)
         self.s['lines'].append(line)
         self.rebuild()
         if not line['valid']:
@@ -1374,7 +1468,7 @@ class City:
                             for edge in segment['path']:
                                 if edge.get('ref'):
                                     for period in ('am','pm'):
-                                        self.road_load[(period,edge['ref'])]+=120/line['headway']
+                                        self.road_load[(period,edge['ref'])]+=120/transit_management.headway(line)
             for household_index,h in enumerate(households):
                 if household_index%64==0:
                     self.monthly_progress(.36+.20*(iteration+household_index/max(1,len(households)))/self.s['policy']['trafficIterations'],'交通分配')
@@ -1422,6 +1516,7 @@ class City:
                 if route:
                     h['transportCost']+=route['fee']*self.s['policy']['workingDaysPerMonth']
                     item.update({k:v for k,v in route.items() if k!='path'})
+                    item['transitCalls']=transit_management.calls(self,route,depart)
                     boards=[e for e in route['path'] if e['kind']=='board']
                     for edge in boards:
                         boardings[edge['ref']]+=1; stop_board[edge['origin']]+=1
@@ -1436,6 +1531,10 @@ class City:
                 else:
                     connected=target in self.distances(source,'public')[0] or ((h['car'] or taxis.enabled(self)) and target in self.distances(source,'car')[0])
                     item['failureReason']='班次、运力或可接受时间受限' if connected else '起终点无合法网络连接'
+                    if any(l.get('valid') and l['mode'] in ('metro','train') for l in self.s['lines']):
+                        wanted=self.route(source,target,False,h['income'],False,period,depart)
+                        if wanted and any(e['kind']=='ride' and e.get('mode') in ('metro','train') for e in wanted['path']):
+                            item['railIntentCalls']=transit_management.calls(self,wanted,depart)
                     if purpose=='work': h['commuteFailed']=True
                 trips.append(item)
             self.s['taxiReport']=self._taxi_dispatch.report()
@@ -1478,6 +1577,8 @@ class City:
         for stop in self.s['stops']:
             stop['boardings']=stop_board[stop['id']]
             stop['alightings']=stop_alight[stop['id']]
+        transit_management.record(self,trips)
+        rail_services.record(self,trips)
         for f in self.s['facilities']:
             f['visits']=facility_load[f['id']]
         self.live_traffic=None
@@ -1539,7 +1640,7 @@ class City:
                 p['rent']=round(10*(.7+accessibility*.6),2)
             p.setdefault('history',[]).append(dict(month=self.s['month'],date=construction.date_string(construction.day(self)),land=p['landValue'],rent=p['rent'],jobs=jobs))
             p['history']=p['history'][-1040:]
-            p['reason']='道路未接入' if not p['connected'] else '保护用地' if p['use']=='protected' else f"30 分钟内可达 {jobs} 个岗位；坡度 {terrain['slope']*100:.1f}%；工程成本 ×{terrain['costFactor']:.2f}；土地估值 {p['landValue']:.0f} 币/m²"
+            p['reason']='道路未接入' if not p['connected'] else '保护用地' if p['use']=='protected' else f"30 分钟内可达 {jobs} 个岗位；坡度 {terrain['slope']*100:.1f}%；工程成本 ×{terrain['costFactor']:.2f}；土地估值 {p['landValue']:.0f} 元/m²"
 
     def redevelop(self):
         if self.s['settings'].get('autoRenew',True):return
@@ -1587,12 +1688,16 @@ class City:
         maintenance=sum(r.get('constructionCost',r['length']*ROAD_TYPES[r['kind']]['cost'])*.0006 for r in self.s['roads'])
         station_maintenance=sum(s.get('constructionCost',25000 if s['mode']=='bus' else 500000)*.004 for s in self.s['stops'])
         operation=sum(l.get('operatingCost',0) for l in self.s['lines']+self.s['regionalServices'])
-        fare=sum(t.get('fee',0) for t in getattr(self,'trips',[]) if t.get('mode')=='public')*self.s['policy']['workingDaysPerMonth']
+        fare=sum(t.get('fee',0) for t in getattr(self,'trips',[]) if t.get('mode')=='public' and not any(c['line'] in {l['id'] for l in self.s['lines'] if l['mode'] in ('metro','train')} for c in t.get('transitCalls',[])))*self.s['policy']['workingDaysPerMonth']
         tax=sum(h['income'] for h in self.s['households'])*self.s['settings']['taxRate']
         facility_maintenance=sum(f.get('maintenance',12000) for f in self.s['facilities'])
         factor=getattr(self,'_period_factor',1.)
+        rail=rail_runtime.ensure(self)
+        fare+=rail['pendingFare']/max(factor,1e-9)
+        rail['pendingFare']=0.
+        station_maintenance+=sum(f.get('constructionCost',0)*.004 for f in self.s['railInfrastructure']['facilities']+self.s['railInfrastructure'].get('passages',[]))
         self.s['maintenance']=round((maintenance+station_maintenance+operation+facility_maintenance)*factor,2)
-        self.s['operatingAccounts']=dict(roadMaintenance=round(maintenance),stationMaintenance=round(station_maintenance),facilityMaintenance=round(facility_maintenance),vehicleLease=round(sum(l.get('fleet',0)*TRANSIT_TYPES[l['mode']]['vehicleCost'] for l in self.s['lines'])),transitOperation=round(operation),tax=round(tax),fares=round(fare))
+        self.s['operatingAccounts']=dict(roadMaintenance=round(maintenance),stationMaintenance=round(station_maintenance),facilityMaintenance=round(facility_maintenance),vehicleLease=round(sum(l.get('fleet',0)*(rail_services.VEHICLES[l['vehicleType']]['vehicleCost']*l['formation'] if l['mode'] in ('metro','train') else TRANSIT_TYPES[l['mode']]['vehicleCost']) for l in self.s['lines'])),transitOperation=round(operation),tax=round(tax),fares=round(fare))
         self.s['revenue']=round((fare+tax)*factor,2)
         self.s['operatingAccounts']={k:round(v*factor,2) for k,v in self.s['operatingAccounts'].items()}
         if 'calendar' in self.s:
@@ -1678,6 +1783,7 @@ class City:
                 b['footprintArea']=round(Polygon(b['footprint']).area,1)
         state={k:v for k,v in self.s.items() if k not in ('households','commands','placeNames','namingGeography')}
         state['parcels']=parcels
+        state['railRuntime']=rail_runtime.view(self)
         # Detailed representative-day schedules remain in the save, not in
         # every UI response. Live samples consume the authoritative report.
         state['taxiReport']={k:v for k,v in self.s['taxiReport'].items() if k not in ('bookings','emptyJourneys')}
@@ -1690,7 +1796,7 @@ class City:
                                   aggregateFlows=aggregate_flows(self),canUndo=bool(self.undo),
                                   canRedo=bool(self.redo),householdSample=self.s['households'][:100],
                                   meta=dict(model=MODEL_VERSION,width=self.terrain.width,height=self.terrain.height,
-                                            uses=USES,roadTypes=ROAD_TYPES,transitTypes=TRANSIT_TYPES,specialBuildings=special_buildings.CATALOG,
+                                            uses=USES,roadTypes=ROAD_TYPES,transitTypes=TRANSIT_TYPES,specialBuildings=special_buildings.CATALOG,railRules=rail_infrastructure.RULES,railVehicles=rail_services.VEHICLES,
                                             policy=self.s['policy'],parameters=parameter_definitions(self.s['policy']),metrics=metric_definitions(self.s['stats'],MODEL_VERSION),trafficPeriod='典型工作日 · 早晚高峰各 2 小时，平峰活动抽样')))
 
     def inspect(self, object_id):

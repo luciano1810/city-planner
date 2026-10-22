@@ -3,10 +3,10 @@
   const fields=[
     ['fleetSize','车队规模 / 辆',0,500,1],
     ['maxWaitMinutes','最长接客等待 / 分钟',1,60,1],
-    ['baseFare','起步价 / 币',0,100,.5],
-    ['perKm','超起步里程 / 币每 km',0,20,.1],
+    ['baseFare','起步价 / 元',0,100,.5],
+    ['perKm','超起步里程 / 元每 km',0,20,.1],
     ['includedKm','起步里程 / km',0,20,.5],
-    ['perMinute','行车计时 / 币每分钟',0,10,.1],
+    ['perMinute','行车计时 / 元每分钟',0,10,.1],
     ['startHour','开始运营 / 时',0,23,1],
     ['hours','每日运营 / 小时',1,24,1],
   ];
@@ -36,7 +36,7 @@
         ['完成 / 补足旅程',`${format(report.completed)} / ${format(report.rescued)}`,'人次'],
         ['仍未满足',format(report.unserved),'人次'],['平均接客等待',format(report.meanWait),'分钟'],
         ['载客 / 空驶',`${format(report.occupiedKm)} / ${format(report.emptyKm)}`,'km'],
-        ['车队忙碌率',format((report.utilization||0)*100),'%'],['乘客支付车费',format(report.revenue),'币'],
+        ['车队忙碌率',format((report.utilization||0)*100),'%'],['乘客支付车费',format(report.revenue),'元'],
       ]){const row=document.createElement('p');row.className='city-note';row.textContent=`${label}：${value} ${unit}`;summary.append(row);}
       const failures=Object.entries(report.failures||{});
       if(failures.length){const row=document.createElement('p');row.className='city-note';row.textContent=failures.map(([reason,count])=>`${reason} ${count} 次`).join('；');summary.append(row);}

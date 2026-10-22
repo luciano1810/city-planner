@@ -147,4 +147,22 @@ def update(city):
         paved.extend(valid)
         plans.append(dict(id=obj['id'],surfaces=obj['forecourt'],parking=parking,trees=trees,
                           accessPath=[anchor,entry],accessWidth=width))
+    # Older frontage-grown cities have no block outlines. Finish every nearby
+    # street-facing side, not just the road containing the site's entrance.
+    # These are paving only: do not invent entrances, parking or access links.
+    street_lines = [LineString(r['points']) for r in roads if r['level']==0 and r['kind'] in ('street','avenue','lane')]
+    street_index = STRtree(street_lines)
+    for _, site, obj in sites:
+        if not obj.get('connected') or (obj.get('building') or {}).get('status') in ('planned','construction'):
+            continue
+        reach = site.buffer(24,join_style=2)
+        sides = [frontage(site,street_lines[int(i)]).intersection(reach)
+                 for i in street_index.query(reach,predicate='intersects')]
+        apron = unary_union(sides).difference(reserved).difference(exclusions)
+        paved.extend(p for p in polygons(apron) if city.terrain.buildable(p,.25))
+    # Include street aprons in the join, so corner and rear gaps cannot leave
+    # isolated terrain slivers between an already paved site and its sidewalk.
+    joined = unary_union([*developed,*paved])
+    infill = joined.buffer(12.05,join_style=2).buffer(-12.05,join_style=2).difference(reserved).difference(exclusions)
+    paved.extend(p for p in polygons(infill) if city.terrain.buildable(p,.25))
     city.s['streetside'] = dict(surfaces=contours(unary_union(paved)),sites=plans)

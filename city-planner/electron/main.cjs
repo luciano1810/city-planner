@@ -64,7 +64,7 @@ ipcMain.handle('terrain:generate', async (_event, options) => {
   return result;
 });
 ipcMain.handle('city:request', async (_event, { action, payload }) => {
-  if (!['create','saves','load','import','state','command','step','save','checkpoint','export','inspect','route','branch','close','preview','query','compare','summary','scenario','renewal_preview','traffic','clock','simulate'].includes(action)) throw new Error('未知城市操作');
+  if (!['create','saves','load','import','state','command','step','save','checkpoint','export','inspect','route','branch','close','preview','special_preview','bus_preview','rail_preview','query','compare','summary','scenario','renewal_preview','traffic','clock','simulate'].includes(action)) throw new Error('未知城市操作');
   const response = await fetch(`http://127.0.0.1:${backendPort}/api/city/${action}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Terrain-Token': token },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(180000)

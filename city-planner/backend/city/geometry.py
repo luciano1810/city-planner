@@ -197,6 +197,10 @@ def road_contacts(road, other, shape=None, other_shape=None, tolerance=.05):
 
     def compatible(a, b, point):
         if road['level'] == other['level']:
+            if group(road)=='rail' and (road.get('railManaged') or other.get('railManaged')):
+                if any(Point(p).distance(point)<=tolerance for p in road.get('railJunctions',[])+other.get('railJunctions',[])):return True
+                # Simple endpoint continuation is legal without a branch switch.
+                return min(a,shape.length-a)<tolerance and min(b,other_shape.length-b)<tolerance
             return True
         # Old saves retain their endpoint links. New roads must name the
         # magnetic target explicitly; a geometric crossing is not a ramp.
@@ -281,7 +285,7 @@ def road_junctions(roads, shapes, nodes, edges):
     return junctions
 
 
-def make_network(roads, stops, terrain, parcels=()):
+def make_network(roads, stops, terrain, parcels=(), rail_stations=()):
     """Split same-layer crossings; bridge/tunnel endpoints are explicit ramps."""
     shapes = {r['id']: LineString(r['points']) for r in roads}
     road_map = {r['id']: r for r in roads}
@@ -337,9 +341,18 @@ def make_network(roads, stops, terrain, parcels=()):
             other = roads[j]
             for a, b, point in road_contacts(road, other, shape, tree_shapes[j]):
                 connect(road['id'], a, other['id'], b, point)
+    for station in rail_stations:
+        for entry in station.get('entrances',[]):
+            rid=entry.get('road')
+            if rid in shapes:
+                cuts[rid].add(shapes[rid].project(Point(entry.get('accessPoint',entry['point']))))
     stop_projection = {}
     for stop in stops:
         compatible = [r for r in roads if r['kind'] in FRONTAGE_ROADS] if stop['mode']=='bus' else [r for r in roads if group(r)==group({'kind':stop['mode']})]
+        if stop.get('railPlatform'):
+            compatible=[r for r in compatible if r['id']==stop['track'] and r['level']==stop['level']]
+        if stop.get('curb'):
+            compatible = [r for r in roads if r['id'] == stop.get('road') and r['kind'] in DRIVABLE_ROADS]
         if not compatible:
             stop_projection[stop['id']] = None
             continue
@@ -348,7 +361,7 @@ def make_network(roads, stops, terrain, parcels=()):
         if shape.distance(Point(stop['point'])) > 90:
             stop_projection[stop['id']] = None
             continue
-        d = shape.project(Point(stop['point']))
+        d = shape.project(Point(stop.get('anchor', stop['point'])))
         cuts[r['id']].add(d)
         p = list(shape.interpolate(d).coords[0])
         access = None
@@ -381,7 +394,8 @@ def make_network(roads, stops, terrain, parcels=()):
             if anchor is not None:
                 levels = contact_levels[root(anchor)]
                 level = next(iter(levels)) if len(levels) == 1 else 0
-            nid = f'{group(road)}:{level}:{xy[0]}:{xy[1]}'
+            suffix=(':'+road['id']) if road.get('railManaged') and anchor is None else ''
+            nid = f'{group(road)}:{level}:{xy[0]}:{xy[1]}{suffix}'
             nodes[nid] = list(xy)
             positions[(road['id'], round(d, 3))] = nid
             ids.append(nid)
@@ -399,12 +413,20 @@ def make_network(roads, stops, terrain, parcels=()):
                               kind=road['kind'], level=road['level'], oneway=road['oneway'],
                               traffic=0., ratio=0., time=profile['freeTime'], **profile))
     attachments = {}
+    stopmap = {s['id']: s for s in stops}
     for sid, result in stop_projection.items():
         if result is None:
             attachments[sid] = None
             continue
         rid, d, p, access = result
         attachments[sid] = dict(node=positions[(rid, round(d, 3))], point=p, access=None)
+        stop = stopmap[sid]
+        if stop.get('curb'):
+            shape = shapes[rid]
+            a, b = shape.interpolate(max(0, d-.1)), shape.interpolate(min(shape.length, d+.1))
+            dx, dy = b.x-a.x, b.y-a.y
+            offset = (ROAD_TYPES[road_map[rid]['kind']]['width']/2+.8)*stop['side']/max(math.hypot(dx,dy),.001)
+            attachments[sid]['curbPoint'] = [p[0]-dy*offset,p[1]+dx*offset]
         if access:
             ar, ad, ap = access
             attachments[sid]['access'] = dict(node=positions[(ar, round(ad, 3))], point=ap,

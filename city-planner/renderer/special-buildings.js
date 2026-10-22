@@ -2,7 +2,7 @@
 (function(root){
   'use strict';
   const civic=typeof module!=='undefined'&&module.exports?require('./civic-buildings.js'):root.CityCivicBuildings;
-  const names={...civic.names,airport:'机场',port:'港口',train_station:'火车站',parking_lot:'露天停车场',parking_garage:'停车楼'};
+  const names={...civic.names,bus_depot:'公交车总站',airport:'机场',port:'港口',train_station:'火车站',parking_lot:'露天停车场',parking_garage:'停车楼'};
   const adaptive=typeof module!=='undefined'&&module.exports?require('./block-architecture.js'):root.CityBlockArchitecture;
   const cache=new WeakMap();
   function hash(id){let n=2166136261;for(const c of String(id)){n^=c.charCodeAt(0);n=Math.imul(n,16777619);}return n>>>0;}
@@ -84,6 +84,27 @@
       for(let x=-w*.3;x<w*.35;x+=14*s)box(x,51*s,0,1*s,1*s,13*s,'facade','facade');
       surface(0,57*s,w*.82,9*s,'paving');
       lamp(-w*.43,57*s);lamp(w*.43,57*s);
+    }else if(f.kind==='bus_depot'){
+      const unit=w/96;
+      surface(0,0,w,d,'paving');surface(0,d*.05,w*.94,d*.82,'asphalt');
+      box(-w*.25,-d*.25,0,w*.42,d*.28,8*unit,'facade','metal','#a6b4ae');
+      box(w*.23,-d*.29,0,w*.37,d*.2,6*unit,'glass','metal','#70929b');
+      box(-w*.25,-d*.25,8*unit,w*.46,d*.32,.7*unit,'metal','metal','#c4cec8');
+      for(const x of [-.39,-.25,-.11])box(w*x,-d*.105,0,9*unit,.4,5.5*unit,'metal','metal','#576e73');
+      line([[-w*.43,d*.3],[w*.4,d*.3]],.3*unit,'#ddc166',[3,2]);
+      for(let i=0;i<6;i++){
+        const x=(-.39+i*.145)*w,y=d*.045;
+        line([[x-4.5*unit,y-8*unit],[x-4.5*unit,y+8*unit],[x+4.5*unit,y+8*unit]],.16*unit,'#e5e4cf');
+        if(i===2||i===5)continue;
+        box(x,y,.45*unit,2.6*unit,11.8*unit,3.1*unit,'carPaint','metal',i%2?'#d8e3d7':'#629e99');
+        box(x,y,1.5*unit,2.66*unit,10.1*unit,1.2*unit,'glass','glass','#345e70');
+        box(x,y,3.55*unit,2.6*unit,11.8*unit,.2*unit,'metal','metal','#dfe6dc');
+        box(x,y,3.8*unit,1.5*unit,2.4*unit,.35*unit,'metal','metal','#adbcb7');
+      }
+      box(w*.37,d*.4,0,7*unit,5*unit,3.2*unit,'glass','metal');
+      box(w*.13,-d*.29,6*unit,12*unit,6*unit,.7*unit,'metal','metal');
+      for(const x of [-w*.46,w*.46])lamp(x,d*.3);
+      label('BUS',0,d*.38,4*unit,'#efe9cf');
     }else if(f.kind==='parking_lot'||f.kind==='parking_garage'){
       surface(0,0,w,d,'asphalt');
       const garage=f.kind==='parking_garage',h=garage?f.height:0;

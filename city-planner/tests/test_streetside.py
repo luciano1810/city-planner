@@ -101,6 +101,24 @@ class StreetsideTests(unittest.TestCase):
         streetside.update(c)
         self.assertTrue(shape(c.s['streetside']['surfaces']).is_empty)
 
+    def test_frontage_save_paves_side_street_without_adding_an_entrance(self):
+        points=list(box(100,140,160,190).exterior.coords)
+        site=dict(id='home',points=points,use='residential',connected=True,road='front',
+                  center=[130,165],entrance=[130,140],building=dict(footprint=points,status='active'))
+        roads=[dict(id='front',kind='street',level=0,points=[[0,100],[300,100]]),
+               dict(id='side',kind='street',level=0,points=[[80,100],[80,250]])]
+        c=SimpleNamespace(s=dict(parcels=[site],facilities=[],roads=roads),terrain=Terrain(flat_world()))
+        streetside.update(c)
+        paving=shape(c.s['streetside']['surfaces'])
+        self.assertTrue(paving.covers(Point(94,165)))
+        self.assertFalse(paving.covers(Point(80,165)))
+        self.assertFalse(paving.covers(Point(65,165)))
+        self.assertEqual(len(c.s['streetside']['sites']),1)
+        self.assertEqual(c.s['streetside']['sites'][0]['accessPath'],[[130,100],[130,140]])
+        roads.pop()
+        streetside.update(c)
+        self.assertFalse(shape(c.s['streetside']['surfaces']).covers(Point(94,165)))
+
 
 if __name__=='__main__':
     unittest.main()

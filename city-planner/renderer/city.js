@@ -18,7 +18,7 @@
   const roadKinds = ['motorway','highway','avenue','street','lane','path'];
   const trafficMetrics=window.CityTrafficMetrics;
   let trafficPeriod='peak';
-  const specialTools=['airport','port','train_station'];
+  const specialTools=['airport','port','train_station','bus_depot'];
   const facilityNames={school:'学校',clinic:'诊所',park:'公园',plaza:'广场',...window.CitySpecialBuildings.names};
   let state=null, session=null, active=false, working=false;
   let currentSave=null;
@@ -47,6 +47,18 @@
   let baseline=null, sourceParcel=null, inspectedRoute=null, space=false;
   let renewalSelection=[],renewalPreview=null;
   let specialPreview=null,specialTimer=null,specialTicket=0;
+  let busPreview=null,busTimer=null,busTicket=0,busSnap=null;
+  const busDraft=()=>tool==='line'&&el('city-mode').value==='bus';
+  const busReady=()=>state?.facilities.some(f=>f.kind==='bus_depot'&&f.connected);
+  function clearBusPreview(){clearTimeout(busTimer);busTicket++;busPreview=null;busSnap=null;}
+  function scheduleBusPreview(){
+    clearBusPreview();
+    if(!busDraft()||lineStops.length<2)return;
+    const ticket=busTicket,revision=state.revision;
+    const command={stops:structuredClone(lineStops),oneway:!!el('transit-oneway')?.checked};
+    busTimer=setTimeout(async()=>{try{const result=await api('bus_preview',{command});if(ticket===busTicket&&revision===state.revision){busPreview=result;updateHint();workspace.requestDraw();}}catch(error){if(ticket===busTicket){busPreview={valid:false,reason:error.message};updateHint();}}},140);
+  }
+  function busSnapAt(point){const g=workspace.geometry,t=workspace.terrain;return window.CityBusGeometry.snap(point,state.roads,state.meta.roadTypes,{sx:t.width*g.scale/state.meta.width,sy:t.height*g.scale/state.meta.height});}
   const toolDrafts=new Map();
   const shapeBounds=new WeakMap();
 
@@ -133,6 +145,7 @@
           <div class="signal-speed-labels"><span>00:00</span><span>12:00</span><span>24:00</span></div>
           <p class="city-note">模拟速度最高为 3 天/秒；低于 1 天/秒时光照跟随模拟速度，达到 1 天/秒后光照按实时速度变化。拖动滑块可暂停模拟并调整光照，城市日期保持不变。</p>
           <label><span><input type="checkbox" id="city-render-labels"> 显示建筑名称、楼层与城区名称</span></label>
+          <label><span><input type="checkbox" id="city-show-transit-lines"> 显示公共交通线路（公交 / 地铁 / 火车）</span></label>
         </div>
         <h3>专题地图</h3><div class="city-fields">
           <label>显示内容<select class="city-field" id="city-layer">
@@ -170,7 +183,7 @@
     <div class="city-kpis" hidden>
       <div class="city-kpi"><span>常住人口</span><strong id="ck-pop">0</strong><small id="ck-pop-sub">等待城市生长</small></div>
       <div class="city-kpi"><span>就业人数 / 岗位</span><strong id="ck-jobs">0 / 0</strong><small id="ck-jobs-sub">—</small></div>
-      <div class="city-kpi"><span>土地估值中位数</span><strong id="ck-land">—</strong><small>模拟币 / m² 土地</small></div>
+      <div class="city-kpi"><span>土地估值中位数</span><strong id="ck-land">—</strong><small>元 / m² 土地</small></div>
       <div class="city-kpi"><span>平均通勤</span><strong id="ck-time">—</strong><small id="ck-time-sub">单程平均 · 查看详情</small></div>
     </div>`);
   document.querySelector('.workspace').insertAdjacentHTML('beforeend', `
@@ -225,7 +238,7 @@
       el('city-dialog-close').disabled=false;
       for(const id of ['city-play','city-speed','city-demo','city-save','city-finish','city-create-line']) el(id).disabled=false;
       el('city-start').disabled=!workspace.canConfirm;
-      window.dispatchEvent(new Event('city-renewal-change'));
+      window.dispatchEvent(new Event('city-renewal-change'));updateHint();
     }
   }
   function activate(result) {
@@ -240,7 +253,7 @@
     window.AppNavigation?.show('city');
     owned.forEach(selector=>document.querySelector(selector).hidden=false);
     el('city-inspector').hidden=false;
-    selected=null; draft=[]; lineStops=[]; inspectedRoute=null;tool='select';space=false;
+    selected=null; draft=[]; lineStops=[]; clearBusPreview();inspectedRoute=null;tool='select';space=false;
     canvas.classList.remove('city-drawing');
     document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='select'));
     el('city-migration').value=state.settings.migration; el('city-external').value=state.settings.externalJobs;
@@ -268,6 +281,7 @@
       if(result.city)state=result.city;
       state.simulation=result.simulation;state.month=result.month;state.sceneTimeSeconds=result.sceneTimeSeconds;
       state.settlement=result.settlement;
+      if(result.railRuntime)state.railRuntime=result.railRuntime;
       trafficState=result.traffic;state.liveTraffic=trafficState;
       trafficPlayback.push(trafficState,result.trafficAnimation,{reset:result.trafficReset,time:timing?.sentAt});
       syncTrafficAnimation();
@@ -302,7 +316,7 @@
   }
   function liveTrafficValues(){
     const t=trafficState,count=value=>Number.isFinite(value)?fmt(value):'—';
-    return {vehicles:count(t?.vehicles?.length),pedestrians:count(t?.pedestrians?.length),waiting:count(t?.waiting),
+    return {vehicles:count(t?.vehicles?.length),buses:count(t?.vehicles?.filter(v=>v.mode==='bus').length),pedestrians:count(t?.pedestrians?.length),waiting:count(t?.waiting),
       passed:count(t?.passed),pedestrianWaiting:count(t?.pedestrianWaiting),
       sampling:t?(state.simulation?.sampled?'高速抽样':'精细人车'):'暂无样本',
       source:t?(t.mode==='test'?'验证人车流':'城市交通分配'):'—'};
@@ -310,7 +324,7 @@
   function liveTrafficSummary(){
     const values=liveTrafficValues();
     const counts=[['vehicles','样本车辆','辆'],['pedestrians','样本行人','人'],['waiting','等待车辆','辆'],['pedestrianWaiting','等灯行人','人'],['passed','样本通过','辆次']];
-    return `<div class="live-traffic-summary"><dl class="live-traffic-counts">${counts.map(([key,label,unit])=>`<div><dt>${label}</dt><dd><strong data-live-traffic="${key}">${values[key]}</strong><small>${unit}</small></dd></div>`).join('')}</dl><p class="live-traffic-source">模拟精度：<span data-live-traffic="sampling">${values.sampling}</span><span>交通来源：<span data-live-traffic="source">${values.source}</span></span></p><p class="live-traffic-note">当前人车样本；通过数为累计过路口辆次，重新生成样本后清零。</p></div>`;
+    return `<div class="live-traffic-summary"><dl class="live-traffic-counts">${counts.map(([key,label,unit])=>`<div><dt>${label}</dt><dd><strong data-live-traffic="${key}">${values[key]}</strong><small>${unit}</small></dd></div>`).join('')}</dl><p class="live-traffic-source">模拟精度：<span data-live-traffic="sampling">${values.sampling}</span><span>交通来源：<span data-live-traffic="source">${values.source}</span></span></p><p class="live-traffic-note">当前人车样本含公交 <span data-live-traffic="buses">${values.buses}</span> 辆；通过数为累计过路口辆次，重新生成样本后清零。</p></div>`;
   }
 
   function updateTrafficDetails(){
@@ -327,6 +341,9 @@
     el('junction-signal-dot').className='signal-dot '+(signal?.phase||'unknown');
   }
   function setTool(next) {
+    if(working)return;
+    if(next==='line'&&el('city-mode').value==='bus'&&!busReady()){status('请先建造并连接公交车总站',true);return;}
+    clearBusPreview();
     clearTimeout(specialTimer);specialTicket++;specialPreview=null;
     pause();toolDrafts.set(tool,{draft:draft.map(cloneDraftPoint),lineStops:[...lineStops],editingRoad,editingLine,shape:el('city-shape').value,level:el('city-level').value,oneway:el('city-oneway').checked});
     tool=next;const saved=toolDrafts.get(next);draft=saved?.draft.map(cloneDraftPoint)||[];lineStops=saved?.lineStops.slice()||[];editingRoad=saved?.editingRoad||null;editingLine=saved?.editingLine||null;sourceParcel=null;inspectedRoute=null;preview=null;dragControl=null;
@@ -338,14 +355,15 @@
     if(el('measure').getAttribute('aria-pressed')==='true') el('measure').click();
     // Tools and their drafts only affect the live overlay. Invalidating the
     // static base here briefly replaces finished textures with preview tiles.
-    schedulePreview();if(specialTools.includes(tool)&&hover)scheduleSpecialPreview();updateHint();workspace.requestAnimation();
+    schedulePreview();scheduleBusPreview();if(specialTools.includes(tool)&&hover)scheduleSpecialPreview();updateHint();workspace.requestAnimation();
   }
   function updateHint() {
     const names=state?.meta.roadTypes;
     let hint='点击建筑、道路或站点查看详情 · 空格拖动平移';
     if(names?.[tool])hint=`绘制${names[tool].name} · 点击加点，拖动圆点调整 · 双击 / Enter 完成 · Backspace 撤回一点`;
     if(tool==='stop')hint='点击兼容的道路或轨道放置站点';
-    if(tool==='line')hint='按行驶顺序点击站点，然后开通线路';
+    if(tool==='line')hint=busDraft()?'沿道路两侧吸附选站 · 按点击顺序连接 · 至少两站后 Enter 创建 · Backspace 撤回':'按行驶顺序点击站点，然后开通线路';
+    if(busDraft()&&busPreview?.valid===false)hint=busPreview.reason+' · Backspace 撤回站点';
     if(tool==='delete')hint='点击对象拆除 · 可在推进模拟前撤销';
     if(tool==='route')hint=sourceParcel?'选择目的地块':'选择起点地块，查看实际可行旅程';
     if(['park','plaza','school','clinic'].includes(tool))hint='点击陆地放置公共服务设施';
@@ -363,9 +381,10 @@
     el('city-hint').classList.toggle('error',!!roadError);
     const geometry=preview?.valid?preview.road.points:window.CityGeometry.curvePoints(draft,el('city-shape').value==='curve');
     const distance=geometry.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p[0]-geometry[i][0],p[1]-geometry[i][1]),0);
-    el('city-draft-info').textContent=draft.length?`${draft.length} 个控制点 · ${fmt(distance)} m${preview?(preview.valid?` · ${preview.road.terrainAdjusted?'已自动绕坡 · ':''}预计 ${fmt(preview.road.constructionCost+(preview.clearance?.cost||0))} 币 · ${preview.connections} 处连接${preview.clearance&&(preview.clearance.buildings||preview.clearance.facilities)?` · 自动拆除 ${preview.clearance.buildings} 栋建筑 / ${preview.clearance.facilities} 处设施，安置 ${preview.clearance.households} 户`:''}`:` · ${preview.reason}`):draft.length<2?' · 请点击终点':' · 正在检查地形与连接'}${editingRoad?' · 拖动控制点调整':''}`:'靠近道路自动吸附，逐点绘制，Enter 完成，Esc 取消。按住空格拖动地图。';
+    el('city-draft-info').textContent=draft.length?`${draft.length} 个控制点 · ${fmt(distance)} m${preview?(preview.valid?` · ${preview.road.terrainAdjusted?'已自动绕坡 · ':''}预计 ${fmt(preview.road.constructionCost+(preview.clearance?.cost||0))} 元 · ${preview.connections} 处连接${preview.clearance&&(preview.clearance.buildings||preview.clearance.facilities)?` · 自动拆除 ${preview.clearance.buildings} 栋建筑 / ${preview.clearance.facilities} 处设施，安置 ${preview.clearance.households} 户`:''}`:` · ${preview.reason}`):draft.length<2?' · 请点击终点':' · 正在检查地形与连接'}${editingRoad?' · 拖动控制点调整':''}`:'靠近道路自动吸附，逐点绘制，Enter 完成，Esc 取消。按住空格拖动地图。';
     el('city-draft-info').classList.toggle('error',!!roadError);
-    el('city-stop-order').textContent=lineStops.length?lineStops.map(id=>state.stops.find(s=>s.id===id)?.name||id).join(' → '):'尚未选择站点';
+    el('city-stop-order').textContent=lineStops.length?lineStops.map((id,i)=>typeof id==='string'?state.stops.find(s=>s.id===id)?.name||id:`第 ${i+1} 站`).join(' → '):'尚未选择站点';
+    el('city-create-line').disabled=working||lineStops.length<2;
     window.dispatchEvent(new Event('city-tool-change'));
   }
   function updateRoadValidation(g=workspace.geometry) {
@@ -416,7 +435,7 @@
     el('ck-pop-sub').textContent=`今日迁入 ${fmt(s.movedIn)} · 迁出 ${fmt(s.movedOut)}`;
     if(el('ck-treasury')){
       el('ck-treasury').textContent=fmt(s.treasury);
-      el('ck-treasury-sub').textContent=`日收入 ${fmt(s.revenue)} 币`;
+      el('ck-treasury-sub').textContent=`日收入 ${fmt(s.revenue)} 元`;
     }
     el('ck-jobs').textContent=`${fmt(s.employed)} / ${fmt(s.jobs)}`;
     el('ck-jobs-sub').textContent=`失业率 ${fmt(s.unemployment,1)}%`;
@@ -426,19 +445,21 @@
     el('city-undo').disabled=!state.canUndo;el('city-redo').disabled=!state.canRedo;
     el('city-object-picker').innerHTML='<option value="">选择城市对象</option>'+[...state.roads,...state.stops,...state.lines,...state.facilities,...state.parcels,...state.districts].map(o=>`<option value="${escape(o.id)}">${escape(o.building?.name||o.name||useNames[o.building?.use]||o.kind||'地块')} · ${escape(o.id)}</option>`).join('');
     el('map-name').textContent=state.name;el('map-number').textContent=`${date(state.month)}`;
-    el('city-line-list').innerHTML=state.lines.length?state.lines.map(l=>`<button class="city-list-item" data-line="${escape(l.id)}"><b>${escape(l.name)} · ${modeNames[l.mode]}</b><small>${l.valid?`${fmt(l.boardings)} 上车人次 · 峰值 ${fmt(l.load*100)}%`:`${escape(l.reason)}`}<br>每 ${fmt(l.headway)} 分钟 · ${fmt(l.fleet)} 辆车</small></button>`).join(''):'<p class="city-note">先设置至少两个站点，再创建运营线路。</p>';
-    el('city-line-list').querySelectorAll('[data-line]').forEach(b=>b.onclick=()=>inspect(b.dataset.line));
+    el('city-line-list').innerHTML=state.lines.length?state.lines.map(l=>`<button class="city-list-item" data-line="${escape(l.id)}"><b><span class="tm-list-swatch" data-line-color="${escape(l.color)}"></span>${escape(l.name)} · ${modeNames[l.mode]}</b><small>${fmt(l.boardings)} 上车人次 / 典型日<br>${l.valid?`每 ${fmt(l.serviceHeadway??l.headway,1)} 分钟 · ${fmt(l.fleet)} 辆车`:`${escape(l.reason)}`}</small></button>`).join(''):'<p class="city-note">先设置至少两个站点，再创建运营线路。</p>';
+    el('city-line-list').querySelectorAll('[data-line-color]').forEach(node=>node.style.backgroundColor=/^#[\da-f]{6}$/i.test(node.dataset.lineColor)?node.dataset.lineColor:'#397e76');
+    el('city-line-list').querySelectorAll('[data-line]').forEach(b=>b.onclick=()=>state.lines.find(l=>l.id===b.dataset.line)?.mode==='bus'&&window.CityTransitManagement?CityTransitManagement.open(b.dataset.line):window.CityRail?CityRail.openManager(b.dataset.line):inspect(b.dataset.line));
     for(const [id,external] of [['city-freight-start',false],['city-freight-end',true]])el(id).innerHTML=state.stops.filter(s=>s.role==='freight'&&!!s.external===external).map(s=>`<option value="${escape(s.id)}">${escape(saveLabel(s))}</option>`).join('');
-    el('city-freight-list').innerHTML=(state.regionalServices||[]).map(f=>`<div class="city-note"><b>${escape(f.name)}</b> · ${f.valid?fmt(f.tonnes)+' / '+fmt(f.dailyCapacity)+' 吨/日':escape(f.reason)}<br>${fmt(f.operatingCost)} 币/月 <button class="city-btn" data-freight-toggle="${escape(f.id)}">${f.enabled?'停运':'恢复'}</button><button class="city-btn" data-freight-delete="${escape(f.id)}">删除</button></div>`).join('');
+    el('city-freight-list').innerHTML=(state.regionalServices||[]).map(f=>`<div class="city-note"><b>${escape(f.name)}</b> · ${f.valid?fmt(f.tonnes)+' / '+fmt(f.dailyCapacity)+' 吨/日':escape(f.reason)}<br>${fmt(f.operatingCost)} 元/月 <button class="city-btn" data-freight-toggle="${escape(f.id)}">${f.enabled?'停运':'恢复'}</button><button class="city-btn" data-freight-delete="${escape(f.id)}">删除</button></div>`).join('');
     el('city-freight-list').querySelectorAll('[data-freight-toggle]').forEach(b=>b.onclick=()=>command({type:'freight_update',id:b.dataset.freightToggle,enabled:!state.regionalServices.find(f=>f.id===b.dataset.freightToggle).enabled}));
     el('city-freight-list').querySelectorAll('[data-freight-delete]').forEach(b=>b.onclick=()=>command({type:'delete',id:b.dataset.freightDelete}));
+    if(busDraft())scheduleBusPreview();
     el('city-auto-renew').checked=state.settings.autoRenew!==false;renderRenewals();renderLegend(); renderInspector(); updateHint(); workspace.requestDraw();
   }
   function renderLegend() {
     let html=Object.entries(colors).map(([k,color])=>`<span><i data-swatch="${color}"></i>${useNames[k]}</span>`).join('');
     if(layer==='use'&&window.CityScene.effectiveQuality==='map')html=[['#eeede7','建筑'],['#faf0d9','商业用地'],['#cce5ae','公园绿地'],['#d1d2d3','主干道'],['#9ed9ed','水域']].map(([color,name])=>`<span><i data-swatch="${color}"></i>${name}</span>`).join('');
-    if(layer==='land')html='<span>土地估值 · 模拟币 / m²</span><span>浅色低价 → 深色高价</span>';
-    if(layer==='rent')html='<span>空间租金 · 币 / m² / 月</span><span>浅色低 → 深色高</span>';
+    if(layer==='land')html='<span>土地估值 · 元 / m²</span><span>浅色低价 → 深色高价</span>';
+    if(layer==='rent')html='<span>空间租金 · 元 / m² / 月</span><span>浅色低 → 深色高</span>';
     if(layer==='access')html='<span>30 分钟可达岗位 · 网络时间</span><span>浅色少 → 深色多</span>';
     if(layer==='traffic')html=`<span>典型工作日 · ${trafficMetrics.periods[trafficPeriod]} · ${trafficPeriod==='off'?'辆/抽样时段':'辆/小时'}</span><span>${trafficPeriod==='off'?'浅蓝 → 深蓝：相对车流量；不计算饱和度':'绿 ≤60% · 橙 60%–100% · 红 >100%（流量/有效容量）'}</span>`;
     if(layer==='flows')html='<span>典型工作日旅程抽样 · 最多显示 250 条</span><span>蓝色公交 · 金色驾车 · 绿色步行</span>';
@@ -448,7 +469,7 @@
     if(layer==='pollution')html='<span>环境压力指数 0–1 · 非物理浓度</span>';
     if(layer==='districts')html='<span>功能城区 · 连通空间聚类 · 标签含三个月惯性</span>';
     if(layer==='flows')html='<span>远景汇总通勤 · 近景抽样轨迹 · 虚线为当月迁移（外部采用抽象门户）</span>';
-    const legends={slope:'地块平均坡度 · %',cost:'地形工程成本倍数 · 1–3',landscape:'景观品质指数 · 0–1',risk:'低海拔邻水指数 · 非洪水概率',height:'建筑高度 · m',change:'土地月涨跌幅 · %',development:'浅色未开发 · 金色施工 · 绿色使用 · 灰色空置',comparison:'当前方案减对照 · 土地币/m² · 蓝色降低 / 金色升高'};
+    const legends={slope:'地块平均坡度 · %',cost:'地形工程成本倍数 · 1–3',landscape:'景观品质指数 · 0–1',risk:'低海拔邻水指数 · 非洪水概率',height:'建筑高度 · m',change:'土地月涨跌幅 · %',development:'浅色未开发 · 金色施工 · 绿色使用 · 灰色空置',comparison:'当前方案减对照 · 土地元/m² · 蓝色降低 / 金色升高'};
     if(legends[layer])html='<span>'+legends[layer]+'</span>';
     if(['use','development','districts','height'].includes(layer))html+='<span>绿色半透明虚线 · 待开工住宅</span>';
     if(layer==='transit')html='<span>运营线路 · 实线有效 · 虚线未运营轨道</span><span>圆点为站点</span>';
@@ -497,8 +518,8 @@
         const b=p.building;
         box.innerHTML=`<h2>${escape(b?.name||(b?b.landmark==='cbd_skyscraper'?'CBD 摩天楼':useNames[b.use]:p.openSpace?'公共配套用地':'待开发地块'))}${close}</h2>
         ${!b&&!p.openSpace?'<h3>最近日度评估 · 未开发原因</h3>':''}<p>${escape(!b?(p.developmentReason||p.reason||'等待下次日结算评估开发条件'):(p.reason||'等待城市发展'))}</p>${!b&&!p.openSpace?'<p>每日评估新项目，按计划日期逐栋开工；中等坡地优先建设小体量低层建筑，超过 45% 的陡坡不开发。</p>':''}${details([
-          ['地块面积',`${fmt(p.area)} m²`],['地形高程',`${fmt(p.terrain?.elevation,1)} m`],['平均坡度',`${fmt((p.terrain?.slope||0)*100,1)}%`],['基础工程成本',`×${fmt(p.terrain?.costFactor,2)}`],['距水体',`${fmt(p.terrain?.waterDistance)} m`],['景观品质指数',fmt(p.terrain?.scenic,2)],['低地邻水指数',fmt(p.terrain?.lowland,2)],['可达空缺岗位',fmt(p.vacantJobs)],['土地单价',`${fmt(p.landValue)} 币/m²`],
-          ['租金',`${fmt(p.rent,1)} 币/m²/月`],['网络接入',p.connected?'已接入':'失去接入'],
+          ['地块面积',`${fmt(p.area)} m²`],['地形高程',`${fmt(p.terrain?.elevation,1)} m`],['平均坡度',`${fmt((p.terrain?.slope||0)*100,1)}%`],['基础工程成本',`×${fmt(p.terrain?.costFactor,2)}`],['距水体',`${fmt(p.terrain?.waterDistance)} m`],['景观品质指数',fmt(p.terrain?.scenic,2)],['低地邻水指数',fmt(p.terrain?.lowland,2)],['可达空缺岗位',fmt(p.vacantJobs)],['土地单价',`${fmt(p.landValue)} 元/m²`],
+          ['租金',`${fmt(p.rent,1)} 元/m²/月`],['网络接入',p.connected?'已接入':'失去接入'],
           ...(p.localBusinessDemand?Object.entries(p.localBusinessDemand).map(([use,gap])=>['本地'+useNames[use]+'空间缺口',fmt(gap,1)+' 岗位容量']):[]),
           ...(p.block?[
             ['街区名称',p.blockName],
@@ -509,14 +530,14 @@
           ['30 分钟可达岗位',fmt(p.accessJobs)],['公交可达岗位',fmt(p.publicJobs)],['货运门户时间',p.freightTime==null?'不可达':`${fmt(p.freightTime,1)} min`],
           ...(b?[['状态',statusNames[b.status]],...(b.startDate?[['开工日期',b.startDate],['预计竣工',b.completionDate],['施工进度',fmt((b.constructionProgress||0)*100,1)+'%']]:[]),...(b.extensionCompletionDay!=null?[['加层进度',fmt((b.extensionProgress||0)*100,1)+'%'],['加层竣工日',new Date(Date.UTC(2026,0,1+b.extensionCompletionDay)).toISOString().slice(0,10)]]:[]),['形态',({villa:'低层住宅',slab:'多层住宅',tower:'高层建筑',office:'办公楼',retail:'商铺',factory:'厂房',warehouse:'仓库'})[b.form]||useNames[b.use]],['楼层',fmt(b.floors)],['高度',`${fmt(b.height||b.floors*3.3,1)} m`],['建筑占地',`${fmt(b.footprintArea??b.floorArea/b.floors)} m²`],['总建筑面积',`${fmt(b.floorArea)} m²`],
             [b.use==='residential'?'入住家庭 / 容量':'就业 / 空间容量',`${fmt(b.occupied)} / ${fmt(b.capacity)}`],
-            ['建筑年龄',`${fmt(b.age)} 个月`],['建筑状况',`${fmt(b.condition??100,1)} / 100`],['物业估值',`${fmt(b.propertyValue)} 币`]]:[])])}
+            ['建筑年龄',`${fmt(b.age)} 个月`],['建筑状况',`${fmt(b.condition??100,1)} / 100`],['物业估值',`${fmt(b.propertyValue)} 元`]]:[])])}
         <h3>通勤记录</h3>${details([['已完成通勤平均时间',fmt(trafficMetrics.commutes(state).get(p.id)?.mean,1)+' 分钟'],['有通勤记录的家庭',fmt(trafficMetrics.commutes(state).get(p.id)?.count||0)],['通勤失败家庭',fmt(trafficMetrics.commutes(state).get(p.id)?.failed||0)]])}<p class="city-note">最近典型工作日的家庭通勤记录；无记录时显示 —，不将失败旅程计为 0 分钟。</p>
         <h3>规划用途偏好</h3><select class="city-field" id="city-zone"><option value="auto">自动选择</option>${p.blockCommon?'':Object.entries(useNames).map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}<option value="protected">保护，不开发</option></select>
         <div class="city-row"><button class="city-btn" id="city-zone-apply">应用偏好</button><button class="city-btn" id="city-route-from">从这里出发</button></div>
         ${b?'<button class="city-btn" id="city-renovate-building">翻新建筑</button>':''}${b?'<button class="city-btn" id="city-rebuild-onsite">原址重建</button>':''}<button class="city-btn" id="city-renew-block">街区拆除重建</button>${p.renewalProject?'<button class="city-btn" id="city-inspect-renewal">查看更新项目</button>':''}
         ${b?'<button class="city-btn danger" id="city-delete-selected">拆除建筑</button>':''}
         <p>用途偏好影响后续开发，不会立即替换现有建筑。</p>
-        <details><summary>地价驱动贡献 · 模拟币/m²</summary>${details(Object.entries(p.priceDrivers||{}).map(([k,v])=>[({base:'基准',accessibility:'交通可达',cluster:'集聚',demand:'需求',services:'服务',landscape:'景观',terrainCost:'地形工程',lowland:'低地约束',pollution:'污染',noise:'噪声',scarcity:'供给稀缺'})[k]||k,fmt(v,1)]))}</details><h3>地价与租金历史</h3><div class="city-table-wrap"><table class="city-table"><thead><tr><th>结算日期</th><th>地价</th><th>租金</th></tr></thead><tbody>${(p.history||[]).slice(-12).reverse().map(v=>`<tr><td>${v.date||date(v.month)}</td><td>${fmt(v.land)}</td><td>${fmt(v.rent,1)}</td></tr>`).join('')}</tbody></table></div>`;
+        <details><summary>地价驱动贡献 · 元/m²</summary>${details(Object.entries(p.priceDrivers||{}).map(([k,v])=>[({base:'基准',accessibility:'交通可达',cluster:'集聚',demand:'需求',services:'服务',landscape:'景观',terrainCost:'地形工程',lowland:'低地约束',pollution:'污染',noise:'噪声',scarcity:'供给稀缺'})[k]||k,fmt(v,1)]))}</details><h3>地价与租金历史</h3><div class="city-table-wrap"><table class="city-table"><thead><tr><th>结算日期</th><th>地价</th><th>租金</th></tr></thead><tbody>${(p.history||[]).slice(-12).reverse().map(v=>`<tr><td>${v.date||date(v.month)}</td><td>${fmt(v.land)}</td><td>${fmt(v.rent,1)}</td></tr>`).join('')}</tbody></table></div>`;
         el('city-renew-block').onclick=()=>openRenewal(p.id);
         if(el('city-rebuild-onsite'))el('city-rebuild-onsite').onclick=()=>openRenewal(p.id,'onsite');
         if(el('city-renovate-building'))el('city-renovate-building').onclick=()=>openRenewal(p.id,'renovate');
@@ -528,7 +549,7 @@
         box.innerHTML=`<h2>${escape(line.name)}${close}</h2><p>${line.valid?'线路正在服务城市':escape(line.reason)}</p>${details([
           ['方式',modeNames[line.mode]],['单程长度',`${fmt(line.length/1000,2)} km`],['往返周期',`${fmt(line.cycle,1)} min`],
           ['所需车队',`${fmt(line.fleet)} 辆`],['典型日上车人次',fmt(line.boardings)],['峰值载客率',`${fmt(line.load*100,1)}%`],
-          ['客运周转量',`${fmt(line.passengerKm,1)} 人·km`],['月运营成本',`${fmt(line.operatingCost)} 币`]])}
+          ['客运周转量',`${fmt(line.passengerKm,1)} 人·km`],['月运营成本',`${fmt(line.operatingCost)} 元`]])}<h3>停站顺序</h3><p>${line.stops.map(id=>escape(state.stops.find(s=>s.id===id)?.name||'已删除站点')).join(' → ')}</p>${line.depot?`<p>所属总站：${escape(state.facilities.find(f=>f.id===line.depot)?.name||'总站已拆除')}</p>`:''}
           <div class="city-fields"><label>发车间隔 / 分钟<input class="city-field" id="edit-headway" type="number" min="2" max="120" value="${line.headway}"></label>
           <label>每车容量<input class="city-field" id="edit-capacity" type="number" min="10" max="2000" value="${line.capacity}"></label>
           <label>名称<input class="city-field" id="edit-line-name" value="${escape(line.name)}"></label><label>颜色<input class="city-field" id="edit-line-color" type="color" value="${line.color}"></label>
@@ -538,14 +559,14 @@
           <div class="city-row"><button class="city-btn" id="line-update">更新运营</button><button class="city-btn" id="line-toggle">${line.enabled?'暂停运营':'恢复运营'}</button></div>${line.breakPoints?.length?'<button class="city-btn" id="line-breakpoint">定位中断区间</button>':''}<button class="city-btn danger" id="city-delete-selected">删除线路</button>`;
         if(el('line-breakpoint'))el('line-breakpoint').onclick=()=>{workspace.focus(line.breakPoints[0],5);workspace.requestDraw();};
         el('line-update').onclick=()=>command({type:'line_update',id:line.id,headway:Number(el('edit-headway').value),capacity:Number(el('edit-capacity').value),name:el('edit-line-name').value,color:el('edit-line-color').value,startHour:Number(el('edit-line-start').value),hours:Number(el('edit-line-hours').value),speed:Number(el('edit-line-speed').value),dwell:Number(el('edit-line-dwell').value),oneway:el('edit-line-oneway').checked});
-        el('line-reorder').onclick=()=>{showPanel('transit');setTool('line');editingLine=line.id;lineStops=[];el('city-mode').value=line.mode;el('city-line-name').value=line.name;el('city-headway').value=line.headway;el('city-capacity').value=line.capacity;el('city-hours').value=line.hours;el('city-mixed').checked=line.mixed;updateHint();status('重新点击站点，再按开通线路保存新顺序');};
+        el('line-reorder').onclick=()=>{el('city-mode').value=line.mode;showPanel('transit');setTool('line');editingLine=line.id;lineStops=[];el('city-line-name').value=line.name;el('city-headway').value=line.headway;el('city-capacity').value=line.capacity;el('city-hours').value=line.hours;el('city-mixed').checked=line.mixed;if(el('transit-oneway'))el('transit-oneway').checked=!!line.oneway;scheduleBusPreview();updateHint();status('重新点击站点，再按开通线路保存新顺序');};
         el('line-toggle').onclick=()=>command({type:'line_update',id:line.id,enabled:!line.enabled});
       } else if(stop) {
         box.innerHTML=`<h2>${escape(stop.name)}${close}</h2>${details([['交通方式',modeNames[stop.mode]],['设施角色',stop.role==='freight'?'铁路货场':'客运站'],['对外联系',stop.external?'区域边界门户':'城市内部'],['步行接入',stop.connected?'可步行到达':'缺少步行接入'],['上车人次',fmt(stop.boardings)],['下车人次',fmt(stop.alightings)]])}<p>运营服务和出入口连接共同决定此站的可达性。</p><button class="city-btn" id="stop-toggle">${stop.enabled===false?'开放站点':'关闭站点'}</button><button class="city-btn danger" id="city-delete-selected">删除站点</button>`;
         el('stop-toggle').onclick=()=>command({type:'stop_update',id:stop.id,enabled:stop.enabled===false});
       } else if(road) {
         const edges=state.network.edges.filter(e=>e.road===road.id),cfg=state.meta.roadTypes[road.kind];
-        box.innerHTML=`<h2>${escape(road.name)}${close}</h2>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 币`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
+        box.innerHTML=`<h2>${escape(road.name)}${close}</h2>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 元`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
         ${roadTrafficDetails(edges,cfg)}
         ${roadKinds.includes(road.kind)?`${details([['道路等级',cfg.name],['道路宽度',cfg.width+' m'],['基准容量',cfg.capacity?fmt(cfg.capacity)+' 辆/h':'仅步行'],['沿街开发',['street','avenue','lane'].includes(road.kind)?'允许':'不直接开发']])}<div class="city-fields"><label>道路等级<select class="city-field" id="road-kind">${roadKinds.map(k=>`<option value="${k}">${state.meta.roadTypes[k].name}</option>`).join('')}</select></label><label><span><input type="checkbox" id="road-oneway"> 单向</span></label></div><button class="city-btn" id="road-update">更新道路</button><p>升级会自动拆除占路建筑并尝试安置住户与企业；没有合适住房的家庭迁出并登记等待迁回。改为快速路或高速公路会取消原有临街直接接入。高架交叉不会自动形成路口，需绘制连接路。</p>`:''}
         <button class="city-btn" id="road-edit-shape">调整道路控制点</button><p>拆除可能使建筑失去接入，或中断运营线路。</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
@@ -555,9 +576,9 @@
         const transport=window.CitySpecialBuildings.names[facility.kind];
         const rows=[['类型',facilityNames[facility.kind]],['状态','已建成'],['来源',facility.blockCommon?'街区共享公共空间':facility.generated?'城市自动配套':'手动建设'],['道路接入',facility.connected?'已接入':'待连接道路']];
         if(facility.jobCapacity)rows.push(['岗位上限',fmt(facility.jobCapacity)],['开放岗位',fmt(facility.positions||0)],['已就业人数',fmt(facility.employees||0)],['空缺岗位',fmt(Math.max(0,(facility.positions||0)-(facility.employees||0)))]);
-        if(transport){rows.push(['占地',`${fmt(facility.width)} × ${fmt(facility.depth)} m`],['建筑高度',`${fmt(facility.height,1)} m`],['建设费用',fmt(facility.cost)+' 币']);if(facility.parkingSpaces)rows.push(['停车位',fmt(facility.parkingSpaces)],['层数',fmt(facility.floors)]);if(facility.stop)rows.push(['铁路接入',facility.railConnected?'已接入':'待连接铁路'],['运营站点',state.stops.find(s=>s.id===facility.stop)?.name||'—']);}
+        if(transport){rows.push(['占地',`${fmt(facility.width)} × ${fmt(facility.depth)} m`],['建筑高度',`${fmt(facility.height,1)} m`],['建设费用',fmt(facility.cost)+' 元']);if(facility.parkingSpaces)rows.push(['停车位',fmt(facility.parkingSpaces)],['层数',fmt(facility.floors)]);if(facility.stop)rows.push(['铁路接入',facility.railConnected?'已接入':'待连接铁路'],['运营站点',state.stops.find(s=>s.id===facility.stop)?.name||'—']);}
         else rows.push(['服务容量',fmt(facility.capacity)],['典型日使用人数',fmt(facility.visits)]);
-        if(facility.automaticCategory){rows.push(['选址依据',facility.generationReason],['月维护费',fmt(facility.maintenance)+' 币']);if(facility.capacity)rows.push(['服务容量',fmt(facility.capacity)],['典型日使用人数',fmt(facility.visits)]);if(facility.rooms)rows.push(['客房数',fmt(facility.rooms)]);if(facility.chargingSpaces)rows.push(['充电车位',fmt(facility.chargingSpaces)]);}
+        if(facility.automaticCategory){rows.push(['选址依据',facility.generationReason],['月维护费',fmt(facility.maintenance)+' 元']);if(facility.capacity)rows.push(['服务容量',fmt(facility.capacity)],['典型日使用人数',fmt(facility.visits)]);if(facility.rooms)rows.push(['客房数',fmt(facility.rooms)]);if(facility.chargingSpaces)rows.push(['充电车位',fmt(facility.chargingSpaces)]);}
         const note=facility.automaticCategory?'自动选址并预留完整场地，数量随人口发展控制。':facility.kind==='train_station'?'已建立铁路客运站点，可在交通面板中加入运营线路。':facility.parkingSpaces?'随城市发展随机生成的停车设施。':transport?'位置与占地已保留，接入周边道路后可继续规划交通。':'公共服务改善可达居民的生活品质，计入城市维护成本。';
         box.innerHTML=`<h2>${escape(facility.name||facilityNames[facility.kind])}${close}</h2>${details(rows)}<p>${note}</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
       } else if(district){box.innerHTML=`<h2>${escape(district.name||district.kind)}${close}</h2><p>连通建筑的用途与活动聚类；标签具有历史惯性。</p>${details([['区域类型',district.kind],['夜间人口',fmt(district.population)],['日间人口',fmt(district.dayPopulation)],['岗位',fmt(district.jobs)],['建筑',fmt(district.buildings)],['地价 P10 / 中位 / P90',`${fmt(district.landP10)} / ${fmt(district.landValue)} / ${fmt(district.landP90)}`],['外出 / 流入劳动者',`${fmt(district.outgoing)} / ${fmt(district.incoming)}`],['平均坡度',`${fmt(district.slope*100,1)}%`],['容积率',fmt(district.floorRatio,2)],['发展阶段',district.stage]])}<p>${escape(district.reason)}</p><p>出行主方式：${Object.entries(district.modeShare||{}).map(([k,v])=>modeNames[k]+' '+fmt(v,1)+'%').join('；')}</p>`;} else selected=null;
@@ -569,16 +590,16 @@
     }
     box.innerHTML=`<h2>城市观察${close}</h2>
       ${!s.buildings?`<p>尚无建筑：${!state.roads.length?'先铺设地面街道。':!state.parcels.length?'道路周边尚未形成可用地块，请在更平缓、远离水面的区域铺路。':'点击地块查看未开发原因；建筑项目每日评估、按具体日期开工。'}</p>`:''}
-      ${details([['建筑 / 在建',`${fmt(s.buildings)} / ${fmt(s.construction)}`],['住房空置率',`${fmt(s.vacancy,1)}%`],['住宅租金中位数',`${fmt(s.rent,1)} 币/m²/月`],['住房收入比',`${fmt(s.burden,1)}%`],['住房与交通收入比',`${fmt(s.combinedBurden,1)}%`],['可达岗位均值',fmt(s.accessJobs)],['公交可达岗位',fmt(s.publicJobs)],['累计等待迁入',fmt(s.pendingHousing)+' 户'],...(state.housingDemand?[['今日潜在 / 实际迁入',fmt(state.migrationDemand?.potential)+' / '+fmt(state.migrationDemand?.admitted)+' 户'],['等待就业机会',fmt(state.housingDemand.waitingForJobs)+' 户'],['就业关联住房需求',fmt(state.housingDemand.linkedDemand)+' 户'],['空房 / 已承诺住房覆盖',fmt(state.housingDemand.availableCoverage)+' / '+fmt(state.housingDemand.committedCoverage)+' 户'],['区域未满足住房需求',fmt(state.housingDemand.shortage)+' 户'],['住房通勤范围',fmt(state.housingDemand.commuteMinutes)+' 分钟'],['今日计划 / 名额',fmt(state.housingDemand.started)+' / '+fmt(state.housingDemand.projectLimit)]]:[])])}
+      ${details([['建筑 / 在建',`${fmt(s.buildings)} / ${fmt(s.construction)}`],['住房空置率',`${fmt(s.vacancy,1)}%`],['住宅租金中位数',`${fmt(s.rent,1)} 元/m²/月`],['住房收入比',`${fmt(s.burden,1)}%`],['住房与交通收入比',`${fmt(s.combinedBurden,1)}%`],['可达岗位均值',fmt(s.accessJobs)],['公交可达岗位',fmt(s.publicJobs)],['累计等待迁入',fmt(s.pendingHousing)+' 户'],...(state.housingDemand?[['今日潜在 / 实际迁入',fmt(state.migrationDemand?.potential)+' / '+fmt(state.migrationDemand?.admitted)+' 户'],['等待就业机会',fmt(state.housingDemand.waitingForJobs)+' 户'],['就业关联住房需求',fmt(state.housingDemand.linkedDemand)+' 户'],['空房 / 已承诺住房覆盖',fmt(state.housingDemand.availableCoverage)+' / '+fmt(state.housingDemand.committedCoverage)+' 户'],['区域未满足住房需求',fmt(state.housingDemand.shortage)+' 户'],['住房通勤范围',fmt(state.housingDemand.commuteMinutes)+' 分钟'],['今日计划 / 名额',fmt(state.housingDemand.started)+' / '+fmt(state.housingDemand.projectLimit)]]:[])])}
       ${(state.growthCenters||[]).some(c=>c.rank)?`<details><summary>发展中心 · ${state.growthCenters.length} 处</summary><p>人口与就业形成各处活力，交通联系影响跨区服务，主次随实际发展变化。</p>${state.growthCenters.slice().sort((a,b)=>a.rank-b.rank).map(c=>`<p><b>${c.rank===1?'主发展中心':'发展中心 '+c.rank}</b> · ${fmt(c.population)} 位居民 · ${fmt(c.employment)} 个就业家庭<br>位置 ${fmt(c.point[0])}，${fmt(c.point[1])}</p>`).join('')}</details>`:''}
       <h3>实时交通</h3>${liveTrafficSummary()}
       <h3>人口变化</h3><canvas id="city-pop-chart" class="city-chart" aria-label="日度常住人口趋势"></canvas><div class="city-chart-labels"><span>${state.dailyHistory?.[0]?.date||date(state.month)}</span><span>${date(state.month)}</span></div>
       <h3>出行方式 · 已完成旅程</h3><div class="city-bars">${['walk','car','taxi','public'].map(k=>`<div><div class="city-bar-label"><span>${modeNames[k]}</span><span>${s.completedTrips?fmt(s.modeShare[k],1)+'%':'—'}</span></div><div class="city-bar"><i data-percent="${s.modeShare[k]}"></i></div></div>`).join('')}</div>
       <p>${fmt(s.completedTrips)} 次完成 · ${fmt(s.failedTrips)} 次未完成<br>换乘按完整旅程归类，上车共 ${fmt(s.boardings)} 人次。</p>
-      <h3>城市账目</h3>${details([['可用资金',`${fmt(s.treasury)} 币`],['日收入',`${fmt(s.revenue)} 币`],['日维护及运营',`${fmt(s.maintenance)} 币`],['道路 / 轨道',`${fmt(s.roadKm,1)} / ${fmt(s.railKm,1)} km`],['汽车排放估算',`${fmt(s.estimatedCO2,1)} kg/代表日`]])}
-      ${baseline?`<h3>与基线比较</h3><p>基线 ${date(baseline.month)}；当前 ${date(state.month)}${baseline.month!==state.month?' · 时间不同，仅供观察变化':''}</p>${details([['人口变化',fmt(s.population-baseline.population)],['岗位变化',fmt(s.jobs-baseline.jobs)],['通勤变化',s.commute==null||baseline.commute==null?'—':`${fmt(s.commute-baseline.commute,1)} min`],['土地单价变化',s.landValue==null||baseline.landValue==null?'—':`${fmt(s.landValue-baseline.landValue,1)} 币/m²`]])}`:''}
-      <h3>地形与自动生长</h3>${details([['自动支路',fmt(s.autoRoadKm,2)+' km'],['入口与院内小径',fmt(s.pathKm,2)+' km'],['公园 / 广场',fmt(s.parks)+' / '+fmt(s.plazas)],['公共开放空间',fmt(s.publicSpaceArea)+' m²'],['平均开发坡度',fmt(s.meanSlope,1)+'%'],['地形工程增量',fmt(s.terrainEngineeringCost)+' 币']])}<details><summary>完整统计与分布</summary>${details([['企业群组',fmt(s.firms)],['今日新增 / 关闭',fmt(s.firmOpened)+' / '+fmt(s.firmClosed)],['企业利润估算',fmt(s.firmProfit)+' 币/月'],['空缺岗位',fmt(s.vacantJobs)],['地价 P10 / P90',fmt(s.landP10)+' / '+fmt(s.landP90)],['建成区密度',fmt(s.builtDensity)+' 人/km²'],['容积率',fmt(s.floorRatio,2)],['通勤中位数',fmt(s.commuteMedian,1)+' min'],['公交完整旅程',fmt(s.publicJourneys)],['换乘次数',fmt(s.transfers)],['平均候车',fmt(s.meanWait,1)+' min'],['车辆行驶',fmt(s.vehicleKm,1)+' km/代表日'],['累计建设',fmt(s.constructionCost)+' 币'],['区域铁路客运',fmt(s.regionalPassengers)+' 人次/日'],['铁路货运',fmt(s.railFreightTonnes,1)+' 吨/日'],['未完成货运',fmt(s.unservedFreightTonnes,1)+' 吨/日']])}<p>楼层分布：${Object.entries(s.floorDistribution||{}).map(([k,v])=>k+' 层 '+v+' 栋').join('；')}</p><p>主方式：${Object.entries(s.mainModeShare||{}).map(([k,v])=>modeNames[k]+' '+fmt(v,1)+'%').join('；')}</p></details><h3>城区</h3>${state.districts.map(d=>`<button class="city-list-item" data-district="${escape(d.id)}"><b>${escape(d.name||d.kind)}</b><small>${fmt(d.population)} 人 · ${fmt(d.jobs)} 岗位</small></button>`).join('')}<h3>城市记事</h3>${state.events.length?state.events.slice(-7).reverse().map(e=>`<button class="city-list-item" data-event="${state.events.indexOf(e)}"><time>${e.date||date(e.month)} · ${escape(e.category)}</time><br>${escape(e.message)}</button>`).join(''):`<div class="city-onboard"><div><b>01 建立连接</b>绘制几条相连的街道，或生成示范街区。</div><div><b>02 让城市生长</b>推进月份，等待施工、入住与就业。</div><div><b>03 改善出行</b>设置站点并运营线路，观察需求和土地市场。</div></div>`}`;
-    box.insertAdjacentHTML('beforeend',`<h3>分项账目</h3>${details(Object.entries(state.capitalAccounts||{}).map(([k,v])=>[k,fmt(v)+' 币（累计）']))}${details(Object.entries(state.operatingAccounts||{}).map(([k,v])=>[({roadMaintenance:'道路维护',stationMaintenance:'站点维护',facilityMaintenance:'设施维护',vehicleLease:'车辆租赁（含于运营）',transitOperation:'公交运营合计',tax:'税收',fares:'票款'})[k],fmt(v)+' 币/月']))}<details><summary>收入组与时段可达性</summary><p>代表日条件，按家庭等权汇总；机会数不保证空缺或有余量。车辆租赁已计入运营，不再次相加。</p>${(state.accessibilityGroups||[]).map(a=>`<p>${a.group} · ${{am:'早高峰',off:'平峰',pm:'晚高峰'}[a.period]} · ${a.minutes} 分钟：岗位 ${fmt(a.jobs)}，空缺 ${fmt(a.vacancies)}，服务容量 ${fmt(a.services)}</p>`).join('')}</details><p>交通分配：${state.trafficSolve?.converged?'末轮时间变化低于 1%':'有界轮次近似结果'}。${Object.entries(state.tripFailures||{}).map(([k,v])=>escape(k)+' '+fmt(v)+' 次').join('；')}</p><button class="city-btn" id="city-events-all">全部城市记事</button>`);
+      <h3>城市账目</h3>${details([['可用资金',`${fmt(s.treasury)} 元`],['日收入',`${fmt(s.revenue)} 元`],['日维护及运营',`${fmt(s.maintenance)} 元`],['道路 / 轨道',`${fmt(s.roadKm,1)} / ${fmt(s.railKm,1)} km`],['汽车排放估算',`${fmt(s.estimatedCO2,1)} kg/代表日`]])}
+      ${baseline?`<h3>与基线比较</h3><p>基线 ${date(baseline.month)}；当前 ${date(state.month)}${baseline.month!==state.month?' · 时间不同，仅供观察变化':''}</p>${details([['人口变化',fmt(s.population-baseline.population)],['岗位变化',fmt(s.jobs-baseline.jobs)],['通勤变化',s.commute==null||baseline.commute==null?'—':`${fmt(s.commute-baseline.commute,1)} min`],['土地单价变化',s.landValue==null||baseline.landValue==null?'—':`${fmt(s.landValue-baseline.landValue,1)} 元/m²`]])}`:''}
+      <h3>地形与自动生长</h3>${details([['自动支路',fmt(s.autoRoadKm,2)+' km'],['入口与院内小径',fmt(s.pathKm,2)+' km'],['公园 / 广场',fmt(s.parks)+' / '+fmt(s.plazas)],['公共开放空间',fmt(s.publicSpaceArea)+' m²'],['平均开发坡度',fmt(s.meanSlope,1)+'%'],['地形工程增量',fmt(s.terrainEngineeringCost)+' 元']])}<details><summary>完整统计与分布</summary>${details([['企业群组',fmt(s.firms)],['今日新增 / 关闭',fmt(s.firmOpened)+' / '+fmt(s.firmClosed)],['企业利润估算',fmt(s.firmProfit)+' 元/月'],['空缺岗位',fmt(s.vacantJobs)],['地价 P10 / P90',fmt(s.landP10)+' / '+fmt(s.landP90)],['建成区密度',fmt(s.builtDensity)+' 人/km²'],['容积率',fmt(s.floorRatio,2)],['通勤中位数',fmt(s.commuteMedian,1)+' min'],['公交完整旅程',fmt(s.publicJourneys)],['换乘次数',fmt(s.transfers)],['平均候车',fmt(s.meanWait,1)+' min'],['车辆行驶',fmt(s.vehicleKm,1)+' km/代表日'],['累计建设',fmt(s.constructionCost)+' 元'],['区域铁路客运',fmt(s.regionalPassengers)+' 人次/日'],['铁路货运',fmt(s.railFreightTonnes,1)+' 吨/日'],['未完成货运',fmt(s.unservedFreightTonnes,1)+' 吨/日']])}<p>楼层分布：${Object.entries(s.floorDistribution||{}).map(([k,v])=>k+' 层 '+v+' 栋').join('；')}</p><p>主方式：${Object.entries(s.mainModeShare||{}).map(([k,v])=>modeNames[k]+' '+fmt(v,1)+'%').join('；')}</p></details><h3>城区</h3>${state.districts.map(d=>`<button class="city-list-item" data-district="${escape(d.id)}"><b>${escape(d.name||d.kind)}</b><small>${fmt(d.population)} 人 · ${fmt(d.jobs)} 岗位</small></button>`).join('')}<h3>城市记事</h3>${state.events.length?state.events.slice(-7).reverse().map(e=>`<button class="city-list-item" data-event="${state.events.indexOf(e)}"><time>${e.date||date(e.month)} · ${escape(e.category)}</time><br>${escape(e.message)}</button>`).join(''):`<div class="city-onboard"><div><b>01 建立连接</b>绘制几条相连的街道，或生成示范街区。</div><div><b>02 让城市生长</b>推进月份，等待施工、入住与就业。</div><div><b>03 改善出行</b>设置站点并运营线路，观察需求和土地市场。</div></div>`}`;
+    box.insertAdjacentHTML('beforeend',`<h3>分项账目</h3>${details(Object.entries(state.capitalAccounts||{}).map(([k,v])=>[k,fmt(v)+' 元（累计）']))}${details(Object.entries(state.operatingAccounts||{}).map(([k,v])=>[({roadMaintenance:'道路维护',stationMaintenance:'站点维护',facilityMaintenance:'设施维护',vehicleLease:'车辆租赁（含于运营）',transitOperation:'公交运营合计',tax:'税收',fares:'票款'})[k],fmt(v)+' 元/月']))}<details><summary>收入组与时段可达性</summary><p>代表日条件，按家庭等权汇总；机会数不保证空缺或有余量。车辆租赁已计入运营，不再次相加。</p>${(state.accessibilityGroups||[]).map(a=>`<p>${a.group} · ${{am:'早高峰',off:'平峰',pm:'晚高峰'}[a.period]} · ${a.minutes} 分钟：岗位 ${fmt(a.jobs)}，空缺 ${fmt(a.vacancies)}，服务容量 ${fmt(a.services)}</p>`).join('')}</details><p>交通分配：${state.trafficSolve?.converged?'末轮时间变化低于 1%':'有界轮次近似结果'}。${Object.entries(state.tripFailures||{}).map(([k,v])=>escape(k)+' '+fmt(v)+' 次').join('；')}</p><button class="city-btn" id="city-events-all">全部城市记事</button>`);
     box.querySelectorAll('[data-event]').forEach(button=>button.onclick=()=>locateEvent(Number(button.dataset.event)));
     el('city-events-all').onclick=()=>{dialog('<h2>城市记事</h2>'+state.events.slice().reverse().map(e=>`<button class="city-list-item" data-event="${state.events.indexOf(e)}"><b>${e.date||date(e.month)} · ${escape(e.category)}</b><br>${escape(e.message)}</button>`).join(''));el('city-dialog-body').querySelectorAll('[data-event]').forEach(button=>button.onclick=()=>{el('city-dialog').close();locateEvent(Number(button.dataset.event));});};
     el('city-close-inspector').onclick=()=>document.body.classList.remove('show-inspector');
@@ -646,6 +667,8 @@
   }
   function magneticPoint(point){
     snapTarget=null;
+    if(['train','metro'].includes(tool)&&point&&!space){const port=window.CityRail?.nearest(point,true);if(port&&port.station.level===Number(el('city-level').value)&&port.distance<18)return port.point.slice();}
+    if(busDraft()&&!space){busSnap=point?busSnapAt(point):null;return point;}
     if(!point||!state?.meta.roadTypes[tool]||space)return point;
     const g=workspace.geometry,t=workspace.terrain;
     snapTarget=window.CityGeometry.roadSnap(point,state.roads,state.network.junctions,{kind:tool,
@@ -662,7 +685,7 @@
   function schedulePreview(){
     clearTimeout(previewTimer);preview=null;const ticket=++previewTicket;
     if(draft.length<2||!state.meta.roadTypes[tool])return;
-    const command={points:draft.map(p=>p.slice()),id:editingRoad,shape:el('city-shape').value,snap:false,connections:roadConnections(),kind:tool,level:Number(el('city-level').value),oneway:el('city-oneway').checked,autoRoute:el('city-auto-route').checked};
+    const command={points:draft.map(p=>p.slice()),id:editingRoad,shape:el('city-shape').value,snap:false,connections:roadConnections(),kind:tool,railManaged:['train','metro'].includes(tool),level:Number(el('city-level').value),oneway:el('city-oneway').checked,autoRoute:el('city-auto-route').checked};
     previewTimer=setTimeout(async()=>{try{const result=await api('preview',{command});if(ticket===previewTicket){preview=result;updateHint();workspace.requestAnimation();}}catch(error){if(ticket===previewTicket)status(error.message,true);}},180);
   }
   function specialCommand(point){return {type:'special_building',kind:tool,point,name:el('city-special-name').value,size:el('city-special-size').value,rotation:Number(el('city-special-rotation').value)};}
@@ -677,18 +700,18 @@
     if(!hover||!specialTools.includes(tool))return;
     const cmd=specialCommand(hover.slice());
     el('city-special-hint').textContent=tool==='port'?'陆侧堆场留在岸上，海侧朝向水面。正在检查位置…':tool==='train_station'?'站台自动对齐铁路。正在检查位置…':'正在检查占地与地形…';
-    specialTimer=setTimeout(async()=>{try{const result=await api('special_preview',{command:cmd});if(ticket!==specialTicket)return;specialPreview=result;el('city-special-hint').textContent=result.valid?`可放置 · ${fmt(result.facility.width)} × ${fmt(result.facility.depth)} m · ${fmt(result.facility.cost)} 币`:result.reason;workspace.requestAnimation();}catch(error){if(ticket===specialTicket)el('city-special-hint').textContent=error.message;}},160);
+    specialTimer=setTimeout(async()=>{try{const result=await api('special_preview',{command:cmd});if(ticket!==specialTicket)return;specialPreview=result;el('city-special-hint').textContent=result.valid?`可放置 · ${fmt(result.facility.width)} × ${fmt(result.facility.depth)} m · ${fmt(result.facility.cost)} 元`:result.reason;workspace.requestAnimation();}catch(error){if(ticket===specialTicket)el('city-special-hint').textContent=error.message;}},160);
   }
   async function runQuery(params){
     pause();await task(async()=>{queryResult=await api('query',params);workspace.requestDraw();
-      const s=queryResult.stats;dialog(`<h2>${params.kind==='area'?'范围统计':'网络可达范围'}</h2><p>${escape(queryResult.rule)} · ${date(queryResult.month)}</p>${details([['常住人口',fmt(s.population)],['日间人口',fmt(s.dayPopulation)],['岗位',fmt(s.jobs)],['建筑',fmt(s.buildings)],['土地面积',fmt(s.area)+' m²'],['总建筑面积',fmt(s.floorArea)+' m²'],['容积率',fmt(s.floorRatio,2)],['地价中位数',fmt(s.landValue)+' 币/m²'],['地价 P10 / P90',fmt(s.landP10)+' / '+fmt(s.landP90)]])}<p>蓝色轮廓显示纳入统计的地块。等时范围使用实际网络、候车与接驳时间，不跨越无连接水体。</p>`);
+      const s=queryResult.stats;dialog(`<h2>${params.kind==='area'?'范围统计':'网络可达范围'}</h2><p>${escape(queryResult.rule)} · ${date(queryResult.month)}</p>${details([['常住人口',fmt(s.population)],['日间人口',fmt(s.dayPopulation)],['岗位',fmt(s.jobs)],['建筑',fmt(s.buildings)],['土地面积',fmt(s.area)+' m²'],['总建筑面积',fmt(s.floorArea)+' m²'],['容积率',fmt(s.floorRatio,2)],['地价中位数',fmt(s.landValue)+' 元/m²'],['地价 P10 / P90',fmt(s.landP10)+' / '+fmt(s.landP90)]])}<p>蓝色轮廓显示纳入统计的地块。等时范围使用实际网络、候车与接驳时间，不跨越无连接水体。</p>`);
     });
   }
   async function compareSaves(){
     pause();await task(async()=>{const data=await api('saves');dialog(`<h2>选择对照存档</h2><p>保持当前城市，读取另一方案的同一时点指标。</p>${data.saves.map((s,i)=>`<button class="city-list-item" data-compare="${i}"><b>${escape(saveLabel(s))}</b></button>`).join('')||'<p>先保存另一方案。</p>'}`);
       el('city-dialog-body').querySelectorAll('[data-compare]').forEach(button=>button.onclick=()=>task(async()=>{
         comparison=await api('compare',{name:data.saves[Number(button.dataset.compare)].name});
-        const labels={population:'人口',housing:'住房容量',jobs:'岗位',employed:'就业',commute:'平均通勤 / 分钟',commuteP90:'通勤 P90',accessJobs:'可达岗位',boardings:'公交上车人次',landValue:'地价 / 币/m²',rent:'租金 / 币/m²/月',vacancy:'空置率 / %',treasury:'资金 / 币',maintenance:'日维护运营 / 币',constructionCost:'累计建设成本 / 币'};
+        const labels={population:'人口',housing:'住房容量',jobs:'岗位',employed:'就业',commute:'平均通勤 / 分钟',commuteP90:'通勤 P90',accessJobs:'可达岗位',boardings:'公交上车人次',landValue:'地价 / 元/m²',rent:'租金 / 元/m²/月',vacancy:'空置率 / %',treasury:'资金 / 元',maintenance:'日维护运营 / 元',constructionCost:'累计建设成本 / 元'};
         dialog(`<h2>方案比较</h2><p>${escape(comparison.current.name)}（${date(comparison.current.month)}）减去 ${escape(comparison.reference.name)}（${date(comparison.reference.month)}）</p><p>${comparison.warnings.map(escape).join('；')||'共同检查点、模型与期限一致'}</p>${details(Object.entries(comparison.deltas).map(([k,v])=>[labels[k]||k,fmt(v,2)]))}<p>切换“方案地价差异”图层，可定位共同地块的变化。正值表示当前方案更高，不代表一定更好。</p>`);layer='comparison';el('city-layer').value=layer;renderLegend();workspace.requestDraw();
       }));
     });
@@ -698,7 +721,7 @@
     if(working)return;
     if(draft.length<2){status('请至少添加两个控制点');return;}
     const points=draft.map(p=>[...p]);
-    const cmd={type:editingRoad?'road_edit':'road',id:editingRoad,points,shape:el('city-shape').value,snap:false,connections:roadConnections(),kind:tool,level:Number(el('city-level').value),oneway:el('city-oneway').checked,autoRoute:el('city-auto-route').checked};
+    const cmd={type:editingRoad?'road_edit':'road',id:editingRoad,points,shape:el('city-shape').value,snap:false,connections:roadConnections(),kind:tool,railManaged:['train','metro'].includes(tool),level:Number(el('city-level').value),oneway:el('city-oneway').checked,autoRoute:el('city-auto-route').checked};
     clearTimeout(previewTimer);const ticket=++previewTicket;
     try {
       const result=preview||await api('preview',{command:cmd});
@@ -711,6 +734,8 @@
     updateHint();workspace.requestDraw();
   }
   function handlePoint(point,event=null){
+    if(window.CityRail?.point(point))return;
+    if(tool==='select'){const rail=window.CityRail?.nearest(point);if(rail&&rail.distance<14){CityRail.openStation(rail.station.id);return;}}
     if(specialTools.includes(tool)){const cmd=specialCommand(point);command(cmd).then(ok=>{if(ok){specialPreview=null;scheduleSpecialPreview();}});return;}
     if(tool==='renewal'){const p=pick(point,'parcel');if(p){renewalSelection=renewalSelection.includes(p.id)?renewalSelection.filter(id=>id!==p.id):[...renewalSelection,p.id];renewalPreview=null;renderRenewals();workspace.requestDraw();}return;}
     if(tool==='gateway'){command({type:'gateway',point});return;}
@@ -734,6 +759,15 @@
     if(tool==='stop'){command({type:'stop',mode:el('city-mode').value,name:el('city-stop-name').value,point,role:el('city-mode').value==='train'?el('city-station-role').value:'passenger',external:el('city-mode').value==='train'&&el('city-station-external').checked});return;}
     if(['school','park','plaza','clinic'].includes(tool)){command({type:'facility',kind:tool,point});return;}
     if(tool==='line'){
+      if(busDraft()){
+        if(!busReady()){status('请先建造并连接公交车总站',true);return;}
+        const snap=busSnapAt(point);if(!snap){status('请靠近已有机动车道路的路边选择站点');return;}
+        const existing=state.stops.find(s=>s.mode==='bus'&&s.enabled!==false&&s.road===snap.road&&s.side===snap.side&&Math.hypot(s.point[0]-snap.point[0],s.point[1]-snap.point[1])<3);
+        const candidate=existing?.id||snap;
+        if(lineStops.length>=80){status('一条线路最多设置 80 个站点');return;}
+        if(lineStops.some(s=>{const old=typeof s==='string'?state.stops.find(q=>q.id===s):s;return s===candidate||old&&old.road===snap.road&&old.side===snap.side&&Math.hypot(old.point[0]-snap.point[0],old.point[1]-snap.point[1])<3;})){status('此站点已在线路中，请继续选择下一站');return;}
+        lineStops.push(candidate);scheduleBusPreview();updateHint();workspace.requestDraw();return;
+      }
       const stop=pick(point,'stop');
       if(stop&&(stop.mode===el('city-mode').value||['train','metro'].includes(stop.mode)&&['train','metro'].includes(el('city-mode').value))&&!lineStops.includes(stop.id)){lineStops.push(stop.id);updateHint();workspace.requestDraw();}
       else status('请选择兼容且未重复的站点');
@@ -764,11 +798,12 @@
   },true);
   canvas.addEventListener('pointermove',event=>{
     if(!active)return;pointerPosition={clientX:event.clientX,clientY:event.clientY};hover=magneticPoint(eventPoint(event));
+    window.CityRail?.move(hover);
     if(specialTools.includes(tool)){scheduleSpecialPreview();workspace.requestAnimation();}
     if(dragControl!==null&&hover){draft[dragControl]=hover;schedulePreview();updateHint();}
-    if(draft.length||state.meta.roadTypes[tool])workspace.requestAnimation();
+    if(draft.length||state.meta.roadTypes[tool]||busDraft())workspace.requestAnimation();
   });
-  canvas.addEventListener('pointerleave',()=>{pointerPosition=null;snapTarget=null;hover=null;workspace.requestAnimation();});
+  canvas.addEventListener('pointerleave',()=>{pointerPosition=null;snapTarget=null;busSnap=null;hover=null;workspace.requestAnimation();});
   canvas.addEventListener('pointerup',()=>{dragControl=null;});
   canvas.addEventListener('pointercancel',()=>{dragControl=null;});
   canvas.addEventListener('dblclick',event=>{
@@ -779,9 +814,13 @@
     if(event.target.closest('button,summary')&&[' ','Enter'].includes(event.key))return;
     if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='s'){event.preventDefault();files();return;}
     if(event.code==='Space'){event.preventDefault();space=true;}
+    if(working)return;
+    if(window.CityRail?.key(event))return;
+    if(event.key==='Backspace'&&tool==='line'&&lineStops.length){event.preventDefault();lineStops.pop();scheduleBusPreview();updateHint();workspace.requestDraw();}
+    if(event.key==='Enter'&&tool==='line'&&lineStops.length>=2){event.preventDefault();el('city-create-line').click();return;}
     if(event.key==='Backspace'&&draft.length){event.preventDefault();draft.pop();schedulePreview();updateHint();workspace.requestDraw();}
     if(event.key.toLowerCase()==='r'&&specialTools.includes(tool)&&tool!=='train_station'){event.preventDefault();el('city-special-rotate').click();}
-    if(event.key==='Escape'){editingRoad=null;editingLine=null;preview=null;draft=[];lineStops=[];toolDrafts.delete(tool);sourceParcel=null;inspectedRoute=null;clearTimeout(previewTimer);previewTicket++;if(specialTools.includes(tool))setTool('select');updateHint();workspace.requestAnimation();}
+    if(event.key==='Escape'){const wasBus=busDraft();editingRoad=null;editingLine=null;preview=null;draft=[];lineStops=[];clearBusPreview();toolDrafts.delete(tool);sourceParcel=null;inspectedRoute=null;clearTimeout(previewTimer);previewTicket++;if(specialTools.includes(tool)||wasBus)setTool('select');updateHint();workspace.requestAnimation();}
     if(event.key==='Enter'&&draft.length){event.preventDefault();finish();}
     if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();command({type:event.shiftKey?'redo':'undo'});}
   });
@@ -948,12 +987,8 @@
         if(scale>.25)label(fmt(values[i],1),e.points[Math.floor(e.points.length/2)],10,'#334a3c',48,'center',{id:e.id});
       });
     }
-    for(const line of state.lines){
-      if(!line.valid||cartographic&&!['transit','transitLoad'].includes(layer)&&panel!=='transit'&&line.id!==selected)continue;
-      ctx.strokeStyle=layer==='transitLoad'?trafficMetrics.viewColor(layer,line.load==null?null:line.load*100):line.color;ctx.lineWidth=(line.id===selected?5:layer==='transitLoad'?4:2)/scale;ctx.globalAlpha=['transit','transitLoad'].includes(layer)||panel==='transit'?1:.65;
-      for(const p of line.paths||[]){if(p.direction===0&&p.points.length){path(p.points);ctx.stroke();if(layer==='transitLoad'&&scale>.15)label(`${line.name} · ${fmt(line.load==null?null:line.load*100,1)}%`,p.points[Math.floor(p.points.length/2)],11,'#334a3c',55,'center',{id:line.id});}}
-      ctx.globalAlpha=1;
-    }
+    const overlayStops=el('city-show-transit-lines').checked?window.CityTransitOverlay.paint(ctx,state,{scale,selected,visible,inView,label,
+      lineColor:line=>layer==='transitLoad'?trafficMetrics.viewColor(layer,line.load==null?null:line.load*100):line.color}):new Set();
     const stationMaximum=layer==='stationActivity'?Math.max(0,...state.stops.map(s=>trafficMetrics.stopActivity(s)??0)):0;
     for(const stop of state.stops){
       if(!visible(stop.point))continue;
@@ -963,6 +998,7 @@
         ctx.beginPath();ctx.arc(...stop.point,radius,0,Math.PI*2);ctx.fillStyle=trafficMetrics.viewColor(layer,value,stationMaximum);ctx.fill();ctx.strokeStyle=chosen?'#df8d35':'#fff';ctx.lineWidth=2/scale;ctx.stroke();
         label(`${stop.name} · ${fmt(value)} 人次`,[stop.point[0],stop.point[1]-radius-5/scale],11,'#334a3c',55,'center',{id:stop.id});continue;
       }
+      if(overlayStops.has(stop.id)&&!chosen)continue;
       if(cartographic){if(scale>.15||chosen)window.CityMapRenderer.poi(label,{...stop,kind:stop.mode},scale,chosen?stop.id:null);continue;}
       ctx.beginPath();ctx.arc(...stop.point,(chosen?6:4)/scale,0,Math.PI*2);ctx.fillStyle=stop.connected?'#fcfdf6':'#e9b5a1';ctx.fill();
       ctx.lineWidth=(chosen?2.5:1.5)/scale;ctx.strokeStyle=chosen?'#df8d35':'#3d6f72';ctx.stroke();
@@ -1038,6 +1074,8 @@
     if(queryResult)for(const p of state.parcels){if(queryResult.stats.parcels.includes(p.id)){path(p.points,true);ctx.strokeStyle='#367baf';ctx.lineWidth=2/scale;ctx.stroke();}}
     for(const p of state.parcels){if(renewalSelection.includes(p.id)){path(p.points,true);ctx.fillStyle='#885ca52b';ctx.fill();ctx.strokeStyle='#80529e';ctx.lineWidth=2/scale;ctx.stroke();}}
     if(renewalPreview)for(const phase of renewalPreview.phases){for(const site of phase.sites){path(site.targetBuilding?.footprint||site.points,true);ctx.fillStyle=site.blockCommon?'#71916466':'#b97e4b66';ctx.fill();ctx.strokeStyle='#9a693c';ctx.lineWidth=1/scale;ctx.stroke();}}
+    window.CityRail?.draw(ctx,scale);
+    if(busDraft())window.CityBusGeometry.paint(ctx,{stops:lineStops.map(s=>typeof s==='string'?state.stops.find(q=>q.id===s):s).filter(Boolean),paths:busPreview?.paths||[],hover:busSnap,scale,valid:busPreview?.valid!==false});
     if(draft.length){
       const pointer=hover&&dragControl===null&&!editingRoad?hover:null;
       const plan=window.CityGeometry.roadDraftPlan(draft,pointer,el('city-shape').value==='curve',preview);
@@ -1057,7 +1095,7 @@
     }
     if(specialTools.includes(tool)&&hover){const f=specialPreview?.facility||specialFootprint(hover);if(f)window.CitySpecialBuildings.preview(ctx,f,scale,specialPreview?.valid!==false);}
     if(preview&&!preview.valid&&preview.point){const p=preview.point;ctx.strokeStyle='#b54435';ctx.lineWidth=2/scale;ctx.beginPath();ctx.arc(...p,10/scale,0,Math.PI*2);ctx.stroke();path([[p[0]-6/scale,p[1]-6/scale],[p[0]+6/scale,p[1]+6/scale]]);ctx.stroke();}
-    const broken=state.lines.find(l=>l.id===selected);if(broken?.breakPoints?.length){path(broken.breakPoints);ctx.strokeStyle='#b54435';ctx.lineWidth=3/scale;ctx.setLineDash([6/scale,4/scale]);ctx.stroke();ctx.setLineDash([]);}
+    const broken=state.lines.find(l=>l.id===selected);if(broken?.breakPoints?.length&&el('city-show-transit-lines').checked){path(broken.breakPoints);ctx.strokeStyle='#b54435';ctx.lineWidth=3/scale;ctx.setLineDash([6/scale,4/scale]);ctx.stroke();ctx.setLineDash([]);}
     ctx.restore();
   }
   function dialog(html) { el('city-dialog-body').innerHTML=html+'<p id="city-dialog-error" class="save-error" role="alert" hidden></p>';if(!el('city-dialog').open)el('city-dialog').showModal(); }
@@ -1124,9 +1162,9 @@
         accepted=plan;renewalPreview=plan;
         el('renewal-preview-result').innerHTML=renewalSVG(plan)+details([
           ['更新面积',fmt(plan.area)+' m²'],['现有建筑',fmt(plan.oldBuildings)+' 栋'],['保留地块',fmt(plan.preservedIds.length)+' 块'],
-          ['市政总投资',fmt(plan.cost)+' 币'],['最短交付时间',fmt(plan.minimumMonths)+' 个月（等待另计）'],
+          ['市政总投资',fmt(plan.cost)+' 元'],['最短交付时间',fmt(plan.minimumMonths)+' 个月（等待另计）'],
           ...(mode!=='renovate'?[['安置家庭 / 人数',fmt(plan.households)+' 户 / '+fmt(plan.people)+' 人'],['城内空余住房',fmt(plan.availableHomes)+' 户容量（未筛选负担能力）'],['受影响企业',fmt(plan.firms)+' 个群组'],['规划建筑',fmt(plan.buildings)+' 栋'],['旧 / 新总建筑面积',fmt(plan.oldFloorArea)+' / '+fmt(plan.floorArea)+' m²'],...Object.entries(plan.useAreas).filter(([,v])=>v>0).map(([u,v])=>[useNames[u]+'面积',fmt(v)+' m²']),['规划住房 / 岗位空间',fmt(plan.housingCapacity)+' 户 / '+fmt(plan.jobCapacity)+' 岗位空间'],['新增共享广场',fmt(plan.newPublicArea)+' m²']]:[])
-        ])+plan.warnings.map(s=>`<p class="renewal-notice">${escape(s)}</p>`).join('')+`<div class="city-table-wrap"><table class="city-table"><thead><tr><th>分期</th><th>原地块</th><th>最低工期</th><th>投资 / 币</th></tr></thead><tbody>${plan.phases.map(p=>`<tr><td>第 ${p.index} 期</td><td>${p.sourceIds.length}</td><td>${p.demolitionMonths+p.constructionMonths} 月</td><td>${fmt(p.cost)}</td></tr>`).join('')}</tbody></table></div>`;
+        ])+plan.warnings.map(s=>`<p class="renewal-notice">${escape(s)}</p>`).join('')+`<div class="city-table-wrap"><table class="city-table"><thead><tr><th>分期</th><th>原地块</th><th>最低工期</th><th>投资 / 元</th></tr></thead><tbody>${plan.phases.map(p=>`<tr><td>第 ${p.index} 期</td><td>${p.sourceIds.length}</td><td>${p.demolitionMonths+p.constructionMonths} 月</td><td>${fmt(p.cost)}</td></tr>`).join('')}</tbody></table></div>`;
         el('renewal-commit').disabled=false;workspace.requestDraw();
       } catch(error){if(resultBox.isConnected&&ticket===formVersion)resultBox.textContent=error.message;throw error;}
     });
@@ -1141,11 +1179,11 @@
     const built=state.parcels.filter(q=>q.renewalProject===id&&q.building);
     const delivered=built.filter(q=>q.building.status!=='construction');
     dialog(`<h2>${escape(p.name)}</h2><p><b>${renewalStatus[p.status]}</b> · ${escape(p.reason)}</p>${p.origin==='automatic'?`<p class="renewal-notice">${escape(p.decision)}</p>`:''}${details([
-      ['发起方式',p.origin==='automatic'?'系统自动评估':'手动立项'],['交付进度',`${p.phases.filter(s=>s.status==='complete').length} / ${p.phases.length} 期`],['已投入 / 总预算',`${fmt(p.spent)} / ${fmt(p.cost)} 币`],
+      ['发起方式',p.origin==='automatic'?'系统自动评估':'手动立项'],['交付进度',`${p.phases.filter(s=>s.status==='complete').length} / ${p.phases.length} 期`],['已投入 / 总预算',`${fmt(p.spent)} / ${fmt(p.cost)} 元`],
       ['累计城内安置 / 迁出',`${fmt(p.relocated)} / ${fmt(p.movedOut)} 人`],['企业迁移 / 关闭',`${fmt(p.firmsRelocated)} / ${fmt(p.firmsClosed)} 个群组`],
       ['当前可使用建筑',`${fmt(delivered.length)} 栋`],['已入住人口 / 住房容量',`${fmt(delivered.reduce((n,q)=>n+(q.population||0),0))} 人 / ${fmt(delivered.filter(q=>q.building.use==='residential').reduce((n,q)=>n+q.building.capacity,0))} 户`],
       ['实际就业 / 经营空间容量',`${fmt(delivered.reduce((n,q)=>n+(q.building.employees||0),0))} / ${fmt(delivered.filter(q=>q.building.use!=='residential').reduce((n,q)=>n+q.building.capacity,0))}`]
-    ])}<ol class="renewal-stages">${p.phases.map(s=>`<li><b>第 ${s.index} 期 · ${renewalStatus[s.status]}</b><small>${fmt(s.cost)} 币${s.ready&&['construction','demolition'].includes(s.status)?' · 本阶段预计 '+(s.completionDay!=null?new Date(Date.UTC(2026,0,1+s.completionDay)).toISOString().slice(0,10):date(s.ready))+' 完成':''}</small></li>`).join('')}</ol>
+    ])}<ol class="renewal-stages">${p.phases.map(s=>`<li><b>第 ${s.index} 期 · ${renewalStatus[s.status]}</b><small>${fmt(s.cost)} 元${s.ready&&['construction','demolition'].includes(s.status)?' · 本阶段预计 '+(s.completionDay!=null?new Date(Date.UTC(2026,0,1+s.completionDay)).toISOString().slice(0,10):date(s.ready))+' 完成':''}</small></li>`).join('')}</ol>
     <p class="city-note">运营数据来自城市模拟。最短工期不含安置、需求及预算等待；每次交付后可取消未开工阶段，已交付部分继续使用。</p>
     <div class="city-row"><button class="city-btn" id="renewal-locate">定位项目</button>${!['complete','cancelled'].includes(p.status)?`<button class="city-btn danger" id="renewal-cancel" ${p.phases.some(s=>['demolition','construction'].includes(s.status))?'disabled':''}>取消未开工阶段</button>`:''}</div>`);
     el('renewal-locate').onclick=()=>{renewalPreview=p;el('city-dialog').close();renewalSelection=state.parcels.filter(q=>q.renewalProject===id).map(q=>q.id);workspace.focus(p.boundary[0],5);renderRenewals();workspace.requestDraw();};
@@ -1156,7 +1194,7 @@
     await api('close');
     pause();active=false;session=null;state=null;currentSave=null;
     updateRoadValidation();
-    clearTimeout(previewTimer);previewTicket++;draft=[];lineStops=[];toolDrafts.clear();
+    clearTimeout(previewTimer);previewTicket++;draft=[];lineStops=[];clearBusPreview();toolDrafts.clear();
     document.body.classList.remove('city-mode','show-inspector');
     owned.forEach(selector=>document.querySelector(selector).hidden=true);
     el('city-dialog').close();workspace.cancelGeneration();window.AppNavigation.show('home');
@@ -1229,8 +1267,8 @@
     }
   }
   function historyDialog() {
-    const columns=[['date','结算日期'],['population','人口'],['jobs','岗位'],['commute','通勤 min'],['landValue','地价 币/m²'],['vacancy','空置率 %']];
-    dialog(`<h2>城市历史与年鉴</h2><p>每日结算时的状态；交通为典型日结果。</p>${state.annual?.length?'<h3>年度汇总</h3>'+state.annual.map(a=>'<p>第 '+a.year+' 年：人口 '+fmt(a.population)+'，岗位 '+fmt(a.jobs)+'，迁入 '+fmt(a.movedIn)+'，迁出 '+fmt(a.movedOut)+'，收入 '+fmt(a.revenue)+' 币，维护运营 '+fmt(a.maintenance)+' 币</p>').join(''):''}<div class="city-table-wrap"><table class="city-table"><thead><tr>${columns.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${(state.dailyHistory||[]).slice().reverse().map(s=>`<tr>${columns.map(([k])=>`<td>${k==='date'?(s.periodDays>1?s.periodStartDate+' 至 '+s.date:s.date):fmt(s[k],1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+    const columns=[['date','结算日期'],['population','人口'],['jobs','岗位'],['commute','通勤 min'],['landValue','地价 元/m²'],['vacancy','空置率 %']];
+    dialog(`<h2>城市历史与年鉴</h2><p>每日结算时的状态；交通为典型日结果。</p>${state.annual?.length?'<h3>年度汇总</h3>'+state.annual.map(a=>'<p>第 '+a.year+' 年：人口 '+fmt(a.population)+'，岗位 '+fmt(a.jobs)+'，迁入 '+fmt(a.movedIn)+'，迁出 '+fmt(a.movedOut)+'，收入 '+fmt(a.revenue)+' 元，维护运营 '+fmt(a.maintenance)+' 元</p>').join(''):''}<div class="city-table-wrap"><table class="city-table"><thead><tr>${columns.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${(state.dailyHistory||[]).slice().reverse().map(s=>`<tr>${columns.map(([k])=>`<td>${k==='date'?(s.periodDays>1?s.periodStartDate+' 至 '+s.date:s.date):fmt(s[k],1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
   }
   document.querySelectorAll('[data-panel]').forEach(b=>b.onclick=()=>showPanel(b.dataset.panel));
   document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
@@ -1266,10 +1304,10 @@
   el('signal-demand').onchange=()=>simulation.reset().catch(()=>{});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
   el('signal-apply').onclick=()=>command({type:'signal_timing',values:{signalGreenSeconds:Number(el('signal-green').value),signalYellowSeconds:Number(el('signal-yellow').value),signalClearanceSeconds:Number(el('signal-clearance').value)}});
-  el('city-mode').onchange=()=>{el('city-capacity').value=state.meta.transitTypes[el('city-mode').value].capacity;lineStops=[];updateHint();};
-  el('city-create-line').onclick=()=>command({type:editingLine?'line_update':'line',id:editingLine,name:el('city-line-name').value,mode:el('city-mode').value,stops:[...lineStops],
-    headway:Number(el('city-headway').value),capacity:Number(el('city-capacity').value),hours:Number(el('city-hours').value),mixed:el('city-mixed').checked}).then(ok=>{if(ok){lineStops=[];editingLine=null;toolDrafts.delete('line');}updateHint();});
-  el('city-clear-line').onclick=()=>{lineStops=[];updateHint();workspace.requestDraw();};
+  el('city-mode').onchange=()=>{if(state)el('city-capacity').value=state.meta.transitTypes[el('city-mode').value].capacity;lineStops=[];editingLine=null;toolDrafts.delete('line');clearBusPreview();updateHint();workspace.requestDraw();};
+  el('city-create-line').onclick=()=>command({type:el('city-mode').value==='bus'?'bus_line':editingLine?'line_update':'line',id:editingLine,name:el('city-line-name').value,mode:el('city-mode').value,stops:[...lineStops],
+    headway:Number(el('city-headway').value),capacity:Number(el('city-capacity').value),hours:Number(el('city-hours').value),mixed:el('city-mixed').checked,oneway:!!el('transit-oneway')?.checked}).then(ok=>{if(ok){lineStops=[];editingLine=null;clearBusPreview();toolDrafts.delete('line');status('线路已保存 · 开始模拟后按班距运营');}updateHint();workspace.requestDraw();});
+  el('city-clear-line').onclick=()=>{if(working)return;lineStops=[];clearBusPreview();updateHint();workspace.requestDraw();};
   el('city-coordinate-apply').onclick=()=>{const point=[Number(el('city-coordinate-x').value),Number(el('city-coordinate-y').value)];if(point.some(v=>!Number.isFinite(v))||point[0]<0||point[1]<0||point[0]>state.meta.width||point[1]>state.meta.height){status('坐标超出世界范围',true);return;}handlePoint(point);};
   el('city-object-picker').onchange=()=>{const id=el('city-object-picker').value;if(!id)return;const object=[...state.parcels,...state.roads,...state.stops,...state.lines,...state.facilities,...state.districts].find(o=>o.id===id);const point=object.center||object.point||object.points?.[0]||state.stops.find(s=>s.id===object.stops?.[0])?.point;if(point){workspace.focus(point,5);el('city-coordinate-x').value=Math.round(point[0]);el('city-coordinate-y').value=Math.round(point[1]);}inspect(id);};
   el('city-shape').onchange=()=>{schedulePreview();updateHint();workspace.requestAnimation();};
@@ -1286,6 +1324,8 @@
   }
   el('city-render-quality').onchange=updateAppearance;
   el('city-render-labels').onchange=()=>{window.CityScene.configure({labels:el('city-render-labels').checked});try{localStorage.setItem('shanhai-scene-v1',JSON.stringify(window.CityScene.settings));}catch{}workspace.requestDraw();};
+  try{el('city-show-transit-lines').checked=localStorage.getItem('shanhai.showTransitLines')==='true';}catch{}
+  el('city-show-transit-lines').onchange=()=>{try{localStorage.setItem('shanhai.showTransitLines',String(el('city-show-transit-lines').checked));}catch{}workspace.requestDraw();};
   function updateSceneClock(previewSeconds){
     const seconds=previewSeconds??(scenePreviewMinute!==null?scenePreviewMinute*60:state?.sceneTimeSeconds??9*3600),lighting=window.CityScene.setTime(seconds);
     const minute=Math.floor(((seconds%86400)+86400)%86400/60),text=String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0');
@@ -1349,6 +1389,6 @@
     }requestAnimationFrame(frame);
   };
 
-  window.CityApp={refreshOverviewChart:drawChart,previewRenewal:previewSelectedRenewal,get renewalSelection(){return [...renewalSelection];},get traffic(){return trafficState;},get active(){return active;},get working(){return working;},get state(){return state;},get selected(){return selected;},get tool(){return tool;},get canCacheBase(){return canCacheBase();},paint,refreshLegend:renderLegend,openSaves,returnHome:()=>files({returnHome:true})};
+  window.CityApp={setTool,inspect,railApi:api,railCommand:command,transitDetails:id=>api('query',{kind:'transit',line:id}),updateTransit:changes=>command({type:'line_update',...changes}),refreshBusPreview:()=>{scheduleBusPreview();updateHint();workspace.requestDraw();},get busDraft(){return {stops:[...lineStops],preview:busPreview,editing:editingLine};},refreshOverviewChart:drawChart,previewRenewal:previewSelectedRenewal,get renewalSelection(){return [...renewalSelection];},get traffic(){return trafficState;},get active(){return active;},get working(){return working;},get state(){return state;},get selected(){return selected;},get tool(){return tool;},get canCacheBase(){return canCacheBase();},paint,refreshLegend:renderLegend,openSaves,returnHome:()=>files({returnHome:true})};
   el('city-start').disabled=!workspace.canConfirm;
 })();

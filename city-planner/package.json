@@ -26,8 +26,17 @@
     "test:service-statistics": "node --test tests/service-statistics.test.cjs && node scripts/check-service-statistics.cjs",
     "test:city-overview": "node scripts/check-city-overview.cjs",
     "test:detail": "node --test tests/render-performance.test.cjs tests/material-jobs.test.cjs tests/material-cache.test.cjs tests/material-preparation.test.cjs tests/viewport-refinement.test.cjs tests/city-layer-compositing.test.cjs tests/building-lod.test.cjs tests/vegetation-lod.test.cjs tests/surface-variation.test.cjs tests/scene-renderer.test.cjs tests/ordinary-roofs.test.cjs tests/vehicle-lighting.test.cjs tests/street-furniture.test.cjs tests/courtyard-layout.test.cjs tests/street-tree-index.test.cjs tests/building-fidelity.test.cjs",
+    "test:transit": ".venv/bin/python -m unittest tests.test_bus_transit tests.test_bus_vehicles tests.test_city.TransitTests tests.test_special_buildings tests.test_rail_interop -v && node --test tests/bus-geometry.test.cjs tests/special-buildings.test.cjs && node --check renderer/city.js && node --check renderer/transit-menu.js && node --check renderer/building-previews.js && node --check renderer/workspace-ui.js && node --check electron/main.cjs",
+    "test:transit:visual": "node scripts/check-transit-menu.cjs",
+    "test:transit:acceptance": "node scripts/check-bus-lifecycle.cjs && .venv/bin/python scripts/check_bus_development.py",
     "test:taxi": ".venv/bin/python -m unittest tests.test_taxis -v && node --check renderer/taxi-panel.js && node --test tests/traffic-playback.test.cjs tests/surface-variation.test.cjs",
-    "test:taxi:visual": "node scripts/check-taxis.cjs"
+    "test:taxi:visual": "node scripts/check-taxis.cjs",
+    "test:transit-management": ".venv/bin/python -m unittest tests.test_transit_management tests.test_bus_vehicles tests.test_bus_transit tests.test_city.TransitTests -v && node --check renderer/transit-management.js && node --check renderer/city.js",
+    "test:rail-system": ".venv/bin/python -m unittest tests.test_rail_reconstruction tests.test_rail_audit tests.test_rail_interop tests.test_bus_transit tests.test_bus_vehicles tests.test_transit_management tests.test_city.TransitTests tests.test_daily_calendar tests.test_monthly_preparation -v && node --check renderer/rail-ui.js && node --check renderer/transit-menu.js && node --check renderer/city.js && node --check renderer/building-previews.js && node --check renderer/transit-overlay.js && node --test tests/transit-overlay.test.cjs tests/rail-renderer.test.cjs tests/bus-geometry.test.cjs tests/simulation-driver.test.cjs",
+    "test:rail-system:visual": "node scripts/check-rail-reconstruction.cjs",
+    "test:rail-system:development": ".venv/bin/python scripts/check_rail_development.py",
+    "test:rail-system:lifecycle": "node scripts/check-rail-lifecycle.cjs",
+    "test:rail-system:overlay": "node scripts/check-rail-overlay.cjs"
   },
   "devDependencies": {
     "electron": "^44.9.1"

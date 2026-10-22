@@ -813,8 +813,8 @@ body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:138px}
  body.city-mode .city-kpis.show-services .city-kpi{flex-basis:180px}
 }
 
-/* Migrated categories use their dock menus; only transit still uses this sidebar. */
-body.city-mode .city-sidebar:not(:has(#city-transit-panel:not([hidden]))){display:none}
+/* All city categories now use their dock menus. */
+body.city-mode .city-sidebar{display:none}
 
 /* The overview opens upward from the city summary, with one data section at a time. */
 body.city-mode .city-inspector.city-overview{position:fixed;top:auto;right:auto;left:var(--overview-left,18px);bottom:var(--overview-bottom,120px);width:min(740px,calc(100vw - 36px));height:fit-content;max-height:var(--overview-max-height,calc(100dvh - 260px));padding:0 18px 18px;z-index:10}
@@ -922,3 +922,4 @@ body.city-mode .workspace-view-panel{display:none}
 .city-inspector .live-traffic-source{display:flex;gap:6px 16px;flex-wrap:wrap;margin:6px 0 0;font-size:11px;line-height:1.5}
 .city-inspector .live-traffic-note{margin:3px 0 0;font-size:11px;line-height:1.5}
 @media(max-width:480px){.live-traffic-counts{grid-template-columns:repeat(3,minmax(0,1fr))}.live-traffic-counts strong{font-size:17px}}
+body.city-mode .workspace-rail{display:none}

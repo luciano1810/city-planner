@@ -225,9 +225,9 @@
     return maxX>=0&&minX<=ctx.canvas.width&&maxY>=0&&minY<=ctx.canvas.height;
   }
   function parcel(ctx,p,scale){
-    const b=p.building?.status==='planned'?null:p.building;if(!b&&!p.blockCommon&&p.use!=='protected')return;
+    const b=p.building?.status==='planned'?null:p.building;if(!b&&!p.blockCommon&&!p.openSpace&&p.use!=='protected')return;
     // One world-aligned paving material removes the checkerboard of lot grass.
-    const paved=b||p.blockCommon&&p.use!=='protected';
+    const paved=b||(p.blockCommon||p.openSpace)&&p.use!=='protected';
     polygonMaterial(ctx,p.points,paved?'paving':'grass',paved?0:seed(p.block||p.id));
     if(b&&scale>.28){
       // The overview already lives in the base snapshot. Always omit tiny
@@ -1117,6 +1117,22 @@
     ctx.restore();
   }
   function vehicle(ctx,car,scale){
+    if(car.mode==='bus'){
+      const length=car.length||10.8,width=car.width||2.5,color=car.color||'#438e89';
+      ctx.save();ctx.translate(...car.point);
+      const shadow=shadowOffset(3.2);ctx.save();ctx.translate(...shadow);ctx.rotate(car.heading);ctx.fillStyle='#253a4150';ctx.fillRect(-length/2,-width/2,length,width);ctx.restore();
+      ctx.rotate(car.heading);ctx.fillStyle='#25373e';
+      for(const x of [-length*.31,length*.31])for(const y of [-width*.53,width*.53])ctx.fillRect(x-.42,y-.14,.84,.28);
+      ctx.fillStyle=color;ctx.fillRect(-length/2,-width/2,length,width);
+      ctx.fillStyle='#294e60';ctx.fillRect(-length*.43,-width*.49,length*.79,width*.98);
+      ctx.fillStyle='#e3e9e1';ctx.fillRect(-length*.46,-width*.38,length*.84,width*.76);
+      ctx.fillStyle='#788f91';ctx.fillRect(-2.1,-.65,1.8,1.3);ctx.fillRect(.5,-.55,1.1,1.1);
+      ctx.strokeStyle='#b9c9c6';ctx.lineWidth=.07;for(let x=-1.95;x<-.4;x+=.22){ctx.beginPath();ctx.moveTo(x,-.5);ctx.lineTo(x,.5);ctx.stroke();}
+      ctx.fillStyle='#f5f4d8';for(const y of [-width*.35,width*.35])ctx.fillRect(length/2-.15,y-.16,.16,.32);
+      ctx.fillStyle=car.speed<.2?'#f34b38':'#ad4236';for(const y of [-width*.35,width*.35])ctx.fillRect(-length/2,y-.16,.16,.32);
+      if(car.state==='boarding'){ctx.fillStyle='#f3d47e';ctx.fillRect(length*.23,width/2-.1,1,.16);ctx.fillRect(-length*.15,width/2-.1,1,.16);}
+      ctx.restore();return;
+    }
     let modelId=car.id,style=variation.vehicle(modelId,car.kind);
     // Passenger-car bays must not be populated with the road fleet's buses.
     if(car.parked)for(let tries=0;tries<32&&style.length*style.scale>5.4;tries++)style=variation.vehicle(++modelId);
@@ -1265,7 +1281,7 @@
     }
     for(const car of traffic?.vehicles||[])if(visible(car.point)){
       ctx.save();const z=root.RoadRenderer.vehicleHeight(car,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes));ctx.translate(car.point[0],car.point[1]-.28*z);ctx.rotate(car.heading);
-      const style=variation.vehicle(car.id),front=style.length*style.scale*.46,side=style.width*style.scale*.34;
+      const style=car.mode==='bus'?{length:car.length||10.8,width:car.width||2.5,scale:1}:variation.vehicle(car.id),front=style.length*style.scale*.46,side=style.width*style.scale*.34;
       for(const y of [-side,side]){
         ctx.save();ctx.globalAlpha=night;ctx.drawImage(headlight(),front,y-2.2,10,4.4);ctx.restore();
         glow(ctx,front,y,.85,'255,250,221',night*.9);

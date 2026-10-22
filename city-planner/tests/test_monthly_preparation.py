@@ -1,5 +1,6 @@
-"""Weekly work stays isolated; short ticks commit only a complete revision."""
+"""Daily work stays isolated; short ticks commit only a complete revision."""
 import copy
+import math
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -44,6 +45,20 @@ class MonthlyPreparationTests(unittest.TestCase):
         self.assertEqual(city.s['month'],month);self.assertEqual(city.s['stats'],stats)
         self.assertAlmostEqual(city.s['sceneTimeSeconds'],sunlight+.2)
         self.assertTrue(result['settlement']['pending'])
+
+    def test_fractional_tick_immediately_before_midnight_does_not_stall(self):
+        self.city.s['simulation']['monthSeconds']=math.nextafter(DAY,0)
+        job=self.service.preparation=HeldPreparation(self.city)
+        job.result=City.restore(self.city.snapshot())
+        advance_calendar(job.result,DAY-self.city.s['simulation']['monthSeconds'])
+        result=self.call()
+        self.assertGreater(result['advancedSeconds'],0)
+        self.assertEqual(self.city.s['simulation']['monthSeconds'],DAY)
+        with patch('city.monthly.Preparation',HeldPreparation):
+            self.call()
+        self.assertIsNotNone(self.service.preparation)
+        self.service.preparation.progress=(.5,'继续计算')
+        self.assertGreater(self.call()['advancedSeconds'],DAY*.49)
 
     def test_ready_commit_preserves_current_clock_name_and_save_identity(self):
         city=self.city;city.s['simulation']['monthSeconds']=DAY-10

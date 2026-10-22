@@ -227,6 +227,15 @@ class CityService:
             if action == 'special_preview':
                 from .special_buildings import preview
                 return preview(city,payload.get('command',{}))
+            if action == 'rail_preview':
+                from . import rail_infrastructure,rail_services
+                cmd=payload.get('command',{})
+                if cmd.get('type')=='rail_facility':return rail_infrastructure.facility_preview(city,cmd)
+                if cmd.get('type')=='rail_passage':return rail_infrastructure.passage_preview(city,cmd)
+                return rail_infrastructure.station_preview(city,cmd) if cmd.get('type')=='rail_station' else rail_services.preview(city,cmd)
+            if action == 'bus_preview':
+                from .bus_transit import preview
+                return preview(city,payload.get('command',{}))
             if action == 'query':
                 return city.query(payload)
             if action == 'summary':
@@ -234,7 +243,7 @@ class CityService:
                 return dict(model=MODEL_VERSION,name=city.s['name'],month=city.s['month'],settings=city.s['settings'],policy=city.s['policy'],
                             stats=city.s['stats'],districts=city.s['districts'],annual=city.s['annual'],
                             date=date_string(day(city)),dailyHistory=city.s['dailyHistory'],
-                            units=dict(land='模拟币/m² 土地',rent='模拟币/m² 建筑/月',traffic='典型工作日',time='分钟'),
+                            units=dict(land='元/m² 土地',rent='元/m² 建筑/月',traffic='典型工作日',time='分钟'),
                             terrain=city.terrain.data['grid'],origin=city.s.get('origin'),events=city.s['events'],
                             metrics=metric_definitions(city.s['stats'],MODEL_VERSION),accessibilityGroups=city.s.get('accessibilityGroups',[]),
                             aggregateFlows=aggregate_flows(city),capitalAccounts=city.s.get('capitalAccounts',{}),operatingAccounts=city.s.get('operatingAccounts',{}))

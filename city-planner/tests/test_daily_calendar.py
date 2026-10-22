@@ -57,6 +57,21 @@ class DailyCalendarTests(unittest.TestCase):
         self.assertAlmostEqual(balance-c.s['treasury'],round(monthly/28,2),2)
         self.assertEqual(c.s['dailyHistory'][-1]['periodDays'],1)
 
+    def test_rail_fares_settle_once_and_facility_upkeep_is_prorated(self):
+        city=self.city();baseline=City.restore(city.snapshot())
+        city._period_factor=baseline._period_factor=1/31
+        city.s['railRuntime']['pendingFare']=125.
+        city.s['railInfrastructure']['facilities'].append(dict(constructionCost=310000))
+        city.finance();baseline.finance()
+        self.assertEqual(city.s['railRuntime']['pendingFare'],0.)
+        self.assertAlmostEqual(city.s['revenue']-baseline.s['revenue'],125.,2)
+        self.assertAlmostEqual(city.s['maintenance']-baseline.s['maintenance'],40.,2)
+        self.assertAlmostEqual(city.s['treasury']-baseline.s['treasury'],85.,2)
+        city.finance();baseline.finance()
+        self.assertEqual(city.s['revenue'],baseline.s['revenue'])
+        self.assertAlmostEqual(city.s['maintenance']-baseline.s['maintenance'],40.,2)
+        self.assertAlmostEqual(city.s['treasury']-baseline.s['treasury'],45.,2)
+
     def test_month_and_leap_year_rate_conversion(self):
         self.assertAlmostEqual(period_factor(0,31),1.)
         self.assertAlmostEqual(period_factor(28,35),3/31+4/28)

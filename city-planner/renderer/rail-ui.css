@@ -1,0 +1,48 @@
+#transit-rail-controls{margin:0 20px;border-top:1px solid #e4ebe7;padding:14px 0;font-size:12px;color:#385660}
+.rail-fields{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.rail-fields label,.rm-settings label{display:grid;gap:6px;font-size:12px;color:#47606a}
+.rail-fields input,.rail-fields select,#rail-management input,#rail-management select{border:1px solid #cad8d4;border-radius:7px;padding:8px;background:#fff;color:#254650;font:inherit;max-width:100%;min-width:0;box-sizing:border-box}
+.rail-fields input[type=number]{width:90px}.rail-fields input[type=text]{width:165px}
+.rail-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0}
+.rail-note{font-size:12px;color:#586f75;line-height:1.7}
+.rail-route{max-height:120px;overflow:auto;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px}
+.rail-route li{border:1px solid #dbe6e1;border-radius:8px;padding:4px 8px;background:#f6faf8}
+#rail-hint{line-height:1.7;color:#377e6b}#rail-hint.error{color:#a44731}
+#rail-buildings:empty{display:none}#rail-buildings{margin-top:12px;border:1px solid #dbe6e1;border-radius:8px;padding:10px}
+#rail-buildings label{display:inline-flex;gap:5px;margin:4px 10px 4px 0}
+.rail-build-advanced{margin:12px 0}.rail-build-advanced summary{cursor:pointer;padding:8px 0;color:#47606a}.rail-build-advanced[open] summary{margin-bottom:8px}
+#rail-management{width:min(1020px,calc(100vw - 32px));max-height:calc(100dvh - 40px);border:1px solid #d8e5df;border-radius:18px;padding:22px;background:#fcfdfb;color:#294c56;box-shadow:0 24px 90px #16383c40}
+#rail-management::backdrop{background:#163b4455;backdrop-filter:blur(4px)}
+.rm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.rm-header h2{margin:4px 0}.rm-header small{letter-spacing:.1em;color:#587477}
+.rm-filters{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0;align-items:center}.rm-filters label{display:flex;gap:8px;align-items:center;font-size:12px}
+.rm-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:24px}
+#rm-lines{display:flex;flex-direction:column;gap:8px;max-height:65vh;overflow:auto}
+#rm-lines button{text-align:left;padding:12px;border:1px solid #dde7e1;border-radius:10px;background:white;color:#335760;cursor:pointer}
+#rm-lines button[aria-current=true]{background:#edf6f1;border-color:#4b9282}#rm-lines small{display:block;margin-top:6px;line-height:1.5}
+#rm-content{min-width:0}.rm-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.rm-heading h3{margin:4px 0}.rm-status{font-size:12px;color:#436b61}
+.rm-settings{display:grid;gap:14px;margin:20px 0 12px}.rm-settings input,.rm-settings select{width:100%;min-height:38px}.rm-settings [hidden]{display:none!important}
+.rm-name-row{display:grid;grid-template-columns:minmax(0,1fr) 56px;gap:12px}.rm-name-row input[type=color]{padding:3px}
+.rm-field-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.rm-settings .rail-note{margin:-8px 0 0}
+.rm-section-label{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#47606a;margin-top:4px}
+#rail-management .rm-check{display:flex;align-items:center;gap:8px;font-size:12px;min-height:28px}#rail-management .rm-check input{width:16px;height:16px;min-height:0;padding:0;accent-color:#377c69}
+#rail-management input:disabled{background:#f0f3f1;color:#677976}.rm-via{margin:14px 0 4px}.rm-save-row{justify-content:space-between;padding:6px 0}
+.rm-metrics{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}.rm-metrics span{flex:1;min-width:110px;border:1px solid #e2ebe5;border-radius:10px;padding:12px;font-size:12px;color:#586f75}.rm-metrics b{display:block;font-size:22px;color:#2e6868;margin-bottom:6px}
+.rm-table-wrap{overflow:auto;margin:12px 0}#rail-management table{border-collapse:collapse;width:100%;font-size:12px}#rail-management td,#rail-management th{text-align:left;padding:10px;border-bottom:1px solid #e0e9e4}#rail-management td select{width:100%}
+#rm-message{color:#996034;font-size:13px;line-height:1.6}#rm-message:empty{display:none}
+#rail-management details{margin-top:0;border-top:1px solid #e0e9e4}#rail-management summary{cursor:pointer;font-weight:600;font-size:13px;padding:13px 0;line-height:1.5}#rail-management summary span{font-size:12px;font-weight:400;color:#586f75;margin-left:8px}
+#rail-management details[open]>summary{margin-bottom:4px}.rm-danger{margin-top:12px!important}.rm-danger>summary{color:#8f5548;font-weight:400!important}
+#rs-form{margin:18px 0}.rs-platforms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}
+.rs-platform{border:1px solid #dde7e1;border-radius:9px;padding:12px}.rs-platform .rail-note{margin:6px 0}.rs-platform .rm-heading .rail-note{margin:0}.rs-platform strong{font-size:13px}
+#rail-management .rs-platform details{border:0}#rail-management .rs-platform summary{padding:4px 0;font-size:12px;font-weight:400;color:#586f75}
+.rs-entry{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px;background:#f1f6f2;border:1px solid #dce8e0;border-radius:9px;margin:8px 0;font-size:12px}.rs-entry p{margin:4px 0 0}.rs-entry .rail-actions{margin:0;gap:8px}
+#rail-management .rs-entry-more{border:0}#rail-management .rs-entry-more summary{padding:8px;font-size:12px;font-weight:400}.rs-entry-more[open]{flex-basis:100%}
+.rail-hours{height:120px;display:flex;gap:3px;margin:16px 0 24px}.rail-hours>div{flex:1;position:relative;border-bottom:1px solid #b5cbc2}.rail-hours i{position:absolute;bottom:0;width:100%;background:#67a48e;min-height:1px;border-radius:3px 3px 0 0}.rail-hours small{position:absolute;top:100%;font-size:9px}
+#rail-management button:focus-visible,#rail-management input:focus-visible,#rail-management select:focus-visible,#rail-management summary:focus-visible,#transit-rail-controls :focus-visible{outline:3px solid #db9b43;outline-offset:2px}
+@media(max-width:700px){
+  #rail-management{padding:14px;width:calc(100vw - 20px);box-sizing:border-box}.rm-layout{grid-template-columns:1fr;gap:16px}
+  #rm-lines{flex-direction:row;max-height:none;overflow:auto}#rm-lines button{min-width:175px}#rm-lines small:last-child{display:none}
+  .rail-fields label{flex:1;min-width:120px}.rail-fields input[type=number]{width:100%}.rm-metrics span{min-width:100px}
+  #transit-rail-controls{margin-inline:14px}.rm-header h2{font-size:20px}.rs-platforms{grid-template-columns:1fr}
+  #rail-management .city-btn,#rail-management .icon-btn,#transit-rail-controls .city-btn{min-height:44px}#rail-management input:not([type=checkbox]),#rail-management select{min-height:44px;font-size:16px}
+  #rail-management summary{min-height:44px;box-sizing:border-box}#rail-management .rs-platform summary{padding:12px 0}.rm-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.rm-filters label{white-space:nowrap;gap:6px}.rm-filters select{width:100%}
+}
