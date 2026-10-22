@@ -1,8 +1,5 @@
 .observe-menu-open .city-sidebar{visibility:hidden;pointer-events:none}
 .observe-menu .build-tabs button{padding-inline:18px;white-space:nowrap}
-.observe-menu .observe-advanced-toggle{display:flex;align-items:center;gap:8px;flex-shrink:0;background:#f7f9f8;border:1px solid #e3e9e7;color:#68797e}
-.observe-advanced-toggle[aria-expanded="true"]{color:#397e76;border-color:#9eb8b6}
-.observe-advanced-toggle[aria-expanded="true"] span{transform:rotate(180deg)}
 .observe-filters{display:flex;flex-wrap:wrap;gap:7px;padding:14px 20px 0}
 .observe-filters button{border:1px solid transparent;border-radius:7px;background:#f3f6f4;color:#7b898b;padding:5px 14px;font:inherit;font-size:11px;cursor:pointer}
 .observe-filters button.active{color:#397e76;border-color:#a7c8bc;background:#eff7f2}
@@ -27,16 +24,7 @@
 .observe-query-settings[hidden]{display:none}
 .observe-query-actions{padding:14px 20px 16px}
 #observe-reports .build-card{flex-basis:137px}
-.observe-advanced>.build-tabs{margin-bottom:16px;width:fit-content}
-.observe-advanced .city-fields{gap:13px}
-.observe-advanced .city-fields>label{flex-basis:100%}
-.observe-advanced .city-fields label>span{display:flex;align-items:center;gap:8px}
-.observe-advanced .city-note{font-size:11px;line-height:1.7;margin:0 0 14px;color:#7b898b}
-.observe-advanced #city-settings{width:100%;background:#f0f8f5;border:1px solid #c8ddd5;color:#397e76}
-#observe-calibration .city-btn{display:block;width:100%;margin-bottom:10px}
-#city-performance-result{overflow-wrap:anywhere}
 @media(max-width:800px){
- .observe-advanced-toggle{margin-left:auto}
  .observe-menu .build-menu-header{gap:8px}
  .observe-menu .build-tabs button{padding:6px 10px}
  .observe-filters{padding:12px 14px 0}
@@ -49,7 +37,6 @@
 @media(max-width:500px){
  .observe-menu .build-tabs{gap:2px;padding:3px}
  .observe-menu .build-tabs button{padding:6px 8px}
- .observe-menu .observe-advanced-toggle{gap:4px;padding:6px 9px}
  .observe-menu .build-card-paging{gap:2px}
  .observe-menu .build-card-paging button{width:22px}
  #observe-queries .build-card{flex-basis:150px}

@@ -97,8 +97,8 @@ assert.equal(fixture.status,0,fixture.stderr);fs.writeFileSync(path.join(temp,'o
   }
   await click('#city-compare');await wait();await click('[data-compare="0"]');await wait();assert.equal(await page.locator('#city-dialog-body h2').innerText(),'方案比较');await click('#city-dialog-close');
   await click('#observe-tab-layers');assert.equal(await page.locator('[data-observe-layer="comparison"]').getAttribute('aria-pressed'),'true');assert(await page.locator('[data-observe-layer="comparison"]').isVisible());
-  await click('#observe-advanced-toggle');await page.locator('#city-migration').fill('35');await page.locator('#city-growth').selectOption('0.5');await page.locator('#city-fare').fill('3');await click('#city-settings');await wait();assert.equal(await page.evaluate(()=>CityApp.state.settings.migration),35);assert.equal(await page.evaluate(()=>CityApp.state.settings.fare),3);
-  await click('#observe-advanced-calibration');await click('#city-calibration');assert((await page.locator('#city-dialog-body h2').innerText()).includes('模型校准'));await click('#city-dialog-close');await click('#observe-advanced-toggle');await page.keyboard.press('Escape');assert.equal(await page.locator('#observe-advanced-panel').isVisible(),false);assert(await page.locator('#workspace-observe-menu').isVisible());
+  assert.equal(await page.locator('#observe-advanced-toggle').count(),0);await click('#city-files');await click('#settings-tab-scenario');await page.locator('#city-migration').fill('35');await page.locator('#city-growth').selectOption('0.5');await page.locator('#city-fare').fill('3');await click('#city-settings');await wait();assert.equal(await page.evaluate(()=>CityApp.state.settings.migration),35);assert.equal(await page.evaluate(()=>CityApp.state.settings.fare),3);
+  await click('#settings-tab-calibration');await click('#city-calibration');assert((await page.locator('#city-dialog-body h2').innerText()).includes('模型校准'));await click('#city-dialog-close');await click('#city-files');await page.keyboard.press('Escape');assert.equal(await page.locator('#workspace-settings').isVisible(),false);assert(await page.locator('#workspace-observe-menu').isVisible());
   await click('#workspace-blocks');assert.equal(await page.locator('#workspace-observe-menu').isVisible(),false);await click('#workspace-observe');assert.equal(await page.locator('#workspace-block-menu').isVisible(),false);
   await click('#observe-tab-reports');await click('#city-branch');await wait();assert((await page.locator('#city-status').innerText()).includes('独立分支'));
   if(!await page.locator('#workspace-observe-menu').isVisible())await click('#workspace-observe');
@@ -110,7 +110,7 @@ assert.equal(fixture.status,0,fixture.stderr);fs.writeFileSync(path.join(temp,'o
     const b=await page.locator('#workspace-observe-menu').boundingBox(),d=await page.locator('.workspace-dock').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=width&&b.y+b.height<d.y,JSON.stringify(b));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.join(output,`${tab}-${width}.png`)});
    }
-   await click('#observe-advanced-toggle');await click('#observe-advanced-scenario');const b=await page.locator('#observe-advanced-panel').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=width&&b.y+b.height<=height,JSON.stringify(b));await page.screenshot({path:path.join(output,`advanced-${width}.png`)});await page.keyboard.press('Escape');
+   await click('#city-files');await click('#settings-tab-scenario');const b=await page.locator('#workspace-settings').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=width&&b.y+b.height<=height,JSON.stringify(b));await page.screenshot({path:path.join(output,`settings-${width}.png`)});await page.keyboard.press('Escape');
   }
   await page.setViewportSize({width:1600,height:1000});
   await click('#observe-tab-layers');await click('[data-observe-group="traffic"]');await click('[data-observe-layer="traffic"]');
@@ -165,7 +165,7 @@ assert.equal(fixture.status,0,fixture.stderr);fs.writeFileSync(path.join(temp,'o
   await page.setViewportSize({width:375,height:812});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:path.join(output,'analytics-mobile.png')});
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['29 map layers','external layer sync','auto and fixed view modes','view preference persistence','lighting and display','area query','isochrone query','journey query','history and exports','scenario comparison and branch','advanced settings','mutual exclusion','four viewport sizes','traffic period switch and road detail','nine analytical views in map and high detail','populated commute and operating transit'],errors}));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['29 map layers','external layer sync','auto and fixed view modes','view preference persistence','lighting and display','area query','isochrone query','journey query','history and exports','scenario comparison and branch','top-right scenario and calibration settings','mutual exclusion','four viewport sizes','traffic period switch and road detail','nine analytical views in map and high detail','populated commute and operating transit'],errors}));
  }catch(error){if(page){await page.screenshot({path:path.join(output,'failure.png')});console.error(await page.locator('#city-status').innerText());}throw error;}
  finally{await browser?.close();server.kill();fs.rmSync(temp,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -135,7 +135,7 @@
           <label for="city-time-of-day">光照时刻 <output id="city-time-value">09:00 · 白天</output></label>
           <input id="city-time-of-day" type="range" min="0" max="1439" step="1" value="540" aria-label="光照时刻">
           <div class="signal-speed-labels"><span>00:00</span><span>12:00</span><span>24:00</span></div>
-          <p class="city-note">低于 1 天/秒时光照跟随模拟速度；达到 1 天/秒后，光照按实时速度变化。拖动滑块可暂停模拟并调整光照，城市日期保持不变。</p>
+          <p class="city-note">光照跟随模拟速度，最高为 6 小时/秒。拖动滑块可暂停模拟并调整光照，城市日期保持不变。</p>
           <label><span><input type="checkbox" id="city-render-labels"> 显示建筑名称、楼层与城区名称</span></label>
         </div>
         <h3>专题地图</h3><div class="city-fields">
@@ -168,7 +168,7 @@
       <div class="city-play"><button class="city-btn primary" id="city-play">开始模拟</button>
       <div class="city-simulation-speed"><label for="city-speed">模拟速度 <output id="city-speed-value">1× · 实时</output></label>
       <input type="range" id="city-speed" min="0" max="${window.CitySimulation.speeds.length-1}" step="1" value="0" aria-label="统一模拟速度" aria-valuetext="1 倍，实时">
-      <div class="signal-speed-labels"><span>实时</span><span>小时</span><span>天 / 月</span></div></div>
+      <div class="signal-speed-labels"><span>实时</span><span>分钟</span><span>6 小时/秒</span></div></div>
       <button class="city-btn" id="city-dashboard">城市概况</button><button class="city-btn" id="city-files">文件</button></div>
       <p id="city-simulation-note" class="city-simulation-note">光照跟随模拟倍速；达到 1 天/秒后改为实时光照。</p></div>
     <div class="city-kpis" hidden>
@@ -293,9 +293,7 @@
       ?(simulation.running?'正在计算模拟进度，完成后自动继续。':'正在完成本次计算，完成后保持暂停。')
       :simulation.running&&settlement?.pending
       ?`${settlement.stage} · ${Math.floor(settlement.progress*100)}% · 后台准备本周结算，仍可暂停和建设。`
-      :simulation.speed>=86400
-      ?'快速推进 · 昼夜保持实时速度，交通抽样显示，施工逐日推进，市场与财政每周结算。'
-      :'光照跟随模拟倍速；达到 1 天/秒后改为实时光照。';
+      :'光照跟随模拟倍速，最高 6 小时/秒。';
   }
   function updateTraffic() {
     updateSceneClock();updateSimulationControls();
@@ -376,7 +374,7 @@
       if(!node||!node.getClientRects().length)continue;
       const box=node.getBoundingClientRect();
       if(left+width<=box.left||left>=box.right)continue;
-      if(selector==='.city-controlbar')topEdge=Math.max(topEdge,box.bottom+pad);
+      if(selector==='.city-controlbar'&&!node.closest('.workspace-status-tray'))topEdge=Math.max(topEdge,box.bottom+pad);
       else bottomEdge=Math.min(bottomEdge,box.top-pad);
     }
     const top=Math.max(topEdge,Math.min(y-height-18,bottomEdge-height));

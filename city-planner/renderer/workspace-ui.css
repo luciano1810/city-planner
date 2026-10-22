@@ -634,8 +634,8 @@ body:not(.menu-mode) .workspace-rail{--rail-top:110px;bottom:auto;height:fit-con
 /* Global actions live in the top-right settings; the bottom holds tools only. */
 body.city-mode:not(.menu-mode){--ui-bottom:80px}
 body.city-mode .workspace-tool-tray{grid-template-rows:1fr;align-items:center}
-body.city-mode .city-controlbar:has(.workspace-settings:not([hidden])){z-index:20}
-.workspace-settings{position:absolute;right:0;top:calc(100% + 10px);width:260px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 180px);overflow:auto;padding:16px;background:var(--ui-paper);border:1px solid var(--ui-line);border-radius:14px;box-shadow:var(--ui-shadow);color:var(--ui-ink)}
+.workspace-settings-anchor:has(.workspace-settings:not([hidden])){z-index:20}
+.workspace-settings{position:absolute;right:0;top:calc(100% + 10px);width:360px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 180px);overflow:auto;padding:16px;background:var(--ui-paper);border:1px solid var(--ui-line);border-radius:14px;box-shadow:var(--ui-shadow);color:var(--ui-ink)}
 .workspace-settings[hidden]{display:none}
 .workspace-settings h3{margin:0 0 12px;font-size:14px}
 body.city-mode .workspace-settings .workspace-files{position:static;display:grid;grid-template-columns:1fr;width:auto;padding:0;gap:6px;border:0;background:none;box-shadow:none;border-radius:0}
@@ -839,3 +839,58 @@ body.city-mode .city-inspector.city-overview{position:fixed;top:auto;right:auto;
  .city-overview>h2{margin-left:-12px;margin-right:-12px;padding:12px;font-size:17px}
  .city-overview-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.overview-stat-card{padding:11px 9px;gap:5px}.overview-stat-card>strong{font-size:17px;line-height:23px}.overview-card-label{font-size:11px;gap:5px}
 }
+
+.workspace-settings-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.workspace-settings-header h3{margin:0}
+.workspace-settings>.build-tabs{margin-bottom:18px;width:fit-content}
+.workspace-settings>.build-tabs button{padding-inline:18px}
+.workspace-settings [role="tabpanel"][hidden]{display:none}
+.workspace-settings .city-fields{gap:13px}
+.workspace-settings .city-fields>label{flex-basis:100%}
+.workspace-settings .city-note{font-size:11px;line-height:1.7;margin:0 0 14px;color:var(--ui-muted)}
+.workspace-settings #city-settings{width:100%;background:#f0f8f5;border:1px solid #c8ddd5;color:#397e76}
+#settings-calibration .city-btn{display:block;width:100%;margin-bottom:10px}
+#city-performance-result{overflow-wrap:anywhere}
+
+/* Simulation and city context share the lower-left card; settings stay top-right. */
+.workspace-settings-anchor{position:absolute;top:18px;right:18px;z-index:9}
+body:not(.city-mode) .workspace-settings-anchor{display:none}
+.workspace-settings-anchor>#city-files{display:grid;place-items:center;width:48px;height:48px;padding:12px;background:var(--ui-paper);border:1px solid var(--ui-line);border-radius:12px;box-shadow:var(--ui-shadow)}
+.workspace-settings-anchor>#city-files svg{width:23px;height:23px}
+.workspace-settings-anchor>#city-files[aria-expanded="true"]{background:#edf5ff;border-color:#88bfff;color:var(--ui-blue)}
+body.city-mode .city-kpis{top:18px;right:84px}
+body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:138px;--rail-top:138px}
+body.city-mode .workspace-bottom{grid-template-columns:300px minmax(0,1fr)}
+body.city-mode .workspace-bottom .workspace-status-tray{max-height:calc(100dvh - 160px)}
+body.city-mode .workspace-status-tray .city-controlbar{position:static;inset:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;width:100%;height:auto;min-height:0;flex:none;padding:0 0 12px;margin:0 0 12px;gap:10px 12px;background:none;border:0;border-bottom:1px solid var(--ui-line);border-radius:0;box-shadow:none}
+body.city-mode .workspace-status-tray .city-controlbar[hidden]{display:none}
+body.city-mode .workspace-status-tray .city-play{display:contents}
+body.city-mode .workspace-status-tray .city-controlbar>.map-label{grid-column:1/-1;min-width:0;flex-wrap:wrap}
+body.city-mode .workspace-status-tray .city-date{grid-column:1;grid-row:2;font-size:12px}
+body.city-mode .workspace-status-tray #city-play{grid-column:2;grid-row:2;min-height:36px;padding:8px 12px}
+body.city-mode .workspace-status-tray .city-simulation-speed{grid-column:1/-1;grid-row:3;min-width:0;width:100%}
+body.city-mode .workspace-status-tray .city-simulation-speed label{font-size:11px}
+@media(max-width:1050px) and (min-width:701px){
+ body.city-mode .workspace-bottom{grid-template-columns:260px minmax(0,1fr);right:18px}
+ body.city-mode .workspace-bottom .workspace-tool-tray{justify-self:start}
+ .workspace-navigation{bottom:100px;width:200px}
+}
+@media(max-width:700px){
+ .workspace-settings-anchor{top:10px;right:10px}
+ .workspace-settings-anchor>#city-files{width:42px;height:42px;padding:10px}
+ body.city-mode .city-kpis{top:10px;right:64px}
+ body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:122px;--rail-top:122px}
+ body.city-mode .workspace-bottom{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;height:auto;gap:8px;padding:0}
+ body.city-mode .workspace-bottom .workspace-status-tray{grid-column:1;grid-row:1;width:100%;padding:12px;max-height:calc(100dvh - 230px)}
+ body.city-mode .workspace-bottom .workspace-tool-tray{grid-column:1;grid-row:2;justify-self:center}
+ body.city-mode .workspace-status-tray .city-controlbar{gap:8px 12px;margin-bottom:9px;padding-bottom:9px}
+ body.city-mode .workspace-status-tray .city-overview-button{grid-template-columns:minmax(0,1fr) auto}
+ body.city-mode .workspace-status-tray .overview-copy{flex-direction:row;align-items:center;gap:8px}
+ body.city-mode .workspace-status-tray .overview-meta{margin-top:4px;padding-top:4px}
+ body.city-mode .workspace-bottom .city-status{max-height:24px;margin-top:4px;padding-top:4px}
+}
+
+/* Uniform, compact indicators, with horizontal browsing on narrow screens. */
+body.city-mode .city-kpis{display:flex;right:auto;width:min(932px,calc(100% - 102px));overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;padding-bottom:0}
+body.city-mode .city-kpis .city-kpi,body.city-mode .city-kpis.show-services .city-kpi{flex:0 0 180px;width:180px;min-width:0;scroll-snap-align:start}
+@media(max-width:700px){body.city-mode .city-kpis{width:calc(100% - 74px)}}
