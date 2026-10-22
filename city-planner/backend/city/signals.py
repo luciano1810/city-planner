@@ -8,6 +8,7 @@ from shapely.geometry import LineString
 from .parameters import ROAD_TYPES, DRIVABLE_ROADS
 from .vehicle_paths import FRONT_CLEARANCE, FOLLOW_GAP, RoutePath
 from .vehicle_trips import build_demand
+from . import bus_vehicles
 
 TIMING_LIMITS = dict(signalGreenSeconds=(5,90),signalYellowSeconds=(2,6),signalClearanceSeconds=(2,15))
 
@@ -128,8 +129,12 @@ class LiveTraffic:
         elif self.sources:
             # Warm the representative sample at actual journey origins.
             count = min(80, max(1, math.ceil(sum(rate for _,rate in self.sources)/60)))
-            for key,_ in self.sources[:count]:
+            for key,_ in [(k,r) for k,r in self.sources if not k.startswith('bus:')][:count]:
                 self.spawn(key)
+        if mode == 'observed':
+            for key,_ in self.sources:
+                if key.startswith('bus:'):
+                    self.spawn(key)
         from .pedestrians import Walkers
         self.walkers = Walkers(city, mode)
 
@@ -142,24 +147,29 @@ class LiveTraffic:
             self._paths[key] = RoutePath(self.links, key, self.all_junctions)
         return self._paths[key]
 
-    def stop_position(self, link, arm):
-        return max(0., link['length']-arm['stopDistance']-FRONT_CLEARANCE)
+    def stop_position(self, link, arm, length=4.6):
+        return max(0., link['length']-arm['stopDistance']-max(FRONT_CLEARANCE,length/2+1))
 
     def spawn(self, key, position=None):
         if len(self.cars) >= 400:
             return
         plans = self.journeys[key]; plan = plans[self.serial % len(plans)]
+        if plan.get('mode')=='bus' and not bus_vehicles.can_dispatch(self,plan):
+            return
         route = plan['route']; link = self.links[route[0]]
         position = plan['start'] if position is None else position
         arm=self.arms.get((link['b'],link['road'],link['direction']))
-        if arm and position > self.stop_position(link, arm):
+        if arm and position > self.stop_position(link, arm, plan.get('length',4.6)):
             return  # An access inside a junction cannot inject a car past red.
         car = dict(id=self.serial, route=route, segment=0, position=position,
                    speed=0., waiting=0., reason='', reservation=None, source=plan['source'],
                    target=plan['target'], start=plan['start'], end=plan['end'], born=self.motion_time,
                    kind=plan.get('kind','car'), taxiState=plan.get('taxiState',''))
+        if plan.get('mode')=='bus':
+            car.update({key:copy.deepcopy(plan[key]) for key in ('mode','line','lineName','color','calls','dwell','speedLimit','length','width')})
+            car.update(callIndex=0,stopElapsed=0.)
         lane = self.lane(car)
-        if any(c['route'][c['segment']]==route[0] and self.lane(c)==lane and abs(c['position']-position)<FOLLOW_GAP for c in self.cars):
+        if any(c['route'][c['segment']]==route[0] and self.lane(c)==lane and abs(c['position']-position)<bus_vehicles.gap(c,car) for c in self.cars):
             return
         self.serial += 1
         self.cars.append(car)
@@ -189,12 +199,16 @@ class LiveTraffic:
         point, heading, _ = path.sample(distance)
         start = car.get('start', 0.)
         end = path.starts[-2]+car.get('end', self.links[car['route'][-1]]['length'])
+        extra = {key:car[key] for key in ('mode','line','lineName','color','length','width') if key in car}
+        if car.get('mode')=='bus':
+            call=bus_vehicles.call_at(car,car['segment'])
+            extra.update(stop=call['stop'] if call else None,stopsServed=car['callIndex'])
         return dict(id=car['id'], point=point, heading=heading, speed=round(car['speed'],3),
                     kind=car.get('kind','car'), taxiState=car.get('taxiState',''),
                     waiting=round(car['waiting'],1), state=car['reason'] or 'moving',
                     road=link['road'], level=link['level'], source=car.get('source',self.links[car['route'][0]]['a']),
                     target=car.get('target',self.links[car['route'][-1]]['b']),
-                    progress=max(0.,min(1.,(distance-start)/max(1.,end-start))))
+                    progress=max(0.,min(1.,(distance-start)/max(1.,end-start))),**extra)
 
     def record(self, car):
         v = self.vehicle(car)
@@ -236,16 +250,17 @@ class LiveTraffic:
             for car in self.cars:
                 groups[(car['route'][car['segment']], self.lane(car))].append(car)
             # Snapshot occupancy makes update order independent across links.
-            occupancy = {key:sorted(c['position'] for c in cars) for key,cars in groups.items()}
+            occupancy = {key:sorted((dict(position=c['position'],length=c.get('length',4.6)) for c in cars),key=lambda c:c['position']) for key,cars in groups.items()}
             for (key, lane), cars in groups.items():
-                link = self.links[key]; leader = math.inf
+                link = self.links[key]; leader = math.inf; leading_car={}
                 for car in sorted(cars, key=lambda c:c['position'], reverse=True):
                     path = self.path(car); segment = car['segment']
                     last = segment+1 == len(car['route'])
                     end = car.get('end',link['length']) if last else math.inf
-                    gap_position = leader-FOLLOW_GAP
+                    following_gap = bus_vehicles.gap(car,leading_car)
+                    gap_position = leader-following_gap
                     if math.isfinite(leader):
-                        gap_position = min(gap_position,path.retreat(path.starts[segment]+leader,FOLLOW_GAP)-path.starts[segment])
+                        gap_position = min(gap_position,path.retreat(path.starts[segment]+leader,following_gap)-path.starts[segment])
                     limit = min(end, gap_position)
                     reason = 'queue' if limit < end else 'arrival' if last else ''
                     if not last:
@@ -253,15 +268,16 @@ class LiveTraffic:
                         next_lane = path.lanes[segment+1]
                         downstream = occupancy.get((next_key,next_lane), [])
                         if downstream:
-                            distance = path.starts[segment+1]+downstream[0]
-                            rear = min(link['length']+downstream[0]-FOLLOW_GAP,
-                                       path.retreat(distance,FOLLOW_GAP)-path.starts[segment])
+                            following_gap = bus_vehicles.gap(car,downstream[0])
+                            distance = path.starts[segment+1]+downstream[0]['position']
+                            rear = min(link['length']+downstream[0]['position']-following_gap,
+                                       path.retreat(distance,following_gap)-path.starts[segment])
                             if rear < limit:
                                 limit, reason = rear, 'queue'
                     arm = self.arms.get((link['b'], link['road'], link['direction']))
                     reserved = any(h['junction']==link['b'] for h in self._held(car))
                     enter_allowed = False
-                    stop = self.stop_position(link,arm) if arm else math.inf
+                    stop = self.stop_position(link,arm,car.get('length',4.6)) if arm else math.inf
                     if arm and not reserved:
                         owner = self.owners.get(link['b'])
                         allowed = lamps[link['b']]['lamps'][approach_key(arm)] == 'green'
@@ -274,14 +290,17 @@ class LiveTraffic:
                         # a complete vehicle beyond its crossing.
                         if not last and downstream:
                             target_link = self.links[next_key]
-                            exit_room = min(target_link['length']*.42, arm['stopDistance'])+FOLLOW_GAP
-                            blocked = blocked or downstream[0] < exit_room
+                            exit_room = min(target_link['length']*.42, arm['stopDistance'])+following_gap
+                            blocked = blocked or downstream[0]['position'] < exit_room
                         enter_allowed = allowed and not blocked
                         if not enter_allowed and stop < limit:
                             limit, reason = stop, 'red' if not allowed else 'clearance'
+                    call=bus_vehicles.call_at(car,segment)
+                    if call and call['position']<=limit:
+                        limit,reason=call['position'],'boarding'
                     absolute = path.starts[segment]+car['position']
                     _, _, ratio = path.sample(absolute)
-                    cruise = path.speed_limit(absolute, link['speed'])
+                    cruise = path.speed_limit(absolute, min(link['speed'],car.get('speedLimit',math.inf)))
                     gap = max(0.,limit-car['position'])*ratio
                     # A bounded braking envelope avoids both full-speed stops
                     # and the asymptotic creep of a proportional controller.
@@ -301,15 +320,20 @@ class LiveTraffic:
                         self.events = self.events[-1000:]
                     car['speed'] = max(0.,(position-car['position'])*ratio/dt)
                     car['position'] = position; car['reason'] = reason if car['speed'] < .2 else ''
-                    if car['reason'] and car['reason'] != 'arrival':
+                    if call and reason=='boarding' and position>=call['position']-.02:
+                        car['speed']=0.;car['reason']='boarding'
+                        car['stopElapsed']+=dt
+                        if car['stopElapsed']>=car['dwell']:
+                            car['callIndex']+=1;car['stopElapsed']=0.
+                    if car['reason'] and car['reason'] not in ('arrival','boarding'):
                         car['waiting'] += dt; self.total_wait += dt
-                    leader = position
+                    leader = position;leading_car=car
                     for held in list(self._held(car)):
                         if segment > held['entrySegment']:
                             travelled=position+sum(self.links[car['route'][i]]['length'] for i in range(held['entrySegment']+1,segment))
-                            if travelled >= held['release']+FRONT_CLEARANCE:
+                            if travelled >= held['release']+max(FRONT_CLEARANCE,car.get('length',4.6)/2+1):
                                 self._release(car,held)
-                    if last and position >= end-.02:
+                    if last and position >= end-.02 and car.get('callIndex',0)>=len(car.get('calls',[])):
                         car['position']=end; car['speed']=0.; car['reason']='arrived'
                         car['parked'] = car.get('parked',0.)+dt
                         self.record(car)
@@ -317,7 +341,7 @@ class LiveTraffic:
                             self._departed.append(self.vehicle(car))
                             self.arrived += 1; self._release(car); done.append(car)
                         continue
-                    if position >= link['length'] and not last:
+                    if position >= link['length'] and not last and not bus_vehicles.call_at(car,segment):
                         # Carry the exact residual distance through the join.
                         car['segment'] += 1; car['position'] = position-link['length']
                     self.record(car)
@@ -389,6 +413,7 @@ class LiveTraffic:
         if not finite(self.motion_time,0,1e12) or not finite(self.signal_clock,0,1e12) or type(self.arrived) is not int or self.arrived < 0:
             raise ValueError('无效的车辆旅程时钟')
         for car in self.cars:
+            bus_vehicles.validate(car,self,finite)
             if not finite(car.get('start',0),0,self.links[car['route'][0]]['length']) or not finite(car.get('end',self.links[car['route'][-1]]['length']),0,self.links[car['route'][-1]]['length']):
                 raise ValueError('无效的车辆出行端点')
             if not finite(car.get('parked',0),0,10) or not finite(car.get('born',0),0,1e12):

@@ -227,6 +227,9 @@ class CityService:
             if action == 'special_preview':
                 from .special_buildings import preview
                 return preview(city,payload.get('command',{}))
+            if action == 'bus_preview':
+                from .bus_transit import preview
+                return preview(city,payload.get('command',{}))
             if action == 'query':
                 return city.query(payload)
             if action == 'summary':

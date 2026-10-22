@@ -314,6 +314,15 @@
   }
   function car(batch,vehicle){
     const [x,y]=vehicle.point,a=vehicle.heading||0,id=Number(vehicle.id)||0,z=vehicle.z??(vehicle.level>0?6:0);
+    if(vehicle.mode==='bus'){
+      const length=vehicle.length||10.8,width=vehicle.width||2.5,paint=solid(vehicle.color||'#438e89'),glass=solid(0x294e60),roof=solid(0xe3e9e1),rubber=solid(0x25373e);
+      batch.bevelBox(x,y,z+.4,length,width,1.2,a,paint,paint,.15);
+      batch.bevelBox(x,y,z+1.6,length*.94,width,1.25,a,glass,glass,.1);
+      batch.bevelBox(x,y,z+2.85,length,width,.23,a,roof,roof,.1);
+      for(const dx of [-length*.31,length*.31])for(const dy of [-width*.48,width*.48]){const q=local([x,y],a,dx,dy);batch.bevelBox(...q,z+.12,.95,.25,.85,a,rubber,rubber,.12);}
+      const ac=local([x,y],a,-1.2,0);batch.box(...ac,z+3.08,2.1,1.4,.3,a,solid(0x9daead));
+      return;
+    }
     const style=root.SurfaceVariation.vehicle(id,vehicle.kind),paint=tinted('carPaint',style.color,0),rubber=solid(0x192022),bodyLength=style.length*style.scale,bodyWidth=style.width*style.scale;
     if(vehicle.kind==='taxi'||detailLevel>1&&!carAtlas){
       const body=solid(style.color,.21,.26),glass=solid(0x284456,.14,.3),chrome=solid(0xb9cad0,.25,.6),van=style.cell>=12;

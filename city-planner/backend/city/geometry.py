@@ -340,6 +340,8 @@ def make_network(roads, stops, terrain, parcels=()):
     stop_projection = {}
     for stop in stops:
         compatible = [r for r in roads if r['kind'] in FRONTAGE_ROADS] if stop['mode']=='bus' else [r for r in roads if group(r)==group({'kind':stop['mode']})]
+        if stop.get('curb'):
+            compatible = [r for r in roads if r['id'] == stop.get('road') and r['kind'] in DRIVABLE_ROADS]
         if not compatible:
             stop_projection[stop['id']] = None
             continue
@@ -348,7 +350,7 @@ def make_network(roads, stops, terrain, parcels=()):
         if shape.distance(Point(stop['point'])) > 90:
             stop_projection[stop['id']] = None
             continue
-        d = shape.project(Point(stop['point']))
+        d = shape.project(Point(stop.get('anchor', stop['point'])))
         cuts[r['id']].add(d)
         p = list(shape.interpolate(d).coords[0])
         access = None
@@ -399,12 +401,20 @@ def make_network(roads, stops, terrain, parcels=()):
                               kind=road['kind'], level=road['level'], oneway=road['oneway'],
                               traffic=0., ratio=0., time=profile['freeTime'], **profile))
     attachments = {}
+    stopmap = {s['id']: s for s in stops}
     for sid, result in stop_projection.items():
         if result is None:
             attachments[sid] = None
             continue
         rid, d, p, access = result
         attachments[sid] = dict(node=positions[(rid, round(d, 3))], point=p, access=None)
+        stop = stopmap[sid]
+        if stop.get('curb'):
+            shape = shapes[rid]
+            a, b = shape.interpolate(max(0, d-.1)), shape.interpolate(min(shape.length, d+.1))
+            dx, dy = b.x-a.x, b.y-a.y
+            offset = (ROAD_TYPES[road_map[rid]['kind']]['width']/2+.8)*stop['side']/max(math.hypot(dx,dy),.001)
+            attachments[sid]['curbPoint'] = [p[0]-dy*offset,p[1]+dx*offset]
         if access:
             ar, ad, ap = access
             attachments[sid]['access'] = dict(node=positions[(ar, round(ad, 3))], point=ap,

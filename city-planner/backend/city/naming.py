@@ -39,7 +39,7 @@ FACILITY_SUFFIXES = {
     'power_plant': ('发电厂',), 'substation': ('变电站',), 'water_plant': ('自来水厂',),
     'sewage_plant': ('污水处理厂',), 'recycling_center': ('资源回收中心',),
     'logistics_hub': ('物流中心',), 'airport': ('机场',), 'port': ('港', '港口'),
-    'train_station': ('火车站',), 'parking_lot': ('停车场',), 'parking_garage': ('停车楼',),
+    'bus_depot': ('公交总站',), 'train_station': ('火车站',), 'parking_lot': ('停车场',), 'parking_garage': ('停车楼',),
 }
 # Distinctive names sit between the optional local reference and type suffix.
 # Avoid directional/geographical claims that have not been measured.

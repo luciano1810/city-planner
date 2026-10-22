@@ -25,6 +25,7 @@ def rebuild_regional(city,rails,drive):
 
 
 def assign_regional_passengers(city,trips,boardings,stop_board,stop_alight):
+    from .transit_management import calls
     terminals=[s for s in city.s['stops'] if s.get('external') and s.get('role','passenger')=='passenger' and s.get('enabled',True)]
     flows=[]
     if not terminals:return flows
@@ -36,6 +37,7 @@ def assign_regional_passengers(city,trips,boardings,stop_board,stop_alight):
                 route=city.route(source,target,False,h['income'],True,period,departure,required_mode='train')
                 if not route or route['mode']!='public' or not any(e.get('mode')=='train' for e in route['path'] if e['kind']=='ride'):continue
                 item=dict(source=source,target=target,purpose='regional',period=period,people=1,completed=True,**{k:v for k,v in route.items() if k!='path'})
+                item['transitCalls']=calls(city,route,departure)
                 trips.append(item)
                 for e in route['path']:
                     if e['kind']=='board':boardings[e['ref']]+=1;stop_board[e['origin']]+=1

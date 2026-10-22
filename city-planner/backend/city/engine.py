@@ -32,7 +32,7 @@ from . import housing
 from .employment import facility_workplaces, sync_facilities, facility_capacity
 from .business import BusinessMarket, workplace_supply
 from . import special_buildings, auto_facilities
-from . import road_clearance, taxis
+from . import road_clearance, bus_transit, transit_management, taxis
 
 MODEL_VERSION = 'shanhai-city-12'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
@@ -198,6 +198,8 @@ class City:
             raise ValueError('存档缺少必要字段')
         if any(not isinstance(s[k], list) for k in ['roads','stops','lines','parcels','households','facilities','events','history']):
             raise ValueError('存档集合格式无效')
+        for line in s['lines']:
+            transit_management.validate(line)
         if len(s['roads']) > 2000 or len(s['parcels']) > 30000 or len(s['households']) > 100000:
             raise ValueError('存档超过本版本支持规模')
         for road in s['roads']:
@@ -229,6 +231,10 @@ class City:
             if len(object_ids)!=len(set(object_ids)):
                 raise ValueError('存档对象编号重复')
         for stop in s['stops']:
+            if stop.get('curb'):
+                if stop['mode'] != 'bus' or not isinstance(stop.get('road'), str) or isinstance(stop.get('side'), bool) or stop.get('side') not in (-1, 1):
+                    raise ValueError('存档公交站点的道路或路侧无效')
+                city.point(stop.get('anchor'))
             if stop.get('role','passenger') not in ('passenger','freight') or stop.get('role')=='freight' and stop['mode']!='train':raise ValueError('存档车站设施角色无效')
         for service in s['regionalServices']:
             number(service['trainsPerDay'],1,48,'每日货列',True)
@@ -307,7 +313,8 @@ class City:
             attachment = self.network['stops'].get(stop['id'])
             stop['connected'] = bool(attachment and attachment['access'])
             if attachment:
-                stop['point'] = attachment['point']
+                stop['point'] = attachment.get('curbPoint', attachment['point'])
+                if stop.get('curb'): stop['anchor'] = attachment['point']
         for f in self.s['facilities']:
             if f.get('stop'):
                 f['railConnected'] = bool(self.network['stops'].get(f['stop']))
@@ -443,8 +450,9 @@ class City:
                     self.add(walk,a,b,(att['access']['minutes']-1)*80/self.s['policy']['walkingMetersPerMinute']+1,'walk')
         self.line_segments = {}
         stopmap = {s['id']: s for s in self.s['stops']}
+        bus_graph = bus_transit.road_graph(self.network) if any(l.get('curbRouting') for l in self.s['lines']) else None
         for line in self.s['lines']:
-            line.update(valid=False, reason='', paths=[], fleet=0, operatingCost=0, length=0, cycle=0,breakPoints=[])
+            line.update(valid=False, reason='', paths=[], fleet=0, operatingCost=0, length=0, cycle=0,breakPoints=[],serviceHeadway=line['headway'])
             if not line['enabled']:
                 line['reason'] = '已停运'
                 continue
@@ -456,20 +464,31 @@ class City:
                 line['reason'] = '站点方式不兼容'
                 continue
             graph = drive if line['mode'] == 'bus' else rails[line['mode']]
+            if line.get('depot'):
+                try:
+                    bus_transit.depot_for(self, self.network, bus_graph, [stopmap[s] for s in line['stops']], line['depot'])
+                except ValueError as error:
+                    line['reason'] = str(error)
+                    continue
             segments, failure = [], False
             orders=[line['stops']] if line.get('oneway') else [line['stops'],list(reversed(line['stops']))]
             for direction, order in enumerate(orders):
                 for index, (a,b) in enumerate(zip(order, order[1:])):
                     source = self.network['stops'][a]['node']
                     target = self.network['stops'][b]['node']
-                    distances, prev = shortest_paths(graph, source)
-                    if target not in distances:
+                    if line.get('curbRouting'):
+                        path = bus_transit.segment(self.network, bus_graph, stopmap[a], stopmap[b], direction)
+                        travel_time = sum(e['time'] for e in path) if path else None
+                    else:
+                        distances, prev = shortest_paths(graph, source)
+                        path = reconstruct(prev, source, target) if target in distances else None
+                        travel_time = distances.get(target)
+                    if path is None:
                         failure = True
                         line['breakPoints']=[stopmap[a]['point'],stopmap[b]['point']]
                         break
-                    path = reconstruct(prev, source, target)
                     length = sum(e.get('length',0) for e in path)
-                    running = max(distances[target],length/1000/line.get('speed',TRANSIT_TYPES[line['mode']]['speed'])*60) + line.get('dwell',.6)
+                    running = max(travel_time,length/1000/line.get('speed',TRANSIT_TYPES[line['mode']]['speed'])*60) + line.get('dwell',.6)
                     # Tram mixed running inherits nearby road congestion.
                     if line['mode'] == 'tram' and line.get('mixed'):
                         running *= 1 + .3 * self.s.get('stats',{}).get('congestion',0)
@@ -485,13 +504,12 @@ class City:
             line['valid'] = True
             line['cycle'] = sum(e['time'] for e in segments) + 8
             line['length'] = sum(e['length'] for e in segments)/len(orders)
-            line['fleet'] = max(1, math.ceil(line['cycle']/line['headway']))
-            cfg = TRANSIT_TYPES[line['mode']]
-            daily_km = line['length']*2/1000*60/line['headway']*line['hours']
-            line['operatingCost'] = line['fleet']*cfg['vehicleCost'] + daily_km*cfg['kmCost']*30
+            transit_management.service(line, segments, len(orders), TRANSIT_TYPES[line['mode']])
             for seg in segments:
                 self.line_segments[seg['key']] = seg
-                line['paths'].append(dict(key=seg['key'],points=self.path_points(seg['path']),direction=seg['direction']))
+                points = (bus_transit.display_path(self.network,seg['path'],stopmap[seg['a']],stopmap[seg['b']],seg['direction'])
+                          if line.get('curbRouting') else self.path_points(seg['path']))
+                line['paths'].append(dict(key=seg['key'],points=points,direction=seg['direction']))
                 a = f"{line['id']}:{seg['direction']}:{seg['a']}"
                 b = f"{line['id']}:{seg['direction']}:{seg['b']}"
                 self.add(public,a,b,seg['time'],'ride',line['id'],segment=seg['key'],mode=line['mode'],length=seg['length'])
@@ -499,7 +517,7 @@ class City:
                 for sid in line['stops']:
                     onboard=f"{line['id']}:{direction}:{sid}"
                     # Initial wait is headway-based; transfers pay it again, riding through does not.
-                    self.add(public,sid,onboard,line['headway']/2+self.s['policy']['boardingMinutes'],'board',line['id'],mode=line['mode'])
+                    self.add(public,sid,onboard,transit_management.headway(line)/2+self.s['policy']['boardingMinutes'],'board',line['id'],mode=line['mode'])
                     self.add(public,onboard,sid,self.s['policy']['alightingMinutes'],'alight',line['id'],mode=line['mode'])
         rebuild_regional(self,rails,drive)
         self.graphs = dict(walk=walk, car=drive, public=public)
@@ -652,12 +670,16 @@ class City:
                         if not operating(line,elapsed):
                             unavailable=True
                             break
-                        if line['headway']>=self.s['policy']['lowFrequencyHeadway']:
-                            scheduled=(line['headway']-(elapsed-start)%line['headway'])%line['headway']
-                            adjustment=scheduled-line['headway']/2
+                        interval=transit_management.headway(line)
+                        if interval>=self.s['policy']['lowFrequencyHeadway']:
+                            scheduled=(interval-(elapsed-start)%interval)%interval
+                            adjustment=scheduled-interval/2
                             extra_wait+=adjustment
                             elapsed+=adjustment
                     elapsed+=e['time']
+                    if e['kind']=='board' and not operating(line,elapsed):
+                        unavailable=True
+                        break
                 if unavailable:
                     continue
                 minutes+=extra_wait
@@ -774,13 +796,15 @@ class City:
                 if 'trainsPerDay' in cmd:service['trainsPerDay']=number(cmd['trainsPerDay'],1,48,'每日货列',True)
                 if 'tonnesPerTrain' in cmd:service['tonnesPerTrain']=number(cmd['tonnesPerTrain'],10,5000,'每列吨数')
                 self.rebuild()
+            elif op=='bus_line':
+                bus_transit.create(self,cmd)
             elif op=='line':
                 self.add_line(cmd)
             elif op=='line_update':
                 line=next((l for l in self.s['lines'] if l['id']==cmd.get('id')),None)
                 if line is None:
                     raise ValueError('线路不存在')
-                for k,lo,hi in [('headway',2,120),('capacity',10,2000),('hours',4,24)]:
+                for k,lo,hi in [('headway',2,120),('capacity',10,2000),('hours',.25 if line['mode']=='bus' else 4,24)]:
                     if k in cmd:
                         line[k]=number(cmd[k],lo,hi,k)
                 if 'enabled' in cmd:
@@ -795,9 +819,10 @@ class City:
                     if not isinstance(ids,list) or len(ids)<2 or len(ids)!=len(set(ids)):
                         raise ValueError('停站顺序需要至少两个不重复站点')
                     line['stops']=ids
-                for key,lo,hi in [('dwell',.1,10),('speed',5,180),('startHour',0,23)]:
+                for key,lo,hi in [('dwell',.1,10),('speed',5,180),('startHour',0,23+59/60)]:
                     if key in cmd: line[key]=number(cmd[key],lo,hi,key)
                 if 'oneway' in cmd: line['oneway']=bool(cmd['oneway'])
+                transit_management.configure(line,cmd)
                 self.rebuild()
                 if line['enabled'] and not line['valid']: raise ValueError(line['reason'])
             elif op=='stop_update':
@@ -925,7 +950,7 @@ class City:
             self.s['revision']+=1
             self.s['commands'].append(dict(month=self.s['month'],command=copy.deepcopy(cmd)))
             self.s['commands']=self.s['commands'][-1000:]
-            if op not in ('zone','settings') and self.s['households']:
+            if op not in ('zone','settings') and (self.s['households'] or op in ('line_update','line','bus_line')):
                 self.match_jobs()
                 self.assign_traffic()
             self.summarize()
@@ -1066,6 +1091,8 @@ class City:
 
     def query(self,params):
         kind=params.get('kind','area')
+        if kind=='transit':
+            return transit_management.details(self,params.get('line'))
         facilities=None
         if kind=='area':
             a,b=[self.point(p) for p in params['bounds']]
@@ -1099,6 +1126,9 @@ class City:
                   speed=number(cmd.get('speed',TRANSIT_TYPES[mode]['speed']),5,180,'车辆限速'),oneway=bool(cmd.get('oneway',False)),
                   boardings=0,load=0, color=['#387e8c','#b67848','#7869a2','#b75b67'][len(self.s['lines'])%4])
         naming.name_object(self,'lines',line)
+        if mode == 'bus' and cmd.get('curbRouting'):
+            line.update(depot=cmd['depot'], curbRouting=True)
+        transit_management.configure(line,cmd)
         self.s['lines'].append(line)
         self.rebuild()
         if not line['valid']:
@@ -1374,7 +1404,7 @@ class City:
                             for edge in segment['path']:
                                 if edge.get('ref'):
                                     for period in ('am','pm'):
-                                        self.road_load[(period,edge['ref'])]+=120/line['headway']
+                                        self.road_load[(period,edge['ref'])]+=120/transit_management.headway(line)
             for household_index,h in enumerate(households):
                 if household_index%64==0:
                     self.monthly_progress(.36+.20*(iteration+household_index/max(1,len(households)))/self.s['policy']['trafficIterations'],'交通分配')
@@ -1422,6 +1452,7 @@ class City:
                 if route:
                     h['transportCost']+=route['fee']*self.s['policy']['workingDaysPerMonth']
                     item.update({k:v for k,v in route.items() if k!='path'})
+                    item['transitCalls']=transit_management.calls(self,route,depart)
                     boards=[e for e in route['path'] if e['kind']=='board']
                     for edge in boards:
                         boardings[edge['ref']]+=1; stop_board[edge['origin']]+=1
@@ -1478,6 +1509,7 @@ class City:
         for stop in self.s['stops']:
             stop['boardings']=stop_board[stop['id']]
             stop['alightings']=stop_alight[stop['id']]
+        transit_management.record(self,trips)
         for f in self.s['facilities']:
             f['visits']=facility_load[f['id']]
         self.live_traffic=None

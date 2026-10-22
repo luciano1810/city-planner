@@ -83,6 +83,8 @@ class Handler(BaseHTTPRequestHandler):
                    '/material-jobs.js': 'material-jobs.js', '/material-preparation.js': 'material-preparation.js',
                    '/material-worker.js': 'material-worker.js',
                    '/building-previews.js': 'building-previews.js',
+                   '/bus-geometry.js': 'bus-geometry.js', '/transit-menu.js': 'transit-menu.js', '/transit-menu.css': 'transit-menu.css',
+                   '/transit-management.js': 'transit-management.js', '/transit-management.css': 'transit-management.css',
                    '/build-menu.js': 'build-menu.js', '/build-menu.css': 'build-menu.css',
                    '/block-menu.js': 'block-menu.js', '/block-menu.css': 'block-menu.css',
                    '/observe-menu.js': 'observe-menu.js', '/observe-menu.css': 'observe-menu.css',

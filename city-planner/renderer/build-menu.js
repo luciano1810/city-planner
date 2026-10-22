@@ -175,7 +175,7 @@
     function open(next=tab,{choose=true}={}){
       if(!CityApp.active)return;
       if(!opened)previousRail=document.querySelector('.workspace-rail [data-category].active')?.dataset.category;
-      onOpen();opened=true;menu.hidden=false;
+      onOpen();menu.querySelector('.build-building-settings').append($('city-special-controls'));opened=true;menu.hidden=false;
       document.body.classList.add('build-menu-open');document.body.classList.remove('show-inspector');
       button.setAttribute('aria-expanded','true');
       showTab(next,{choose});

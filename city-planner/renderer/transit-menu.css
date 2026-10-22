@@ -1,0 +1,34 @@
+.transit-menu-open .city-sidebar{visibility:hidden;pointer-events:none}
+.transit-menu .build-tabs button{padding-inline:18px;white-space:nowrap}
+.transit-menu .build-card{flex:0 0 195px}
+.transit-menu .build-cards{padding-bottom:18px}
+.transit-menu .build-card:disabled{opacity:1;cursor:default;color:#52656c}
+.transit-menu .build-card:disabled:hover{border-color:#e4e9e9;background:#fff;box-shadow:none}
+.transit-menu .build-card-note{white-space:normal}
+.transit-coming{position:absolute;right:11px;top:11px;padding:3px 8px;border:1px solid #dce4df;border-radius:6px;background:#fffffff2;color:#52676c;font-size:10px}
+.transit-details{margin:0 20px;border-top:1px solid #edf0ee;padding:14px 0}
+.transit-details[hidden]{display:none}
+.transit-line-fields{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px}
+.transit-line-fields .paired{display:flex;gap:14px}
+.transit-line-fields input[type=number]{width:64px}
+.transit-line-fields #city-line-name{width:150px}
+.transit-route-options{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:11px;color:#6c7c80}
+.transit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.transit-actions #city-stop-order{flex:1;min-width:140px;margin:0 0 0 6px;font-size:11px;line-height:1.6;color:#657b7b;max-height:50px;overflow:auto}
+#transit-preview-status{font-size:11px;color:#397e76;margin:12px 0}
+#transit-preview-status.error{color:#a44b36}
+.transit-menu button:disabled{cursor:not-allowed}
+.transit-actions button:disabled{opacity:.45}
+.transit-footer,.transit-placeholder{padding:12px 20px 16px;margin:0;font-size:11px;line-height:1.6;color:#6c7c80}
+.transit-footer{border-top:1px solid #edf0ee}
+.transit-placeholder+.transit-footer{border:0}
+#transit-depot-settings #city-special-controls{border:0;padding:0}
+#transit-manage #city-line-list{display:flex;gap:12px;overflow-x:auto;scrollbar-width:thin}
+#transit-manage .city-list-item{flex:0 0 230px;min-height:90px;padding:14px;margin:0;border:1px solid #e4e9e9;border-radius:12px;background:#fafcfb;color:#314d54}
+#transit-manage .city-list-item[hidden],#transit-manage #city-line-list[hidden]{display:none}
+#transit-manage .city-list-item small{display:block;margin-top:7px;font-size:11px;color:#65777d;line-height:1.6}
+#transit-manage .city-note{margin:0;font-size:12px;line-height:1.7;color:#65777d}
+#transit-advanced-toggle{margin-left:auto;flex-shrink:0;display:flex;gap:8px;background:#f7f9f8;color:#68797e;border-color:#e3e9e7}
+.transit-advanced .signal-panel{padding:0;border:0}.transit-advanced .signal-panel>h3{display:none}
+@media(max-width:800px){.transit-menu .build-card{flex-basis:170px}.transit-menu .build-tabs button{padding:7px 10px}.transit-details{margin-inline:14px}.transit-footer,.transit-placeholder{padding-inline:14px}.transit-line-fields label{flex-wrap:wrap}}
+@media(max-width:500px){.transit-menu .build-menu-header{flex-wrap:wrap;gap:6px}.transit-menu .build-tabs{flex:1;gap:2px;padding:3px}.transit-menu .build-tabs button{padding:7px 8px;font-size:11px}.transit-menu #transit-advanced-toggle{padding:6px 8px;font-size:10px}.transit-menu .build-menu-close{width:24px;min-width:24px}.transit-menu .build-card{flex-basis:155px}.transit-line-fields{gap:10px}.transit-line-fields .paired{gap:8px}.transit-line-fields #city-line-name{flex:1;width:130px}.transit-actions #city-stop-order{flex-basis:100%;margin:4px 0 0}}

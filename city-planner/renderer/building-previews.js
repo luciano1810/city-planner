@@ -34,7 +34,7 @@
     return m;
   }
   function facility(kind){
-    const m=scene(),sizes={airport:[1000,360],port:[320,240],train_station:[180,80]},[width,depth]=sizes[kind];
+    const m=scene(),sizes={airport:[1000,360],port:[320,240],train_station:[180,80],bus_depot:[96,64]},[width,depth]=sizes[kind];
     const f={id:'portrait-'+kind,kind,width,depth,height:32,point:[0,0],origin:[0,0],rotation:0};
     const plan=CitySpecialBuildings.layout(f);
     if(kind==='port')m.surface(0,0,410,335,'water');
@@ -46,6 +46,7 @@
       m.face(top,'metal',h.color);for(let i=0;i<base.length;i++)m.face([base[i],base[(i+1)%base.length],top[(i+1)%base.length],top[i]],'metal',h.color);
     }
     for(const line of plan.lines)m.line(line.points.map(([x,y])=>[x,y,line.z||.04]),line.width,line.color,line.dash);
+    if(kind==='bus_depot'){m.frame=[-49,-32,49,32,12];m.surface(0,40,150,10,'asphalt');m.surface(0,33,7,15,'asphalt');}
     if(kind==='airport')m.frame=[-230,-16,250,166,32];
     if(kind==='port')m.frame=[-155,-105,155,125,35];
     if(kind==='train_station'){
@@ -126,8 +127,36 @@
     m.lines.at(-1).overlay=true;
     m.trees.push({point:[-13,-8,0],radius:3.5,variant:3});return m;
   }
+  function transit(kind){
+    const m=scene(),rail=kind==='rail_line',tram=kind.startsWith('tram'),track=kind.endsWith('track'),train=kind==='train_track';
+    m.frame=[-26,-16,26,19,9];m.surface(0,0,150,150,'grass');m.surface(0,4,100,30,'paving');m.surface(0,7,100,16,'asphalt');
+    if(tram||track||rail){
+      for(const y of [3,11]){
+        m.surface(0,y,100,4,'paving','#a9aaa0');
+        for(let x=-50;x<50;x+=1.5)m.box(x,y,.05,.3,2.6,.15,'metal','#817765','metal');
+        for(const off of [-.72,.72])m.line([[-50,y+off,.25],[50,y+off,.25]],.16,'#c5cece');
+      }
+      for(const x of [-23,23]){m.box(x,-5,0,.3,.3,9,'metal','#788c8f','metal');m.line([[x,-5,8.6],[x,14,8.6]],.15,'#6f8386');}
+      for(const y of [3,11])m.line([[-50,y,8.4],[50,y,8.4]],.09,'#6e7e80');
+      if(track){if(train)m.frame=[-25,-9,25,16,9];return m;}
+    }else m.line([[-50,7,.05],[50,7,.05]],.18,'#e3d1a0',[3,3]);
+    const vehicle=(x,y,color,length=12)=>{
+      m.box(x,y,.4,length,2.6,3,'metal',color,'metal');m.box(x,y,1.5,length-.5,2.66,1.1,'glass','#365c69','glass');m.box(x,y,3.4,length,2.6,.2,'metal','#dce5df','metal');
+      m.box(x-.7,y,3.6,2.4,1.6,.35,'metal','#aabbb7','metal');
+      for(const dx of [-length*.3,length*.3])for(const dy of [-1.35,1.35])m.box(x+dx,y+dy,.25,.8,.2,.8,'metal','#344143','metal');
+      if(tram){m.line([[x,0,3.9],[x+2,0,6],[x,0,8.3]],.16,'#596d70');}
+    };
+    if(kind!=='tram_station'){vehicle(rail?-9:-1,3,rail?'#d9e3d9':'#4a9992',tram?19:12);if(rail)vehicle(5,3,'#d9e3d9',12);}
+    if(kind==='bus_manage'){vehicle(-13,11,'#c49b5c');vehicle(16,11,'#6596ae');}
+    m.surface(5,-6,23,5,'paving','#d2d0bf');
+    for(const x of [-4,4,12])m.box(x,-8,0,.18,.18,3.2,'metal','#5d7b82','metal');
+    m.box(4,-7,3.2,18,4.3,.18,'metal','#81aaa8','metal');m.box(4,-8,1,17,.15,1.8,'glass','#8eb1b0','glass');
+    m.box(1,-6,.6,7,.5,.18,'metal','#8f7760','metal');m.box(-10,-5,0,.16,.16,3.7,'metal','#6b8583','metal');m.box(-10,-5,2.8,1.6,.24,1,'metal','#408e7b','metal');
+    for(const x of [-23,23])m.trees.push({point:[x,-14,0],radius:4,variant:3});
+    return m;
+  }
   function render(kind){
-    let m=models.get(kind);if(!m){m=kind==='metro_station'?metro():['airport','port','train_station'].includes(kind)?facility(kind):neighborhood(kind);models.set(kind,m);}
+    let m=models.get(kind);if(!m){m=kind==='metro_station'?metro():['airport','port','train_station','bus_depot'].includes(kind)?facility(kind):['bus_line','bus_manage','tram_line','tram_station','rail_line','train_track','tram_track'].includes(kind)?transit(kind):neighborhood(kind);models.set(kind,m);}
     const canvas=document.createElement('canvas');canvas.width=600;canvas.height=360;const ctx=CityScene.useThumbnailMaterials(canvas.getContext('2d'));
     let frame;
     if(m.frame){const [x0,y0,x1,y1,z]=m.frame;frame=quad((x0+x1)/2,(y0+y1)/2,x1-x0,y1-y0).concat([[x0,y0,z],[x1,y0,z]]).map(project);}

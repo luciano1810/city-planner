@@ -13,6 +13,7 @@ from .geometry import stable_id, building_footprint
 
 
 CATALOG = {
+    'bus_depot': dict(name='公交车总站', width=96, depth=64, cost=280000, manual=True),
     'airport': dict(name='机场', width=1000, depth=360, cost=18000000, manual=True),
     'port': dict(name='港口', width=320, depth=240, cost=6500000, manual=True),
     'train_station': dict(name='火车站', width=180, depth=80, cost=1200000, manual=True),
@@ -97,7 +98,7 @@ def check_roads(city, occupied, kind, level, road_id=None):
 def propose(city, cmd):
     kind = cmd.get('kind')
     if kind not in CATALOG or not CATALOG[kind]['manual']:
-        raise ValueError('请选择机场、港口或火车站')
+        raise ValueError('请选择可建造的交通建筑')
     origin = city.point(cmd.get('point'))
     angle = cmd.get('rotation', 0)
     if isinstance(angle, bool) or not isinstance(angle, (float, int)) or not math.isfinite(angle) or not 0 <= angle < 360:
@@ -114,7 +115,7 @@ def propose(city, cmd):
     result = dict(kind=kind, name=name.strip(), point=origin, origin=origin, rotation=angle,
                   width=w, depth=d, size=size, generated=False, capacity=0,
                   maintenance=round(cfg['cost']*scale*scale*.003), cost=round(cfg['cost']*scale*scale),
-                  height={'airport': 32, 'port': 28, 'train_station': 16}[kind]*scale)
+                  height={'airport': 32, 'port': 28, 'train_station': 16, 'bus_depot': 9}[kind]*scale)
     bounds = (-w/2, -d/2, w/2, d/2)
     if kind == 'train_station':
         rails = [r for r in city.s['roads'] if r['kind'] in ('train','metro') and r['level'] == 0]
@@ -156,7 +157,7 @@ def propose(city, cmd):
             raise ValueError('港口海侧需要足够水面，请沿岸线调整位置与朝向')
         result['landPoints'] = points(yard)
     elif not city.terrain.buildable(shape, .08 if kind == 'airport' else .18):
-        raise ValueError('机场需要完整平坦陆地' if kind == 'airport' else '火车站需要平缓陆地')
+        raise ValueError(cfg['name']+'需要完整平缓陆地')
     for road in city.s['roads']:
         if road['level'] < 0:
             continue

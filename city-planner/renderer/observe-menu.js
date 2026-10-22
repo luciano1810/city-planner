@@ -142,6 +142,7 @@
     display.append($('city-render-quality').closest('label'));
     const clock=document.createElement('div');clock.className='observe-lighting';clock.append(source.querySelector('label[for="city-time-of-day"]'),$('city-time-of-day'));display.append(clock);
     display.append($('city-render-labels').closest('label'));
+    display.append($('city-show-transit-lines').closest('label'));
     for(const [kind,label,note] of queries){
       const node=document.querySelector(`[data-tool="${kind}"]`),choose=node.onclick;
       decorate(node,kind,label,note);node.dataset.observeQuery=kind;node.onclick=()=>{if(CityApp.working)return;lastQuery=kind;choose();sync();};

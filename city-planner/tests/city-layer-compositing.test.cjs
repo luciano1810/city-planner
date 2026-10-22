@@ -48,7 +48,7 @@ function fixture({labels=false}={}){
     pointerPosition:null,shapeBounds:new WeakMap(),tool:'select',layer:'use',selected:null,sourceParcel:null,
     colors:{office:'#789'},specialTools:[],panel:'build',lineStops:[],mapHitLabels:[],simulation:{running:true},
     inspectedRoute:null,queryResult:null,renewalSelection:[],renewalPreview:null,draft:[],snapTarget:null,
-    hover:null,space:false,editingRoad:null,dragControl:null,specialPreview:null,preview:null};
+    hover:null,space:false,editingRoad:null,dragControl:null,specialPreview:null,preview:null,busDraft:()=>false};
   vm.runInNewContext(compositor,env);
   function context(onScreen=true){
     let depth=0;
@@ -185,7 +185,7 @@ test('switching dock tools preserves drafts and only refreshes their live overla
     return elements.get(id);
   };
   el('city-shape').value='curve';el('city-level').value='1';el('city-oneway').checked=true;
-  const env={clearTimeout(){},pause(){},specialTimer:0,specialTicket:0,specialPreview:{},
+  const env={clearTimeout(){},pause(){},working:false,clearBusPreview(){},scheduleBusPreview(){},specialTimer:0,specialTicket:0,specialPreview:{},
     tool:'street',toolDrafts:new Map(),draft:[[10,20],[30,40]],cloneDraftPoint:p=>p.slice(),
     lineStops:['stop-1'],editingRoad:'road-1',editingLine:null,sourceParcel:'parcel-1',inspectedRoute:{},
     preview:{},dragControl:0,hover:null,specialTools:['airport'],el,
