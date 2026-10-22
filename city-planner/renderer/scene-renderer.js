@@ -205,7 +205,8 @@
   function parcel(ctx,p,scale){
     const b=p.building?.status==='planned'?null:p.building;if(!b&&!p.blockCommon&&p.use!=='protected')return;
     // One world-aligned paving material removes the checkerboard of lot grass.
-    polygonMaterial(ctx,p.points,b?'paving':'grass',b?0:seed(p.block||p.id));
+    const paved=b||p.blockCommon&&p.use!=='protected';
+    polygonMaterial(ctx,p.points,paved?'paving':'grass',paved?0:seed(p.block||p.id));
     if(b&&scale>.28){
       // The overview already lives in the base snapshot. Always omit tiny
       // planting beds here, even if a previous close view warmed their layout;

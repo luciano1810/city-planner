@@ -81,6 +81,26 @@ class StreetsideTests(unittest.TestCase):
         c._streetside_key=None;streetside.update(c)
         self.assertEqual(shape(f.get('forecourt',[])).intersection(c.terrain.river_geometry).area,0)
 
+    def test_wide_building_gaps_and_block_interiors_have_continuous_paving(self):
+        def parcel(ident, bounds):
+            points=list(box(*bounds).exterior.coords)
+            return dict(id=ident,points=points,use='residential',connected=False,block='block',
+                        building=dict(footprint=points,status='active'))
+        a,b=parcel('a',(100,100,130,140)),parcel('b',(150,100,180,140))
+        c=SimpleNamespace(s=dict(parcels=[a,b],facilities=[],roads=[]),terrain=Terrain(flat_world()))
+        streetside.update(c)
+        self.assertTrue(shape(c.s['streetside']['surfaces']).covers(Point(140,120)))
+        self.assertFalse(shape(c.s['streetside']['surfaces']).covers(Point(95,120)))
+        c.s['blockLayouts']=[dict(id='block',points=list(box(100,100,180,180).exterior.coords))]
+        streetside.update(c)
+        self.assertTrue(shape(c.s['streetside']['surfaces']).covers(Point(140,160)))
+        c.s['facilities']=[dict(id='garden',kind='park',points=list(box(135,150,145,170).exterior.coords))]
+        streetside.update(c)
+        self.assertFalse(shape(c.s['streetside']['surfaces']).covers(Point(140,160)))
+        a['building']=b['building']=None
+        streetside.update(c)
+        self.assertTrue(shape(c.s['streetside']['surfaces']).is_empty)
+
 
 if __name__=='__main__':
     unittest.main()
