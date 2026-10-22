@@ -267,7 +267,7 @@ def road_junctions(roads, shapes, nodes, edges):
             approaches.append(dict(road=road['id'], kind=road['kind'], level=road['level'],
                                    width=ROAD_TYPES[road['kind']]['width'], distance=distance,
                                    direction=direction, tangent=[dx/length, dy/length],
-                                   incoming=direction == -1 or not road['oneway'],
+                                   oneway=road['oneway'], incoming=direction == -1 or not road['oneway'],
                                    outgoing=direction == 1 or not road['oneway']))
         drive = [a for a in approaches if a['kind'] in DRIVABLE_ROADS]
         ground = all(a['level'] == 0 for a in approaches)

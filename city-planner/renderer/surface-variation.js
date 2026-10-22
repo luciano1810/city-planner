@@ -28,7 +28,7 @@
     return pixels;
   }
   function profile(name){
-    const organic=['asphalt','grass','gravel','soil','roof','water'].includes(name);
+    const organic=['asphalt','grass','gravel','soil','roof','water','siteGround','excavation'].includes(name);
     const pavers=name==='paving'||name==='pavingWarm',factor=name==='carPaint'?1:organic||pavers?8:4;
     return {factor,size:factor===1?256:factor*128,mode:pavers?'pavers':organic?'organic':'structured'};
   }

@@ -35,8 +35,8 @@
         const size=atlas.width/4;atlasSample(ctx,atlas,(cfg.cell%4)*size+1,Math.floor(cfg.cell/4)*size+1,size-2);
         const pixels=ctx.getImageData(0,0,256,256),mean=[0,0,0],data=pixels.data;
         for(let i=0;i<data.length;i+=4)for(let ch=0;ch<3;ch++)mean[ch]+=data[i+ch]/65536;
-        const contrast=name==='asphalt'?.32:name==='roof'?.44:name==='grass'?.62:.65;
-        const calibration={paving:.78,roof:.78,facade:.45,grass:.72,curb:.88,water:.55}[name]||0;
+        const contrast=name==='siteGround'?.32:name==='excavation'?.45:name==='asphalt'?.32:name==='roof'?.44:name==='grass'?.62:.65;
+        const calibration={siteGround:.35,excavation:.22,paving:.78,roof:.78,facade:.45,grass:.72,curb:.88,water:.55}[name]||0;
         for(let i=0;i<data.length;i+=4)for(let ch=0;ch<3;ch++){
           const target=name==='asphalt'?cfg.rgb[ch]+[0,1.5,-1,1][cfg.index]:mean[ch]*(1-calibration)+cfg.rgb[ch]*calibration;
           data[i+ch]=target+(data[i+ch]-mean[ch])*contrast;

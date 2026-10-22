@@ -2,6 +2,19 @@ const test=require('node:test');const assert=require('node:assert/strict');
 const {curvePoints,footprintAxis}=require('../renderer/city-geometry.js');
 const {buildingMassing,fitBuildingMasses,rectangleInside,polygonArea,containsPoint}=require('../renderer/city-geometry.js');
 const {roadDraftPlan,roadControlAt}=require('../renderer/city-geometry.js');
+test('city events locate the matching building footprint in existing saves',()=>{
+ const {eventLocation}=require('../renderer/city-geometry.js');
+ const parcel={id:'home',center:[100,100],points:[[50,50],[150,50],[150,150],[50,150]],
+  building:{height:20,footprint:[[70,80],[110,80],[110,110],[70,110]]}};
+ const state={parcels:[parcel]},before=JSON.stringify(state);
+ assert.deepEqual(eventLocation(state,{point:[100,100]}),{id:'home',point:[90,95],size:[40,50]});
+ assert.equal(eventLocation(state,{point:[60,60]}).id,'home');
+ assert.equal(JSON.stringify(state),before);
+ delete parcel.building;
+ assert.deepEqual(eventLocation(state,{point:[100,100]}),{id:'home',point:[100,100],size:[100,100]});
+ assert.deepEqual(eventLocation(state,{point:[500,500]}),{id:null,point:[500,500],size:[150,150]});
+ for(const point of [null,[],[NaN,0],[1,Infinity]])assert.equal(eventLocation(state,{point}),null);
+});
 test('junction inspection chooses the nearest intersection in screen pixels, excluding endpoints',()=>{
  const {junctionAt}=require('../renderer/city-geometry.js');
  const junction=(id,point,roads)=>({id,point,approaches:roads.map(road=>({road}))});
@@ -9,10 +22,28 @@ test('junction inspection chooses the nearest intersection in screen pixels, exc
  const a=junction('a',[104,100],['a','b']),b=junction('b',[107,100],['c','d']);
  assert.equal(junctionAt([endpoint,b,a],[100,100],1,1),a);
  assert.equal(junctionAt([a,b],[106,100],1,1),b);
- assert.equal(junctionAt([a],[100,100],3,1),null);
- assert.equal(junctionAt([a],[104,106],1,2),null);
+ assert.equal(junctionAt([a],[100,100],3,1),a);
+ assert.equal(junctionAt([a],[104,106],1,2),a);
+ assert.equal(junctionAt([a],[96,100],3,1),null);
+ assert.equal(junctionAt([a],[104,112],1,2),null);
  assert.equal(junctionAt([endpoint],[100,100],1,1),null);
  assert.equal(junctionAt([],[100,100],1,1),null);
+});
+test('junction clicks cover the whole intersection up to its stop lines at any zoom',()=>{
+ const {junctionAt}=require('../renderer/city-geometry.js');
+ const make=(angles,widths)=>({point:[0,0],approaches:angles.map((angle,i)=>({road:'r'+i,width:widths[i],tangent:[Math.cos(angle),Math.sin(angle)]}))});
+ const cross=make([0,Math.PI/2,Math.PI,Math.PI*1.5],[24,14,24,14]);
+ for(const scale of [1,10,200]){
+  for(const point of [[11,6],[15,11],[16,12],[6,20],[-15,-11]])assert.equal(junctionAt([cross],point,scale,scale*1.5),cross,JSON.stringify(point));
+ }
+ assert.equal(junctionAt([cross],[22,0],200,200),null,'past stop line selects the road');
+ assert.equal(junctionAt([cross],[25,25],200,200),null,'nearby land stays outside the junction');
+ const angle=.6,rot=p=>[p[0]*Math.cos(angle)-p[1]*Math.sin(angle),p[0]*Math.sin(angle)+p[1]*Math.cos(angle)];
+ const rotated=make([angle,angle+Math.PI/2,angle+Math.PI,angle+Math.PI*1.5],[24,14,24,14]);
+ assert.equal(junctionAt([rotated],rot([15,11]),200,200),rotated);
+ const tee=make([0,Math.PI/2,Math.PI],[24,14,24]);
+ assert.equal(junctionAt([tee],[6,20],200,200),tee);
+ assert.equal(junctionAt([tee],[0,-20],200,200),null,'no phantom entry behind a T junction');
 });
 test('inspection follows facility ownership after construction and releases it after demolition',()=>{
  const {inspectionId,facilityForParcel}=require('../renderer/city-geometry.js');
@@ -110,4 +141,12 @@ test('low-rise homes, halls and tower setbacks have distinct volumes',()=>{
  const tower=buildingMassing(make('office',12));assert.equal(tower.type,'tower');assert.equal(tower.volumes.length,2);
  assert(polygonArea(tower.volumes[1].points)<polygonArea(tower.volumes[0].points));
  assert.equal(tower.volumes[1].base,tower.volumes[0].height);
+});
+
+test('zoomed-in junction picking covers the intersection pavement, not only its center pixel',()=>{
+ const {junctionAt}=require('../renderer/city-geometry.js');
+ const j={id:'cross',point:[100,100],approaches:[{road:'a',width:24},{road:'a',width:24},{road:'b',width:14}]};
+ assert.equal(junctionAt([j],[109,100],20,20),j);
+ assert.equal(junctionAt([j],[114,100],20,20),null);
+ assert.equal(junctionAt([j],[105,100],1,1),j);
 });

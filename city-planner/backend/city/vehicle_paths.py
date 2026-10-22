@@ -14,33 +14,52 @@ FRONT_CLEARANCE = 3.5  # longest rendered vehicle half-length plus a safety gap
 FOLLOW_GAP = 8.
 
 
-def lane_for(links, route, segment):
+def lane_for(links, route, segment, junctions=None):
     link = links[route[segment]]
     count = LANES[link['kind']] // (1 if link['oneway'] else 2)
     if segment + 1 < len(route):
         target = links[route[segment + 1]]
         _, incoming = lane_point(link, link['length'], 0)
         _, outgoing = lane_point(target, 0, 0)
+        dot = sum(a*b for a,b in zip(incoming,outgoing))
+        cross = incoming[0]*outgoing[1]-incoming[1]*outgoing[0]
+        turn = 'straight' if dot > .82 else ('right' if cross > 0 else 'left')
+        arm = next((a for a in (junctions or {}).get(link['b'],{}).get('approaches',[])
+                    if a['road']==link['road'] and a['direction']==-link['direction']), None)
+        allowed = [i for i,row in enumerate(arm.get('laneTurns',[])) if turn in row] if arm else []
+        if allowed:
+            return allowed[-1] if turn=='right' else allowed[0]
         if incoming[0]*outgoing[1] - incoming[1]*outgoing[0] > .08:
             return count - 1
     return 0
 
 
-def lane_point(link, distance, lane):
+def lane_point(link, distance, lane, approach=None):
     shape = link['shape']; d = min(link['length'], max(0., distance))
     p = shape.interpolate(d)
     a = shape.interpolate(max(0., d-.25)); b = shape.interpolate(min(link['length'], d+.25))
     length = max(1e-9, a.distance(b))
     tangent = [(b.x-a.x)/length, (b.y-a.y)/length]
     width = ROAD_TYPES[link['kind']]['width']
-    offset = (-width/2 if link['oneway'] else 0) + (lane+.5)*width/LANES[link['kind']]
+    base = LANES[link['kind']] // (1 if link['oneway'] else 2)
+    offset = (min(lane, base-1)+.5)*width/LANES[link['kind']]
+    if approach and approach.get('autoLanes'):
+        remaining = link['length']-d
+        blend = max(0., min(1., (approach['laneTaperDistance']-remaining)/
+                               (approach['laneTaperDistance']-approach['laneFullDistance'])))
+        blend = blend*blend*(3-2*blend)
+        offset += ((lane+.5)*approach['laneWidth']-offset)*blend
+    offset += -width/2 if link['oneway'] else 0
     return [p.x-tangent[1]*offset, p.y+tangent[0]*offset], tangent
 
 
 class RoutePath:
     def __init__(self, links, route, junctions):
         self.starts = [0.]
-        self.lanes = [lane_for(links, route, i) for i in range(len(route))]
+        self.lanes = [lane_for(links, route, i, junctions) for i in range(len(route))]
+        approaches = [next((a for a in junctions.get(links[key]['b'], {}).get('approaches', [])
+                            if a['road'] == links[key]['road'] and a['direction'] == -links[key]['direction']), None)
+                      for key in route]
         for key in route:
             self.starts.append(self.starts[-1]+links[key]['length'])
         self.distances, self.points, self.turns = [], [], []
@@ -59,12 +78,12 @@ class RoutePath:
             count = max(1, math.ceil((end-start)/2))
             for n in range(count+1):
                 d = start+(end-start)*n/count
-                self._append(self.starts[i]+d, lane_point(link, d, self.lanes[i])[0])
+                self._append(self.starts[i]+d, lane_point(link, d, self.lanes[i], approaches[i])[0])
             if i+1 == len(route):
                 continue
             target = links[route[i+1]]
-            p, u = lane_point(link, end, self.lanes[i])
-            q, v = lane_point(target, trims[i+1][0], self.lanes[i+1])
+            p, u = lane_point(link, end, self.lanes[i], approaches[i])
+            q, v = lane_point(target, trims[i+1][0], self.lanes[i+1], approaches[i+1])
             chord = math.dist(p, q)
             dot = max(-1., min(1., sum(a*b for a,b in zip(u,v))))
             handle = chord * (.5523 / math.sqrt(2) if dot < .5 else 1/3)

@@ -108,7 +108,9 @@ def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
     from .construction import day
     ensure_calendar(city)
     state=city.s['simulation'];remaining=float(seconds);settlements=0;days=0
-    while remaining > 1e-9:
+    # Even a sub-nanosecond remainder may be the last representable step to
+    # midnight. Dropping it leaves a ready background settlement stuck forever.
+    while remaining > 0:
         duration=month_days(city.s['month'])*DAY
         midnight=(int(state['monthSeconds']//DAY)+1)*DAY
         chunk=min(remaining,midnight-state['monthSeconds'])
@@ -116,8 +118,8 @@ def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
         state['elapsedSeconds']+=chunk
         city.s['sceneTimeSeconds']+=daylight_seconds*chunk/seconds
         remaining=max(0.,remaining-chunk)
-        if state['monthSeconds'] >= midnight-1e-8:
-            month_changed=state['monthSeconds'] >= duration-1e-8
+        if state['monthSeconds'] >= midnight:
+            month_changed=state['monthSeconds'] >= duration
             if month_changed:
                 state['monthSeconds']=0.
                 city.s['month']+=1

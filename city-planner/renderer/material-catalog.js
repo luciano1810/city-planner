@@ -3,6 +3,12 @@
   'use strict';
   const range=(a,n)=>Array.from({length:n},(_,i)=>a+i);
   const catalog={
+    siteGround:{atlas:'building-stages',cells:[0,1],meters:3,rgb:[167,147,112],grain:14},
+    excavation:{atlas:'building-stages',cells:[2,3],meters:2.4,rgb:[124,95,65],grain:18},
+    rawConcrete:{atlas:'building-stages',cells:[4],meters:3,rgb:[183,181,169],grain:10},
+    reinforcement:{atlas:'building-stages',cells:[5],meters:1.8,rgb:[148,143,126],grain:8},
+    safetyNet:{atlas:'building-stages',cells:[6],meters:.75,rgb:[66,127,113],grain:6},
+    formwork:{atlas:'building-stages',cells:[7],meters:2.4,rgb:[171,151,114],grain:10},
     asphalt:{atlas:'ground',cells:range(0,4),meters:5,rgb:[91,98,105],grain:11},
     paving:{atlas:'ground',cells:[4,5,6,7,12,13,14,15],meters:4.8,rgb:[241,228,207],grain:9},
     pavingWarm:{atlas:'ground',cells:[12,13,4,7],meters:4.8,rgb:[232,183,150],grain:7},

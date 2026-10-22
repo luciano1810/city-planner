@@ -2,6 +2,7 @@
 (function(root){
   'use strict';
   const G=typeof module!=='undefined'&&module.exports?require('./city-geometry.js'):root.CityGeometry,cache=new WeakMap();
+  const appearance=typeof module!=='undefined'&&module.exports?require('./building-appearance.js'):root.CityBuildingAppearance;
   const equipmentCells=new Map(),equipmentTypes={chiller:0,duct:1,access:2,skylight:3};
   const equipmentHeights={crown:4,access:2.06,chiller:1.05,duct:1.25,chimney:1.65,solar:.55,skylight:.45,garden:1.05,pergola:2.24,terrace:.85};
   // The source atlas includes a front face. Use its lid for horizontal units;
@@ -83,6 +84,7 @@
       function fits(x,y,ww,dd){
         const r=[x-ww/2,y-dd/2,x+ww/2,y+dd/2];
         if(r[0]<x0+.8||r[1]<y0+.8||r[2]>x1-.8||r[3]>y1-.8)return false;
+        if(entry.zones?.some(u=>r[0]<u.x+u.w/2+.65&&r[2]>u.x-u.w/2-.65&&r[1]<u.y+u.d/2+.65&&r[3]>u.y-u.d/2-.65))return false;
         if(units.some(u=>r[0]<u.x+u.w/2+.65&&r[2]>u.x-u.w/2-.65&&r[1]<u.y+u.d/2+.65&&r[3]>u.y-u.d/2-.65))return false;
         return !masses.some(q=>q!==v&&q.rect&&q.height>h+.1&&q.base<=h+.1&&r[0]<q.rect[2]+.5&&r[2]>q.rect[0]-.5&&r[1]<q.rect[3]+.5&&r[3]>q.rect[1]-.5);
       }
@@ -91,8 +93,10 @@
         const x=(x0+x1)/2,y=(y0+y1)/2,ww=Math.min(5,w*.3),dd=Math.min(5,d*.3);
         if(fits(x,y,ww,dd)){units.push({type:'crown',x,y,w:ww,d:dd,z:h+.12});box(x,y,h+.12,ww,dd,2.4,'#8aa6aa','glass');box(x,y,h+2.52,ww*.7,dd*.7,1.1,'#abbdb8');box(x,y,h+3.62,.16,.16,3.4,'#bec9c6');}
       }
+      entry.zones=appearance?.roofZones(parcel,v,masses,shape,units)||[];
       const residentialDeck=b.use==='residential'&&(seed%3===0||v.type==='terrace');
-      const programs=residentialDeck?['access','pergola','garden','terrace','garden','solar']:b.use==='residential'?['access','solar','solar','garden','skylight','chiller']:b.use==='commercial'?['access','chiller','skylight','chiller','duct','skylight']:b.use==='office'?['access','chiller','chiller','duct','skylight','solar']:['access','duct','chiller','skylight','solar','chiller'];
+      const defaultPrograms=residentialDeck?['access','pergola','garden','terrace','garden','solar']:b.use==='residential'?['access','solar','solar','garden','skylight','chiller']:b.use==='commercial'?['access','chiller','skylight','chiller','duct','skylight']:b.use==='office'?['access','chiller','chiller','duct','skylight','solar']:['access','duct','chiller','skylight','solar','chiller'];
+      const programs=appearance?.roofPrograms(parcel,v,defaultPrograms)||defaultPrograms;
       const dimensions={access:[3.15,2.6],chiller:[2.7,2.2],duct:[2.7,2.15],skylight:[1.75,1.65],solar:[3.7,2.5],chimney:[1.3,1.3],garden:[3.4,2.5],pergola:[4.1,3.1],terrace:[3.8,3.1]};
       const max=Math.min(8,Math.max(1,Math.floor(w*d/(shape==='flat'?105:150)))),longX=w>=d,flip=(seed>>>8)%2;
       const typeCounts={};
@@ -172,7 +176,17 @@
     const roof=volume.points.map(([x,y])=>project([x,y,roofZ]));
     const rim=Math.min(.46,w*.055,d*.055),parapetHeight=volume.type==='terrace'?.65:.78;
     const outer=rect(cx,cy,w-.12,d-.12,roofZ+parapetHeight),inner=rect(cx,cy,w-.12-rim*2,d-.12-rim*2,roofZ+parapetHeight),innerFoot=rect(cx,cy,w-.12-rim*2,d-.12-rim*2,roofZ);
-    const meshes=e.meshes.slice().sort((a,b)=>a.points.reduce((s,p)=>s+p[1]*.26+p[2],0)-b.points.reduce((s,p)=>s+p[1]*.26+p[2],0));
+    // Join each original coplanar roof quad before Canvas rasterization.
+    // Separate antialiased triangles expose diagonal seams in pale roof skins.
+    const surfaces=[];
+    for(let i=0;i<e.meshes.length;i++){
+      const a=e.meshes[i],b=e.meshes[i+1];
+      if(a.roof&&b?.roof&&a.material===b.material&&a.color===b.color&&a.points[0].every((n,j)=>n===b.points[0][j])&&a.points[2].every((n,j)=>n===b.points[1][j])){
+        surfaces.push({...a,points:[...a.points,b.points[2]]});i++;
+      }else surfaces.push(a);
+    }
+    const depth=m=>m.points.reduce((s,p)=>s+p[1]*.26+p[2],0)/m.points.length;
+    const meshes=surfaces.sort((a,b)=>depth(a)-depth(b));
     function paint(m){
       const n=normal(m);
       // Hidden faces must not repaint an equipment lid after it was drawn.
@@ -180,7 +194,7 @@
       const diffuse=Math.max(0,n.reduce((sum,x,i)=>sum+x*sun[i],0));
       trace(m.points.map(project));ctx.fillStyle=shade(m.color,n[2]>.65?.93+diffuse*.10:.56+diffuse*.30);ctx.fill();
       if(m.roof){
-        ctx.save();ctx.clip();ctx.globalAlpha=.26;ctx.fillStyle=scene.material(ctx,m.material,m.variant);
+        ctx.save();ctx.clip();ctx.globalAlpha=.40;ctx.fillStyle=scene.material(ctx,m.material,m.variant);
         const points=m.points.map(project),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);ctx.fillRect(Math.min(...xs),Math.min(...ys),Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));ctx.restore();
       }
     }
@@ -192,6 +206,7 @@
       add(base.map(([x,y])=>[x+offset[0],y+offset[1]]));ctx.fillStyle=`rgba(37,47,47,${alpha})`;ctx.fill();
     }
     for(const m of meshes)if(m.roof)paint(m);
+    appearance?.drawRoofZones(ctx,parcel,volume,scene,e.zones);
     ctx.save();trace(roof);ctx.clip();
     if(e.shape==='flat'){
       // Broad membrane panels and two drain sumps are sufficient to explain

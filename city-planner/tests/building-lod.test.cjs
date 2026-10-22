@@ -44,12 +44,12 @@ function harness({lot=null}={}){
       fillRect(...rect){events.push({kind:'rect',canvas,rect});},
       drawImage(...args){events.push({kind:'image',canvas,args});},
       createLinearGradient(){calls.gradients++;return {addColorStop(){}};},
-      clip(){},translate(){},rotate(){},transform(){},clearRect(){}};
+      setLineDash(){},clip(){},translate(){},rotate(){},transform(){},clearRect(){}};
     Object.defineProperty(ctx,'filter',{set(value){calls.filters.push(value);},get(){return 'none';}});
     return ctx;
   }
   const document={createElement(){calls.canvases++;const canvas={width:0,height:0};const ctx=context(canvas);canvas.getContext=()=>ctx;return canvas;}};
-  const window={SceneMaterials:require('../renderer/material-catalog.js'),SurfaceVariation:require('../renderer/surface-variation.js'),
+  const window={CityBuildingStages:require('../renderer/building-stages.js'),SceneMaterials:require('../renderer/material-catalog.js'),SurfaceVariation:require('../renderer/surface-variation.js'),
     SceneRasterCache:require('../renderer/raster-cache.js'),SceneMaterialPreparation:require('../renderer/material-preparation.js'),CityGeometry:geometry,
     CityScene3D:{parkingFor:()=>lot},
     CityOrdinaryRoofs:{drawCanvas(_ctx,_p,volume){calls.roofVolumes.push(volume);}},
@@ -209,4 +209,34 @@ test('distant parking retains its ground without warming vehicle sprites',()=>{
   const {scene,calls,events,context}=harness({lot});scene.building(context(),fixture(),.7);
   assert.deepEqual(events.filter(e=>e.kind==='rect').map(e=>e.rect),[[-13,-5.4,26,10.8]]);
   assert.equal(scene.stats.vehicleSprites,0);assert.equal(scene.stats.vehicleLighting.entries,0);assert.equal(calls.canvases,0);
+});
+
+test('site rasters refresh when progress changes in place and are replaced on completion',()=>{
+  const {scene,calls,events,context}=harness(),p=fixture(),ctx=context(undefined,2.1);
+  const geometryBefore=JSON.stringify(p.building.footprint);
+  for(const [status,progress] of [['planned',0],['construction',.05],['construction',.5],['construction',.9],['active',1]]){
+    p.building.status=status;p.building.constructionProgress=progress;
+    const allocations=calls.canvases;events.length=0;
+    scene.building(ctx,p,2.1);
+    assert.equal(calls.canvases,allocations+1,`${status}/${progress} invalidates its previous raster`);
+    assert(events.some(e=>e.kind==='image'),'a near site uses the same raster path as a completed building');
+    scene.building(ctx,p,2.1);
+    assert.equal(calls.canvases,allocations+1,'unchanged stages reuse their raster');
+    assert.equal(scene.stats.buildingCache.entries,1,'the previous stage is replaced, not retained');
+  }
+  assert.equal(JSON.stringify(p.building.footprint),geometryBefore);
+  assert(calls.roofVolumes.length>0,'completion restores the normal finished roof');
+});
+
+test('planned and construction LOD avoids finished parking, courtyards and near raster allocation',()=>{
+  const lot={point:[14,-5],width:26,depth:10.8,angle:.7};
+  const {scene,calls,events,context}=harness({lot}),ctx=context();
+  for(const status of ['planned','construction']){
+    const p=fixture();p.building.status=status;p.building.constructionProgress=.5;
+    events.length=0;scene.building(ctx,p,.7);
+    assert(events.some(e=>e.kind==='fill'),'all building uses have a visible site');
+    assert(!events.some(e=>e.kind==='rect'),'unfinished buildings do not display a finished car park');
+    scene.withPreview(()=>scene.building(ctx,p,3));
+  }
+  assert.equal(calls.canvases,0);assert.equal(calls.roofVolumes.length,0);
 });

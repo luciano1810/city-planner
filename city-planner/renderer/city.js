@@ -27,22 +27,30 @@
   let trafficFrame=null;
   function animateTraffic(){
     trafficFrame=null;
-    if(!active||!simulation.running||document.hidden)return;
+    if(!active||!simulation.running||!workspace.visible)return;
     workspace.requestAnimation();
     trafficFrame=requestAnimationFrame(animateTraffic);
   }
   function syncTrafficAnimation(){
     trafficPlayback.setPaused(!simulation.running);
-    if(!simulation.running){cancelAnimationFrame(trafficFrame);trafficFrame=null;}
+    if(!simulation.running||!workspace.visible){cancelAnimationFrame(trafficFrame);trafficFrame=null;}
     else if(trafficFrame===null)trafficFrame=requestAnimationFrame(animateTraffic);
   }
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncTrafficAnimation();});
+  let pendingSimulationRender=false;
+  window.addEventListener('workspace-visibility-change',()=>{
+    syncTrafficAnimation();
+    if(workspace.visible&&active&&state){
+      if(pendingSimulationRender){pendingSimulationRender=false;render({incremental:true});}
+      else updateTraffic();
+    }
+  });
   let mapHitLabels=[];
   let snapTarget=null, pointerPosition=null;
   const snappedPoints=new WeakMap();
   function cloneDraftPoint(p){const q=p.slice();if(snappedPoints.has(p))snappedPoints.set(q,snappedPoints.get(p));return q;}
   function roadConnections(){return [draft[0],draft.at(-1)].filter(Boolean).flatMap(p=>{const r=snappedPoints.get(p);return r?[{road:r.road,point:p.slice(),...(r.junction?{junction:r.junction}:{})}]:[];});}
   let tool='select', layer='use', selected=null, hover=null, draft=[], lineStops=[], panel='build';
+  let refreshJunctionPreview=null;
   let editingLine=null,editingRoad=null,dragControl=null,preview=null,previewTimer=null,previewTicket=0,queryResult=null,comparison=null;
   let baseline=null, sourceParcel=null, inspectedRoute=null, space=false;
   let renewalSelection=[],renewalPreview=null;
@@ -229,6 +237,7 @@
     }
   }
   function activate(result) {
+    pendingSimulationRender=false;
     simulation.invalidate();scenePreviewMinute=null; trafficState=result.city.liveTraffic||null;if(trafficState)el('signal-demand').value=trafficState.mode; currentSave=result.saveName||null;
     if(session&&session!==result.id)api('close',{id:session}).catch(()=>{});
     clearTimeout(previewTimer);previewTicket++;
@@ -271,10 +280,12 @@
       trafficState=result.traffic;state.liveTraffic=trafficState;
       trafficPlayback.push(trafficState,result.trafficAnimation,{reset:result.trafficReset,time:timing?.sentAt});
       syncTrafficAnimation();
-      if(result.city)render();else updateTraffic();
+      if(!workspace.visible)pendingSimulationRender=pendingSimulationRender||Boolean(result.city);
+      else if(result.city||pendingSimulationRender){pendingSimulationRender=false;render({incremental:true});}
+      else updateTraffic();
       if(result.saveWarning)status(result.saveWarning,true);
     },
-    onState:()=>{syncTrafficAnimation();if(state)updateSimulationControls();},
+    onState:()=>{syncTrafficAnimation();if(state&&workspace.visible)updateSimulationControls();},
     onError:error=>status(error.message,true)
   });
   function pause(){return simulation.pause();}
@@ -325,6 +336,7 @@
     phaseNode.textContent=signal?(names[signal.phase]||'未知相位'):junction?.signal?'暂无信号样本':'无信号灯控制';
     el('junction-countdown').textContent=Number.isFinite(signal?.remaining)?`${Math.ceil(signal.remaining)} 秒后切换`:'—';
     el('junction-signal-dot').className='signal-dot '+(signal?.phase||'unknown');
+    refreshJunctionPreview?.(signal);
   }
   function setTool(next) {
     clearTimeout(specialTimer);specialTicket++;specialPreview=null;
@@ -402,7 +414,7 @@
     window.dispatchEvent(new CustomEvent('city-panel-change',{detail:next}));
     workspace.requestAnimation();
   }
-  function render() {
+  function render({incremental=false}={}) {
     if(!state)return;
     const s=state.stats;
     taxiPanel.render(state);
@@ -432,7 +444,8 @@
     el('city-freight-list').innerHTML=(state.regionalServices||[]).map(f=>`<div class="city-note"><b>${escape(f.name)}</b> · ${f.valid?fmt(f.tonnes)+' / '+fmt(f.dailyCapacity)+' 吨/日':escape(f.reason)}<br>${fmt(f.operatingCost)} 币/月 <button class="city-btn" data-freight-toggle="${escape(f.id)}">${f.enabled?'停运':'恢复'}</button><button class="city-btn" data-freight-delete="${escape(f.id)}">删除</button></div>`).join('');
     el('city-freight-list').querySelectorAll('[data-freight-toggle]').forEach(b=>b.onclick=()=>command({type:'freight_update',id:b.dataset.freightToggle,enabled:!state.regionalServices.find(f=>f.id===b.dataset.freightToggle).enabled}));
     el('city-freight-list').querySelectorAll('[data-freight-delete]').forEach(b=>b.onclick=()=>command({type:'delete',id:b.dataset.freightDelete}));
-    el('city-auto-renew').checked=state.settings.autoRenew!==false;renderRenewals();renderLegend(); renderInspector(); updateHint(); workspace.requestDraw();
+    el('city-auto-renew').checked=state.settings.autoRenew!==false;renderRenewals();renderLegend(); renderInspector(); updateHint();
+    if(incremental)workspace.requestSceneRefresh();else workspace.requestDraw();
   }
   function renderLegend() {
     let html=Object.entries(colors).map(([k,color])=>`<span><i data-swatch="${color}"></i>${useNames[k]}</span>`).join('');
@@ -479,6 +492,8 @@
   }
   function renderInspector() {
     const box=el('city-inspector'), s=state.stats;
+    refreshJunctionPreview=null;
+    box.classList.toggle('city-junction',state.network.junctions.some(j=>j.id===selected));
     const close='<button class="city-btn" id="city-close-inspector" aria-label="关闭详情">×</button>';
     if(selected) {
       selected=window.CityGeometry.inspectionId(state,selected);
@@ -491,7 +506,12 @@
       const junction=state.network.junctions.find(j=>j.id===selected);
       if(junction){
         const roads=[...new Set(junction.approaches.map(a=>a.road))].map(id=>state.roads.find(r=>r.id===id)?.name||id);
-        box.innerHTML=`<h2>路口详情${close}</h2><p>${escape(roads.join(' × '))}</p><div class="junction-signal-heading"><span id="junction-signal-dot" class="signal-dot unknown" aria-hidden="true"></span><div><strong id="junction-phase"></strong><p id="junction-countdown"></p></div></div><p class="city-note">显示此路口当前相位；绿灯仅对应当前放行方向。</p>`;
+        box.innerHTML=`<h2>路口设置${close}</h2><p>${escape(roads.join(' × '))}</p><div class="junction-signal-heading"><span id="junction-signal-dot" class="signal-dot unknown" aria-hidden="true"></span><div><strong id="junction-phase"></strong><p id="junction-countdown"></p></div></div>${window.JunctionEditor.html(junction,state.roads)}`;
+        refreshJunctionPreview=window.JunctionEditor.bind(box,junction,state,{apply:command,zoom:()=>{
+          const radius=Math.max(100,...junction.approaches.map(a=>a.width*4));
+          workspace.setDisplayMode('high');
+          workspace.focus(junction.point,Math.max(state.meta.width,state.meta.height)/(radius*3));
+        }});
         updateTrafficDetails();
       } else if(p) {
         const b=p.building;
@@ -545,10 +565,11 @@
         el('stop-toggle').onclick=()=>command({type:'stop_update',id:stop.id,enabled:stop.enabled===false});
       } else if(road) {
         const edges=state.network.edges.filter(e=>e.road===road.id),cfg=state.meta.roadTypes[road.kind];
-        box.innerHTML=`<h2>${escape(road.name)}${close}</h2>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 币`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
+        box.innerHTML=`<h2>${escape(road.name)}${close}</h2><form id="road-name-form" class="city-fields"><label>道路名称<input class="city-field" id="road-name" maxlength="60" required value="${escape(road.name)}"></label><button class="city-btn" type="submit">保存道路名称</button></form>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 币`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
         ${roadTrafficDetails(edges,cfg)}
         ${roadKinds.includes(road.kind)?`${details([['道路等级',cfg.name],['道路宽度',cfg.width+' m'],['基准容量',cfg.capacity?fmt(cfg.capacity)+' 辆/h':'仅步行'],['沿街开发',['street','avenue','lane'].includes(road.kind)?'允许':'不直接开发']])}<div class="city-fields"><label>道路等级<select class="city-field" id="road-kind">${roadKinds.map(k=>`<option value="${k}">${state.meta.roadTypes[k].name}</option>`).join('')}</select></label><label><span><input type="checkbox" id="road-oneway"> 单向</span></label></div><button class="city-btn" id="road-update">更新道路</button><p>升级会自动拆除占路建筑并尝试安置住户与企业；没有合适住房的家庭迁出并登记等待迁回。改为快速路或高速公路会取消原有临街直接接入。高架交叉不会自动形成路口，需绘制连接路。</p>`:''}
         <button class="city-btn" id="road-edit-shape">调整道路控制点</button><p>拆除可能使建筑失去接入，或中断运营线路。</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
+        el('road-name-form').onsubmit=event=>{event.preventDefault();if(event.currentTarget.reportValidity())command({type:'road_rename',id:road.id,name:el('road-name').value});};
         el('road-edit-shape').onclick=()=>{showPanel('build');setTool(road.kind);editingRoad=road.id;draft=(road.controls||road.points).map(p=>p.slice());for(const p of [draft[0],draft.at(-1)]){const c=road.connections?.find(c=>Math.hypot(c.point[0]-p[0],c.point[1]-p[1])<.05);if(c)snappedPoints.set(p,{road:c.road,junction:c.junction});}el('city-shape').value=road.shape||'polyline';el('city-level').value=road.level;el('city-oneway').checked=road.oneway;document.body.classList.remove('show-inspector');schedulePreview();updateHint();workspace.requestDraw();};
         if(el('road-kind')){el('road-kind').value=road.kind;el('road-oneway').checked=road.oneway;el('road-update').onclick=()=>command({type:'road_update',id:road.id,kind:el('road-kind').value,oneway:el('road-oneway').checked});}
       } else if(facility) {
@@ -598,8 +619,19 @@
     c.strokeStyle='#527b52';c.lineWidth=2;c.stroke();
     c.fillStyle='#466746';c.font='11px sans-serif';c.fillText(fmt(max)+' 人',12,13);
   }
-  function locateEvent(index){const event=state.events[index];if(event?.point){workspace.focus(event.point,5);document.body.classList.remove('show-inspector');}status(event?.message||'城市事件');}
+  function locateEvent(index){
+    const event=state.events[index],target=window.CityGeometry.eventLocation(state,event);
+    if(target){
+      const g=workspace.geometry,t=workspace.terrain,base=Math.max(g.width/t.width,g.height/t.height);
+      const scale=Math.min(g.width*state.meta.width/(target.size[0]*t.width*base*3),g.height*state.meta.height/(target.size[1]*t.height*base*3));
+      selected=target.id;renderInspector();
+      document.body.classList.remove('show-inspector');
+      workspace.focus(target.point,scale);
+    }
+    status(event?.message||'城市事件');
+  }
   function inspect(id) {
+    if(state.network.junctions.some(j=>j.id===id))pause();
     selected=id;document.body.classList.add('show-inspector');renderInspector();workspace.requestDraw();
   }
   function inside(point, polygon) {
@@ -753,6 +785,7 @@
     }
     const object=pick(point);
     if(tool==='delete'&&object){command({type:'delete',id:object.id});return;}
+    if(object&&state.network.junctions.some(j=>j.id===object.id))pause();
     selected=object?.id||null;document.body.classList.toggle('show-inspector',!!selected);renderInspector();workspace.requestDraw();
   }
   canvas.addEventListener('pointerdown',event=>{
@@ -786,7 +819,7 @@
     if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();command({type:event.shiftKey?'redo':'undo'});}
   });
   document.addEventListener('keyup',event=>{if(event.code==='Space')space=false;});
-  window.addEventListener('blur',()=>{space=false;pause();});
+  window.addEventListener('blur',()=>{space=false;});
 
   function canCacheBase(){
     return Boolean(active&&state&&['use','districts','transit','flows','traffic'].includes(layer)
@@ -828,7 +861,7 @@
       // Low sun projects up to 95 metres from a building into a nearby tile.
       if(!visible(p.center)&&!inView(p.points,rich&&p.building?100:50))continue;
       const b=p.building?.status==='planned'?null:p.building;
-      if(p.building?.status==='planned'&&(physical||layer==='development')&&window.CityMapRenderer.plannedResidential(ctx,p,scale)&&window.CityScene.settings.labels&&scale>.7)
+      if(!rich&&p.building?.status==='planned'&&(physical||layer==='development')&&window.CityMapRenderer.plannedResidential(ctx,p,scale)&&window.CityScene.settings.labels&&scale>.7)
         label('规划住宅',p.building.center||p.center,9,'#397e5b',16,'center');
       let color=b?colors[b.use]:'#eef1df';
       if(layer==='land')color=heat(p.landValue,500);
@@ -855,6 +888,10 @@
       else if(physical&&p.blockCommon&&!p.openSpace){path(p.points,true);ctx.fillStyle='#d8d6be77';ctx.fill();}
       if(!rich&&(!physical||b||p.use==='protected')){path(p.points,true);ctx.fillStyle=p.use==='protected'?'#80997555':physical?'#eee9da':color;ctx.globalAlpha=physical?.42:.72;ctx.fill();ctx.globalAlpha=1;}
       if(!physical&&scale>.25){ctx.lineWidth=.4/scale;ctx.strokeStyle='#75846830';ctx.stroke();}
+      if(rich&&p.building?.status==='planned'){
+        sceneBuildings.push(p);
+        if(window.CityScene.settings.labels&&scale>.7)label('已选址',p.building.center||p.center,9,'#397e5b',16,'center');
+      }
       if(b) {
         if(rich){sceneBuildings.push(p);if(window.CityScene.settings.labels&&(scale>.7||b.floors>=10&&scale>.32))label((b.name?b.name+' · ':'')+b.floors+'F',b.center||p.center,9,'#35404a',b.floors>=10?25:1,'center');}
         else {
@@ -1264,7 +1301,6 @@
   el('city-speed').oninput=()=>simulation.setSpeed(window.CitySimulation.speeds[Number(el('city-speed').value)]).catch(()=>{});
   el('signal-reset').onclick=()=>simulation.reset().catch(()=>{});
   el('signal-demand').onchange=()=>simulation.reset().catch(()=>{});
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
   el('signal-apply').onclick=()=>command({type:'signal_timing',values:{signalGreenSeconds:Number(el('signal-green').value),signalYellowSeconds:Number(el('signal-yellow').value),signalClearanceSeconds:Number(el('signal-clearance').value)}});
   el('city-mode').onchange=()=>{el('city-capacity').value=state.meta.transitTypes[el('city-mode').value].capacity;lineStops=[];updateHint();};
   el('city-create-line').onclick=()=>command({type:editingLine?'line_update':'line',id:editingLine,name:el('city-line-name').value,mode:el('city-mode').value,stops:[...lineStops],

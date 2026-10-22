@@ -448,7 +448,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
             age=0,occupied=0,positions=0,employees=0,cost=round(cost),vacantMonths=0,**style(p,use,floors))
         b=p['building']
         from .construction import schedule, day
-        schedule(city,b,start=int(day(city))+1+started%3)
+        schedule(city,b,start=int(day(city))+1+started%3,duration_scale=.5)
         if len(footprint.exterior.coords)>7 and use in ('residential','commercial'):b['form']='courtyard'
         b['usableArea']=round(floor_area*b['usableRatio'],1);b['useAreas']={use:round(floor_area,1)}
         started+=1

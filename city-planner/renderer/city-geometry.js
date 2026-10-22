@@ -1,18 +1,63 @@
 /* Identical chord-scaled interpolation to backend city.geometry.curve_points. */
 (function(root){
+  const appearance=typeof module!=='undefined'&&module.exports?require('./building-appearance.js'):root.CityBuildingAppearance;
+  function eventLocation(state,event){
+    const point=event?.point;
+    if(!Array.isArray(point)||point.length!==2||!point.every(Number.isFinite))return null;
+    // Existing saves identify construction events by their parcel center.
+    const parcel=state.parcels.find(p=>p.center&&Math.hypot(p.center[0]-point[0],p.center[1]-point[1])<.01)
+      ||state.parcels.find(p=>p.points?.length&&containsPoint(point,p.points));
+    const points=parcel?.building?.footprint?.length?parcel.building.footprint:parcel?.points;
+    if(!points?.length)return {point,id:null,size:[150,150]};
+    const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+    const left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);
+    return {point:[(left+right)/2,(top+bottom)/2],id:parcel.id,
+      size:[Math.max(30,right-left),Math.max(30,bottom-top+(parcel.building?.height||0))]};
+  }
   function facilityForParcel(state,parcel){
     return parcel&&!parcel.building&&parcel.openSpace?state.facilities.find(f=>f.id===parcel.openSpace):null;
   }
   function inspectionId(state,id){
     return facilityForParcel(state,state.parcels.find(p=>p.id===id))?.id||id;
   }
-  function junctionAt(junctions,point,scaleX,scaleY,radius=10){
+  const junctionHitAreas=new WeakMap();
+  function junctionHitArea(junction){
+    if(junctionHitAreas.has(junction))return junctionHitAreas.get(junction);
+    const arms=junction.approaches.filter(a=>a.width>0&&a.tangent?.length===2),points=[];
+    for(const arm of arms){
+      const [ux,uy]=arm.tangent,half=arm.width/2;
+      // Match the road renderer's intersection clearance and stop-line offset.
+      // A polygon through the full-width entries includes the corners that a
+      // center-radius test misses, especially on wide or oblique intersections.
+      let clearance=half+2;
+      for(const other of arms){
+        if(other===arm)continue;
+        const cross=Math.abs(ux*other.tangent[1]-uy*other.tangent[0]);
+        const dot=ux*other.tangent[0]+uy*other.tangent[1];
+        if(cross>.05)clearance=Math.max(clearance,(other.width/2+half*dot)/cross+2);
+      }
+      for(const along of [0,clearance+7])for(const side of [-1,1]){
+        points.push([junction.point[0]+ux*along-uy*half*side,junction.point[1]+uy*along+ux*half*side]);
+      }
+    }
+    points.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const chain=items=>{const result=[];for(const p of items){while(result.length>1&&cross(result.at(-2),result.at(-1),p)<=0)result.pop();result.push(p);}return result;};
+    const polygon=points.length<3?[]:[...chain(points).slice(0,-1),...chain(points.slice().reverse()).slice(0,-1)];
+    junctionHitAreas.set(junction,polygon);return polygon;
+  }
+  function junctionAt(junctions,point,scaleX,scaleY,radius=20){
     let nearest=null,distance=radius;
     for(const junction of junctions){
       // Endpoints and shape vertices are not inspectable intersections.
-      if(new Set(junction.approaches.map(a=>a.road)).size<2)continue;
-      const d=Math.hypot((junction.point[0]-point[0])*scaleX,(junction.point[1]-point[1])*scaleY);
-      if(d<distance){nearest=junction;distance=d;}
+      if(junction.approaches.length<3&&new Set(junction.approaches.map(a=>a.road)).size<2)continue;
+      const dx=junction.point[0]-point[0],dy=junction.point[1]-point[1];
+      const d=Math.hypot(dx*scaleX,dy*scaleY),polygon=junctionHitArea(junction);
+      const inArea=polygon.length>=3&&polygon.every((a,i)=>{const b=polygon[(i+1)%polygon.length];return (b[0]-a[0])*(point[1]-a[1])-(b[1]-a[1])*(point[0]-a[0])>=-1e-7;});
+      const halfWidth=polygon.length?0:Math.max(0,...junction.approaches.map(a=>(a.width||0)/2));
+      const fallback=Math.hypot(dx*scaleX/Math.max(radius,halfWidth*scaleX),dy*scaleY/Math.max(radius,halfWidth*scaleY))<=1;
+      if(!fallback&&!inArea)continue;
+      if(!nearest||d<distance){nearest=junction;distance=d;}
     }
     return nearest;
   }
@@ -174,7 +219,7 @@
         volumes.splice(0,1,{...v,height:base,type:'terrace'},{...v,rect,base,points:[[rect[0],rect[1]],[rect[2],rect[1]],[rect[2],rect[3]],[rect[0],rect[3]],[rect[0],rect[1]]].map(world)});
       }
     }
-    const result={podium,volumes,type};buildingLayouts.set(b,result);return result;
+    const original={podium,volumes,type},result=appearance?appearance.massing(parcel,original):original;buildingLayouts.set(b,result);return result;
   }
   // Distances and projection are measured in CSS pixels, including tilted maps.
   function roadSnap(point,roads,junctions,{kind='street',level=0,sx=1,sy=sx,radius=14,exclude=null}={}){
@@ -202,7 +247,7 @@
     }
     return best;
   }
-  const api={facilityForParcel,inspectionId,junctionAt,roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
+  const api={eventLocation,facilityForParcel,inspectionId,junctionAt,roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.CityGeometry=api;
 })(typeof window==='undefined'?{}:window);
