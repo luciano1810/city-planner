@@ -292,6 +292,7 @@
     return ['left','straight','right'].filter(turn=>turns.has(turn));
   }
   function clearDistance(arm,approaches){
+    if(Number.isFinite(arm.crossingDistance))return arm.crossingDistance-3;
     let distance=arm.width/2+2;
     for(const other of approaches){
       if(other===arm)continue;
@@ -304,19 +305,73 @@
     }
     return distance;
   }
+  function insidePolygon(point,points){
+    let inside=false;
+    for(let i=0,j=points.length-1;i<points.length;j=i++){
+      const a=points[i],b=points[j];
+      if((a[1]>point[1])!==(b[1]>point[1])&&point[0]<(b[0]-a[0])*(point[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+    }
+    return inside;
+  }
+  // Three nearby junctions can enclose a sliver narrower than a sidewalk.
+  // Only absorb short, straight, connected ground-road loops; larger blocks,
+  // curved streets and grade-separated crossings retain their own surfaces.
+  function junctionPockets(roads,network,roadTypes){
+    const byRoad=new Map(),links=new Map(),roadMap=new Map(roads.map(r=>[r.id,r]));
+    for(const j of network.junctions||[])for(const arm of j.approaches){
+      if(arm.level!==0||!motorKinds.has(arm.kind))continue;
+      if(!byRoad.has(arm.road))byRoad.set(arm.road,new Map());
+      byRoad.get(arm.road).set(j.id,{j,distance:arm.distance});
+    }
+    for(const [id,nodes] of byRoad){
+      const road=roadMap.get(id);if(!road)continue;
+      const ordered=[...nodes.values()].sort((a,b)=>a.distance-b.distance);
+      for(let i=1;i<ordered.length;i++){
+        const a=ordered[i-1],b=ordered[i],length=b.distance-a.distance;
+        if(length<1||length>80)continue;
+        const chord=[a.j.point,b.j.point],points=slice(road.points,a.distance,b.distance);
+        if(points.some(p=>{const q=sample(chord,nearestDistance(chord,p)).point;return Math.hypot(p[0]-q[0],p[1]-q[1])>.5;}))continue;
+        for(const [from,to] of [[a,b],[b,a]]){
+          if(!links.has(from.j.id))links.set(from.j.id,new Map());
+          links.get(from.j.id).set(to.j.id,{node:to.j,width:roadTypes[road.kind].width});
+        }
+      }
+    }
+    const pockets=[];
+    for(const [id,neighbors] of links)for(const [bid,ab] of neighbors){
+      if(bid<=id)continue;
+      for(const [cid,bc] of links.get(bid)||[]){
+        const ac=neighbors.get(cid);if(cid<=bid||!ac)continue;
+        const points=[links.get(bid).get(id).node.point,ab.node.point,bc.node.point];
+        const lengths=points.map((p,i)=>Math.hypot(p[0]-points[(i+1)%3][0],p[1]-points[(i+1)%3][1]));
+        const [a,b,c]=points,area2=Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]));
+        const radius=(area2-lengths[0]*ab.width/2-lengths[1]*bc.width/2-lengths[2]*ac.width/2)/lengths.reduce((a,b)=>a+b);
+        if(radius<=3)pockets.push({points,bounds:bounds(points),radius});
+      }
+    }
+    return pockets;
+  }
   function buildPlan(roads,network,roadTypes){
     if(plans.has(network))return plans.get(network);
-    const roadMap=new Map(roads.map(r=>[r.id,r])),arrows=[],crosswalks=[],stopLines=[],signals=[],pedestrianSignals=[];
+    const roadMap=new Map(roads.map(r=>[r.id,r])),arrows=[],crosswalks=[],stopLines=[],signals=[],pedestrianSignals=[],laneBays=[],bayGaps=new Map();
     const gaps=new Map(roads.map(r=>[r.id,[]]));
     const junctions=network.junctions||[];
+    const pockets=junctionPockets(roads,network,roadTypes);
+    const groundRoads=roads.filter(r=>r.level===0&&motorKinds.has(r.kind)).map(r=>({road:r,bounds:bounds(r.points,roadTypes[r.kind].width/2+1)}));
+    const cornerSurfaces=junctionCorners(network,roads).map(c=>({points:[c.junction,c.from,...cornerBoundary(c,'surface'),c.to],bounds:bounds([c.junction,c.from,c.to])}));
+    const supportBlocked=(point,level)=>level===0&&(pockets.some(p=>insidePolygon(point,p.points))||cornerSurfaces.some(c=>intersects(c.bounds,bounds([point]))&&insidePolygon(point,c.points))||groundRoads.some(({road,bounds:box})=>{
+      if(!intersects(box,bounds([point])))return false;
+      const at=sample(road.points,nearestDistance(road.points,point));
+      return Math.hypot(point[0]-at.point[0],point[1]-at.point[1])<roadTypes[road.kind].width/2+.6;
+    }));
     const roadJunctions=new Map();
     for(const junction of junctions)for(const arm of junction.approaches){
       if(!roadJunctions.has(arm.road))roadJunctions.set(arm.road,new Set());
       roadJunctions.get(arm.road).add(arm.distance);
     }
-    const addArrow=(road,distance,direction,offset,turns)=>{
+    const addArrow=(road,distance,direction,offset,turns,laneWidth=roadTypes[road.kind].width/laneCounts[road.kind])=>{
       const at=sample(road.points,distance),travel=at.tangent.map(v=>v*direction);
-      arrows.push({road:road.id,level:road.level,point:[at.point[0]-travel[1]*offset,at.point[1]+travel[0]*offset],travel,turns,laneWidth:roadTypes[road.kind].width/laneCounts[road.kind]});
+      arrows.push({road:road.id,level:road.level,point:[at.point[0]-travel[1]*offset,at.point[1]+travel[0]*offset],travel,turns,laneWidth});
     };
     for(const junction of junctions){
       for(const arm of junction.approaches){
@@ -329,9 +384,11 @@
           const delta=(distance-arm.distance)*arm.direction;
           if(delta>.1)room=Math.min(room,delta/2);
         }
-        const end=arm.distance+arm.direction*Math.min(available,clearance+6);
+        const end=arm.distance+arm.direction*Math.min(available,clearance+(Number.isFinite(arm.crossingDistance)?10:6));
         gaps.get(road.id).push([Math.min(arm.distance,end),Math.max(arm.distance,end)]);
-        if(room<clearance+14)continue;
+        // Advancing a stop line must not expose another set of crossings and
+        // poles on short internal links of an already overlapping junction.
+        if(room<clearance+(Number.isFinite(arm.crossingDistance)?18:14))continue;
         const at=sample(road.points,arm.distance+arm.direction*(clearance+3));
         const tangent=at.tangent.map(v=>v*arm.direction);
         const furniture={road:road.id,level:road.level,point:at.point,tangent,width:arm.width,oneway:road.oneway,
@@ -372,23 +429,51 @@
                 center=far.point;mountTangent=far.tangent.map(v=>-v*opposite.direction);span=opposite.width;placement='far';
               }
             }
-            const count=road.oneway?laneCounts[road.kind]:laneCounts[road.kind]/2,laneWidth=arm.width/laneCounts[road.kind];
+            // A far-side sidewalk may belong to another nearby intersection.
+            // Fall back to this approach instead of planting a mast in traffic.
+            const supportAt=()=>[center[0]+mountTangent[1]*(span/2+1.8),center[1]-mountTangent[0]*(span/2+1.8)];
+            if(placement==='far'&&supportBlocked(supportAt(),road.level)){
+              center=near.point;mountTangent=near.tangent.map(v=>v*arm.direction);span=arm.width;placement='near';
+            }
+            const count=arm.laneCount||(road.oneway?laneCounts[road.kind]:laneCounts[road.kind]/2),laneWidth=arm.laneWidth||arm.width/laneCounts[road.kind];
             const heads=Array.from({length:count},(_,lane)=>{
               const lateral=road.oneway?-arm.width/2+(lane+.5)*laneWidth:(lane+.5)*laneWidth;
               const d=lateral*Math.min(1,span/arm.width);
               return [center[0]+mountTangent[1]*d,center[1]-mountTangent[0]*d];
             });
-            const support=[center[0]+mountTangent[1]*(span/2+1.8),center[1]-mountTangent[0]*(span/2+1.8)];
+            let support=supportAt();
+            if(supportBlocked(support,road.level)){
+              const other=[center[0]-mountTangent[1]*(span/2+1.8),center[1]+mountTangent[0]*(span/2+1.8)];
+              if(!supportBlocked(other,road.level))support=other;
+            }
             signals.push({...stopFurniture,kind:'vehicle',point:heads[0],heads,support,height:5.8,faceDirection:t,
               stopPoint:stop.point,placement,center,mountTangent});
           }
-          const turns=turnsFor(arm,junction.approaches),count=road.oneway?laneCounts[road.kind]:laneCounts[road.kind]/2;
-          const laneWidth=arm.width/laneCounts[road.kind];
+          const turns=turnsFor(arm,junction.approaches),count=arm.laneCount||(road.oneway?laneCounts[road.kind]:laneCounts[road.kind]/2);
+          const laneWidth=arm.laneWidth||arm.width/laneCounts[road.kind];
           for(let lane=0;lane<count;lane++){
-            const allowed=turns.filter(turn=>turn==='straight'||count===1||turn==='left'&&lane===0||turn==='right'&&lane===count-1);
+            const allowed=arm.laneTurns?.[lane]||turns.filter(turn=>turn==='straight'||count===1||turn==='left'&&lane===0||turn==='right'&&lane===count-1);
             if(!allowed.length)continue;
             const offset=road.oneway?-arm.width/2+(lane+.5)*laneWidth:(lane+.5)*laneWidth;
-            addArrow(road,arm.distance+arm.direction*(clearance+18),-arm.direction,offset,allowed);
+            addArrow(road,arm.distance+arm.direction*(clearance+18),-arm.direction,offset,allowed,laneWidth);
+          }
+          if(arm.autoLanes){
+            const start=arm.stopDistance,end=arm.laneTaperDistance,full=arm.laneFullDistance;
+            if(!bayGaps.has(road.id))bayGaps.set(road.id,[]);
+            const limits=[arm.distance+arm.direction*start,arm.distance+arm.direction*end].sort((a,b)=>a-b);
+            bayGaps.get(road.id).push({limits,direction:arm.direction,oneway:road.oneway});
+            for(let lane=1;lane<count;lane++){
+              const points=[];
+              for(let d=start;d<end+1;d=Math.min(end,d+2)){
+                const blend=Math.max(0,Math.min(1,(end-d)/(end-full))),mix=blend*blend*(3-2*blend);
+                const original=Math.min(lane,arm.baseLaneCount)*arm.width/laneCounts[road.kind];
+                const offset=(road.oneway?-arm.width/2:0)+original+(lane*laneWidth-original)*mix;
+                const at=sample(road.points,arm.distance+arm.direction*d),t=at.tangent.map(v=>v*arm.direction);
+                points.push([at.point[0]+t[1]*offset,at.point[1]-t[0]*offset]);
+                if(d===end)break;
+              }
+              laneBays.push({road:road.id,level:road.level,points});
+            }
           }
         }
       }
@@ -415,14 +500,21 @@
           // physical lane allocation intact while giving each stop line a
           // legible approach instead of another enormous floating dash.
           const approach=Math.min(12,(b-a)*.24),first=median?a:Math.min(b,a+(a>0?approach:0)),last=median?b:Math.max(first,b-(b<length?approach:0));
-          for(const [start,end,solid] of [[a,first,true],[first,last,false],[last,b,true]])if(end-start>.05)
-            centerlines.push({road:road.id,level:road.level,median,solid,points:offsetPath(slice(road.points,start,end),offset)});
+          for(const [start,end,solid] of [[a,first,true],[first,last,false],[last,b,true]]){
+            let pieces=[[start,end]];
+            if(!median)for(const bay of bayGaps.get(road.id)||[])if(bay.oneway||offset*bay.direction<0){
+              const [lo,hi]=bay.limits;
+              pieces=pieces.flatMap(([s,e])=>e<=lo||s>=hi?[[s,e]]:[[s,Math.min(e,lo)],[Math.max(s,hi),e]].filter(([s,e])=>e>s));
+            }
+            for(const [s,e] of pieces)if(e-s>.05)centerlines.push({road:road.id,level:road.level,median,solid,points:offsetPath(slice(road.points,s,e),offset)});
+          }
         }
         // Keep only continuous ranges here. Fine joints and grates are created
         // for visible 32 m pieces at street zoom, never for a whole city load.
         if(curbRoad){const points=slice(road.points,a,b);curbRoad.runs.push({id:++detailSerial,start:a,end:b,points,bounds:bounds(points,width/2+.7)});}
         for(let d=a+35;d<b-24;d+=95){
           for(const direction of road.oneway?[1]:[1,-1])for(let lane=0;lane<(road.oneway?count:count/2);lane++){
+            if((bayGaps.get(road.id)||[]).some(b=>b.direction===-direction&&d>=b.limits[0]&&d<=b.limits[1]))continue;
             const offset=road.oneway?-width/2+(lane+.5)*laneWidth:(lane+.5)*laneWidth;
             addArrow(road,d,direction,offset,['straight']);
           }
@@ -442,7 +534,7 @@
       const start=Math.max(0,arm.distance-extent),points=slice(road.points,start,Math.min(measure(road.points).length,arm.distance+extent));
       for(let lane=1;lane<count;lane++)if(lane!==count/2||road.oneway)guides.push({road:road.id,phase:start%5.7,points:offsetPath(points,-width/2+lane*width/count)});
     }
-    const result={arrows,crosswalks,stopLines,signals,pedestrianSignals,centerlines,medians,edgeLines,guides,curbRoads};plans.set(network,result);return result;
+    const result={arrows,crosswalks,stopLines,signals,pedestrianSignals,centerlines,medians,edgeLines,guides,curbRoads,pockets,laneBays};plans.set(network,result);return result;
   }
 
   function cornerAnchor(road,arm,point,nominal,side){
@@ -833,7 +925,12 @@
         ctx.strokeStyle=pass==='outline'?(rail?'#747c78':'#788779'):(rail?'#eef1e8':surfaces[road.kind]);ctx.stroke();
       }
       ctx.setLineDash([]);
-      if(level===0&&stage!=='details'&&root.CityScene){paintCorners(ctx,network,{scale,inView,roads});paintCurbs(ctx,plan,{scale,inView,layout});}
+      if(level===0&&stage!=='details'&&root.CityScene){
+        paintCorners(ctx,network,{scale,inView,roads});paintCurbs(ctx,plan,{scale,inView,layout});
+        for(const pocket of plan.pockets)if(inView(pocket.points)){
+          ctx.fillStyle=root.CityScene.material(ctx,'asphalt',0);path(pocket.points);ctx.closePath();ctx.fill();
+        }
+      }
       if((level===1||level===0)&&root.CityScene&&stage!=='details'){
         const joins=layout.joins.filter(j=>j.approaches.some(a=>a.level===(level===1?1:-1))&&inView([[j.point[0]-j.extent,j.point[1]-j.extent],[j.point[0]+j.extent,j.point[1]+j.extent]]));
         paintConnections(ctx,state,scale,layout,joins);
@@ -864,6 +961,8 @@
         ctx.setLineDash([]);ctx.lineDashOffset=0;
       }
       if(scale>=.45){
+        ctx.strokeStyle=root.CityScene?.material(ctx,'marking',0)||'#fffdf0';ctx.lineWidth=.16;ctx.setLineDash([]);
+        for(const bay of plan.laneBays)if(bay.level===level&&inView(bay.points)){path(bay.points);ctx.stroke();}
         for(const item of plan.crosswalks)if(item.level===level&&visible(item.point))local(item,()=>{
           ctx.fillStyle=root.CityScene?.material(ctx,'marking',root.CityScene.seed(item.road))||'#fffdf0';for(let y=-item.width/2+.7;y<item.width/2-.6;y+=1.35)ctx.fillRect(-2,y,4,.7);
         });

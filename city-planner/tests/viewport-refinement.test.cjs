@@ -15,10 +15,11 @@ function production(name){
 function harness(extra={}){
   const scene={time:9*3600+25,setTime(value){this.time=value;},withPreview(paint){return paint();}};
   const calls={invalidations:0,refreshes:0};
-  const context={window:{CityScene:scene},baseLightMinute:null,baseMaterialRevision:null,drag:null,zooming:false,
+  const context={window:{CityScene:scene},baseLightMinute:null,baseMaterialRevision:null,sceneRevision:0,baseSceneRevision:null,drag:null,zooming:false,
+    frameDraw:{request(){}},
     panCache:{pending:0,invalidate(){this.pending=0;calls.invalidations++;},refresh(){this.pending=10;calls.refreshes++;return true;}},
     ...extra};
-  vm.runInNewContext(['paintCachedBase','invalidatePan','sampleBaseLight','baseNeedsRefresh','rebaseViewportPan','setZoom'].map(production).join('\n'),context);
+  vm.runInNewContext(['paintCachedBase','invalidatePan','sampleBaseLight','baseNeedsRefresh','requestSceneRefresh','rebaseViewportPan','setZoom'].map(production).join('\n'),context);
   return {context,scene,calls};
 }
 
@@ -96,4 +97,57 @@ test('distant detail keeps its existing texture through material refresh too',()
   const {context:c,scene,calls}=harness();scene.materialRevision=1;c.sampleBaseLight(false);
   scene.materialRevision=2;c.sampleBaseLight(false);
   assert.equal(calls.invalidations,1);assert.equal(calls.refreshes,1);
+});
+
+test('daily settlements retain textures and coalesce updates without starving unfinished tiles',()=>{
+  const {context:c,calls}=harness();c.sampleBaseLight(true);
+  const initialInvalidations=calls.invalidations;
+  c.requestSceneRefresh();assert(c.baseNeedsRefresh());c.sampleBaseLight(true);
+  assert.equal(calls.refreshes,1);assert.equal(c.panCache.pending,10);
+  for(let day=0;day<20;day++){
+    c.panCache.pending=10-day%10;
+    c.requestSceneRefresh();c.sampleBaseLight(true);
+    assert.equal(c.panCache.pending,10-day%10,'a newer day cannot restart the active batch');
+  }
+  assert.equal(calls.invalidations,initialInvalidations,'settlements never discard finished textures');
+  assert.equal(calls.refreshes,1);
+  c.panCache.pending=0;assert(c.baseNeedsRefresh(),'the newest day still needs a frame after pausing');
+  c.sampleBaseLight(true);
+  assert.equal(calls.refreshes,2);assert.equal(c.baseSceneRevision,21);
+  assert.equal(c.baseNeedsRefresh(),false);
+  c.panCache.pending=0;c.sampleBaseLight(true);assert.equal(calls.refreshes,2);
+});
+
+test('a daily update waits for camera gestures but manual edits still invalidate immediately',()=>{
+  const {context:c,calls}=harness();c.sampleBaseLight(true);
+  c.drag={};c.requestSceneRefresh();c.sampleBaseLight(true);
+  assert.equal(calls.refreshes,0);assert(c.baseNeedsRefresh());
+  c.drag=null;c.sampleBaseLight(true);assert.equal(calls.refreshes,1);
+  c.invalidatePan();assert.equal(c.panCache.pending,0);assert.equal(c.baseSceneRevision,null);
+  c.sampleBaseLight(true);assert.equal(c.baseSceneRevision,c.sceneRevision);
+});
+
+test('real viewport cache paints the newest daily scene without returning to coarse previews',()=>{
+  const {createPanCache}=require('../renderer/frame-scheduler.js');
+  let day=0,time=0,previews=0;const painted=[];
+  const createCanvas=()=>({width:0,height:0,getContext:()=>({setTransform(){},clearRect(){},save(){},restore(){},beginPath(){},rect(){},clip(){},drawImage(){}})});
+  const cache=createPanCache(()=>painted.push(day),{createCanvas,incremental:true,padding:0,tileSize:100,
+    previewPaint:()=>previews++,now:()=>time+=10});
+  const {context:c}=harness({panCache:cache});
+  c.sampleBaseLight(true);cache.prepare({width:300,height:200,scale:3,left:-100,top:-100},1,true);
+  while(cache.pending)cache.refine();
+  const fullPaints=cache.stats.fullPaints;
+  for(day=1;day<=20;day++){
+    c.requestSceneRefresh();c.sampleBaseLight(true);cache.refine();
+    assert.equal(cache.stats.fullPaints,fullPaints);
+  }
+  day=20;
+  while(cache.pending)cache.refine();
+  if(c.baseNeedsRefresh())c.sampleBaseLight(true);
+  while(cache.pending)cache.refine();
+  assert.equal(previews,1,'only the initial cold viewport needs a preview');
+  assert(painted.slice(-6).every(value=>value===20),'all six tiles eventually show the latest city after pausing');
+  assert.equal(cache.stats.fullPaints,fullPaints);
+  assert.equal(c.baseNeedsRefresh(),false);
+  assert(cache.stats.bytes<=cache.stats.budget);
 });

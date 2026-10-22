@@ -6,9 +6,10 @@ from collections import defaultdict
 from shapely.geometry import LineString
 
 from .parameters import ROAD_TYPES, DRIVABLE_ROADS
-from .vehicle_paths import FRONT_CLEARANCE, FOLLOW_GAP, RoutePath
+from .vehicle_paths import FRONT_CLEARANCE, FOLLOW_GAP, RoutePath, LANES
 from .vehicle_trips import build_demand
 from . import bus_vehicles
+from . import junction_settings, junction_layout
 
 TIMING_LIMITS = dict(signalGreenSeconds=(5,90),signalYellowSeconds=(2,6),signalClearanceSeconds=(2,15))
 
@@ -18,39 +19,39 @@ def approach_key(arm):
 
 
 def clearance(arm, approaches):
-    distance = arm['width']/2+2
-    for other in approaches:
-        if other is arm:
-            continue
-        ax, ay = arm['tangent']; bx, by = other['tangent']
-        cross = abs(ax*by-ay*bx)
-        if cross > .05:
-            distance = max(distance, (other['width']/2+arm['width']/2*abs(ax*bx+ay*by))/cross+2)
-    return distance
+    return junction_layout.clearance(arm, approaches)
 
 
-def configure(network, policy):
+def configure(network, policy, settings=None):
     for key,(low,high) in TIMING_LIMITS.items():
         if type(policy[key]) is not int or not low<=policy[key]<=high:
             raise ValueError('信号配时超出范围：'+key)
+    junction_layout.configure(network)
     delays = {}
     for junction in network.get('junctions', []):
+        local = (settings or {}).get(junction['id'], {})
+        junction_settings.apply(junction, local)
+        timing = {**{k: policy[k] for k in TIMING_LIMITS}, **local.get('timing', {})}
+        for key, value in timing.items():
+            if key not in TIMING_LIMITS or type(value) is not int or not TIMING_LIMITS[key][0] <= value <= TIMING_LIMITS[key][1]:
+                raise ValueError('路口配时超出范围：'+key)
+        junction['timing'] = timing
+        junction['customSettings'] = bool(local)
         if junction['control'] != 'signals':
             continue
         arms = sorted((a for a in junction['approaches'] if a['incoming'] and a['kind'] in DRIVABLE_ROADS),
                       key=lambda a: math.atan2(a['tangent'][1], a['tangent'][0]))
         # One protected incoming arm at a time: opposing left turns never get
         # simultaneous green. Pedestrians have an exclusive vehicle-red stage.
-        stages = [dict(approach=approach_key(a), green=policy['signalGreenSeconds'],
-                       yellow=policy['signalYellowSeconds'], clearance=policy['signalClearanceSeconds']) for a in arms]
+        stages = [dict(approach=approach_key(a), green=timing['signalGreenSeconds'],
+                       yellow=timing['signalYellowSeconds'], clearance=timing['signalClearanceSeconds']) for a in arms]
         pedestrian = math.ceil(max((a['width'] for a in arms), default=14)/1.2)+2
         cycle = sum(s['green']+s['yellow']+s['clearance'] for s in stages)+pedestrian+3
         junction['signal'] = dict(stages=stages, pedestrian=pedestrian, cycle=cycle)
         junction['signal']['initial'] = phase(junction,0)
         for arm in arms:
-            green = policy['signalGreenSeconds']
+            green = timing['signalGreenSeconds']
             delays[(junction['id'], arm['road'], arm['direction'])] = ((cycle-green)**2/(2*cycle)/60, green/cycle)
-            arm['stopDistance'] = clearance(arm, junction['approaches'])+7
     for edge in network['edges']:
         forward = delays.get((edge['b'], edge['road'], -1), (0, 1))
         reverse = delays.get((edge['a'], edge['road'], 1), (0, 1))
@@ -139,7 +140,13 @@ class LiveTraffic:
         self.walkers = Walkers(city, mode)
 
     def lane(self, car):
-        return self.path(car).lanes[car['segment']]
+        return self.queue_lane(car['route'][car['segment']], self.path(car).lanes[car['segment']])
+
+    def queue_lane(self, key, lane):
+        # Bays share their upstream lane. Keep a conservative common queue
+        # through the split/merge so cars never overlap inside the taper.
+        link = self.links[key]
+        return min(lane, LANES[link['kind']] // (1 if link['oneway'] else 2)-1)
 
     def path(self, car):
         key = tuple(car['route'])
@@ -265,7 +272,7 @@ class LiveTraffic:
                     reason = 'queue' if limit < end else 'arrival' if last else ''
                     if not last:
                         next_key = car['route'][segment+1]
-                        next_lane = path.lanes[segment+1]
+                        next_lane = self.queue_lane(next_key, path.lanes[segment+1])
                         downstream = occupancy.get((next_key,next_lane), [])
                         if downstream:
                             following_gap = bus_vehicles.gap(car,downstream[0])

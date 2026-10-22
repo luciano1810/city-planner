@@ -26,7 +26,7 @@ from .blocks import prepare_blocks, grow_block_commons
 
 from . import naming
 from . import renewal
-from . import signals
+from . import signals, junction_settings
 from . import simulation, construction
 from . import housing
 from .employment import facility_workplaces, sync_facilities, facility_capacity
@@ -321,7 +321,7 @@ class City:
             self._topology_base=make_network(self.s['roads'],projections,self.terrain,self.s['parcels'],self.s['stops'])
             self._topology_signature=topology
         self.network=copy.deepcopy(self._topology_base)
-        signals.configure(self.network,self.s['policy'])
+        signals.configure(self.network,self.s['policy'],self.s.get('junctionSettings',{}))
         self.live_traffic = None
         for stop in self.s['stops']:
             if stop.get('railStation'): continue
@@ -960,6 +960,14 @@ class City:
                         self.s['settings'][k]=number(v,*limits[k],k)
                     else:
                         raise ValueError('未知情景参数')
+            elif op=='road_rename':
+                road=next((r for r in self.s['roads'] if r['id']==cmd.get('id')),None)
+                if road is None:raise ValueError('道路不存在')
+                road.update(name=text(cmd.get('name')),nameSource='custom')
+                self.s.setdefault('placeNames',{})['roads:'+road['id']]=road['name']
+            elif op=='junction_update':
+                junction_settings.update(self,cmd,signals.TIMING_LIMITS)
+                self.rebuild()
             elif op=='signal_timing':
                 limits=dict(signalGreenSeconds=(5,90),signalYellowSeconds=(2,6),signalClearanceSeconds=(2,15))
                 for key,value in cmd.get('values',{}).items():
@@ -981,7 +989,7 @@ class City:
                 cost=road['length']*ROAD_TYPES[kind]['cost']*profile['costFactor']
                 self.spend(max(0,cost-road.get('constructionCost',0)),'道路改造')
                 old_kind=road['kind']
-                if road['name'] in (ROAD_TYPES[old_kind]['name'],{'street':'街道','lane':'社区支路'}.get(old_kind)):
+                if road.get('nameSource')!='custom' and road['name'] in (ROAD_TYPES[old_kind]['name'],{'street':'街道','lane':'社区支路'}.get(old_kind)):
                     road['name']=ROAD_TYPES[kind]['name']
                 road['kind']=kind; road['oneway']=bool(cmd.get('oneway',False))
                 road.update(profile=profile,constructionCost=round(cost))
@@ -1002,7 +1010,7 @@ class City:
             self.s['revision']+=1
             self.s['commands'].append(dict(month=self.s['month'],command=copy.deepcopy(cmd)))
             self.s['commands']=self.s['commands'][-1000:]
-            if op not in ('zone','settings') and (self.s['households'] or op in ('line_update','line','bus_line')):
+            if op not in ('zone','settings','road_rename') and (self.s['households'] or op in ('line_update','line','bus_line')):
                 self.match_jobs()
                 self.assign_traffic()
             self.summarize()

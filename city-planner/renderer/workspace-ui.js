@@ -237,7 +237,7 @@
     activeOverview=null;
     // Keep section shortcuts for selected roads, buildings and other objects.
     inspector.querySelector('.inspector-index')?.remove();
-    const headings=[...inspector.querySelectorAll('h3')];
+    const headings=inspector.classList.contains('city-junction')?[]:[...inspector.querySelectorAll('h3')];
     if(headings.length){
       const index=document.createElement('nav');index.className='inspector-index';index.setAttribute('aria-label','详情章节');
       headings.forEach(h=>{const b=document.createElement('button');b.textContent=h.textContent;b.onclick=()=>inspector.scrollTo({top:inspector.scrollTop+h.getBoundingClientRect().top-inspector.getBoundingClientRect().top-70,behavior:'instant'});index.append(b);});
@@ -300,7 +300,7 @@
   const miniCanvas=$('overview-map'),ctx=miniCanvas.getContext('2d'),cache=document.createElement('canvas');const miniViewport=miniCanvas.parentElement;cache.width=miniCanvas.width;cache.height=miniCanvas.height;
   let cachedTerrain=null,cachedRevision=null,miniBounds=null;
   function paintMinimap(){
-    if(document.body.classList.contains('menu-mode')||document.hidden)return;
+    if(document.body.classList.contains('menu-mode')||!MapWorkspace.visible)return;
     const t=MapWorkspace.terrain,s=CityApp.active?CityApp.state:null;
     mini.classList.toggle('is-empty',!t);if(!t){miniBounds=null;ctx.clearRect(0,0,miniCanvas.width,miniCanvas.height);return;}
     miniViewport.style.aspectRatio=`${t.width} / ${t.height}`;
@@ -514,12 +514,14 @@
     metricPanel.innerHTML=`<header class="metric-heading"><span>${icon(config.icon)}</span><div><small>城市指标</small><h2>${config.title}</h2></div><button class="icon-btn metric-close" aria-label="收起指标详情">${icon('close')}</button></header>
       <div class="metric-body"><div class="metric-value"><strong>${metricNumber(s[config.key])}</strong><span>${config.unit}</span></div><p class="metric-change">${delta===null?'暂无可比较的历史记录':`较 ${previous.date||metricDate(previous.month)} ${delta>0?'+':''}${metricNumber(delta)} ${config.unit}`}</p>
       <div class="metric-ranges" aria-label="趋势时间范围">${[[12,'12 个月'],[36,'36 个月'],[0,'全部']].map(([n,label])=>`<button data-months="${n}" aria-pressed="${n===metricRange}">${label}</button>`).join('')}</div>
-      <div class="metric-chart">${metricChart(rows,config)}</div><div class="metric-legend">${config.series.map(([,label,color])=>`<span><i style="background:${color}"></i>${label}</span>`).join('')}</div>
+      <div class="metric-chart">${metricChart(rows,config)}</div><div class="metric-legend">${config.series.map(([,label])=>`<span><i></i>${label}</span>`).join('')}</div>
       <p class="metric-note">${rows.length<2?'目前只有当前数据点，推进一天后形成趋势。':'历史数据取每日结算记录，最后一点为当前状态。'}</p>
       <h3>当前明细</h3><dl class="metric-details">${config.rows.map(([key,label,unit])=>`<dt>${label}</dt><dd>${metricNumber(s[key])}${finite(s[key])&&unit?' '+unit:''}</dd>`).join('')}</dl>
       ${config.key==='commute'?`<section class="metric-explanation" aria-label="通勤指标说明"><h3>这些数字怎么看</h3><p><strong>平均通勤</strong>仅统计已完成的上班通勤，单位为单程分钟。</p><p><strong>90% 通勤用时（P90）</strong>表示已完成通勤中，约 90% 的单程用时不超过该数值，用于观察较慢的通勤情况。</p><p><strong>出行失败次数</strong>统计典型工作日里因道路不连通、运力或可接受时间受限等原因未能完成的出行，涵盖所有出行目的。0 次表示没有失败，不是正在路上的人数。</p></section>`:''}
       <details class="metric-history"><summary>查看所选时段的逐日数据</summary><div class="city-table-wrap"><table class="city-table"><thead><tr><th>结算日期</th>${config.series.map(([,label])=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${rows.slice().reverse().map(row=>`<tr><td>${row.periodDays>1?row.periodStartDate+' 至 '+row.date:row.date||metricDate(row.month)}</td>${config.series.map(([key])=>`<td>${metricNumber(row[key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>
       <button class="metric-overview city-btn">查看完整城市统计 ↗</button></div>`;
+    // Assign dynamic colors through CSSOM; CSP blocks HTML style attributes.
+    metricPanel.querySelectorAll('.metric-legend i').forEach((swatch,index)=>{swatch.style.backgroundColor=config.series[index][2];});
     metricPanel.querySelector('.metric-close').onclick=()=>closeMetric({focus:true});
     metricPanel.querySelector('.metric-overview').onclick=()=>overview.click();
     metricPanel.querySelectorAll('[data-months]').forEach(button=>button.onclick=()=>{metricRange=Number(button.dataset.months);renderMetric();metricPanel.querySelector(`[data-months="${metricRange}"]`).focus();});

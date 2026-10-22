@@ -867,13 +867,18 @@ body.city-mode .workspace-status-tray .city-controlbar[hidden]{display:none}
 .city-demand-panel{padding:10px 0 2px;border-top:1px solid var(--ui-line);margin-top:8px}
 .city-demand-panel header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:11px}
 .city-demand-panel header strong{font-weight:600;color:var(--ui-ink)}
-.city-demand-panel header small,.city-demand-panel p{font-size:10px;color:var(--ui-muted)}
+.city-demand-panel header small{font-size:10px;color:var(--ui-muted)}
 .city-demand-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
 .city-demand-item{min-width:0;display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--ui-muted)}
+/* Keep demand colors in the stylesheet: CSP blocks HTML style attributes. */
+.city-demand-item[data-demand-use="residential"]{--demand-color:#57966e}
+.city-demand-item[data-demand-use="commercial"]{--demand-color:#c99546}
+.city-demand-item[data-demand-use="office"]{--demand-color:#528fab}
+.city-demand-item[data-demand-use="industrial"]{--demand-color:#a080a5}
+.city-demand-item[data-demand-use="warehouse"]{--demand-color:#9a9169}
 .city-demand-item>strong{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ui-ink);overflow-wrap:anywhere}
 .city-demand-track{height:4px;border-radius:3px;background:#edf1f5;overflow:hidden}
 .city-demand-track i{display:block;width:0;height:100%;border-radius:inherit;background:var(--demand-color);transition:width .2s}
-.city-demand-panel p{margin:9px 0 0;line-height:1.4}
 body.city-mode .workspace-bottom .workspace-status-tray .city-status:empty{display:none}
 body.city-mode .workspace-status-tray .city-play{display:contents}
 body.city-mode .workspace-status-tray .city-controlbar>.map-label{display:none}
@@ -923,3 +928,9 @@ body.city-mode .workspace-view-panel{display:none}
 .city-inspector .live-traffic-note{margin:3px 0 0;font-size:11px;line-height:1.5}
 @media(max-width:480px){.live-traffic-counts{grid-template-columns:repeat(3,minmax(0,1fr))}.live-traffic-counts strong{font-size:17px}}
 body.city-mode .workspace-rail{display:none}
+
+body.city-mode .city-inspector.city-junction{width:min(500px,calc(100vw - 36px));bottom:18px;z-index:11}
+.city-junction #junction-preview{height:auto;aspect-ratio:10/9}
+.city-junction .junction-preview-wrap{margin:10px 0}
+.city-junction .junction-signal-heading{padding:9px 12px}
+@media(max-width:700px){body.city-mode .city-inspector.city-junction{right:10px;width:calc(100vw - 20px);bottom:12px}.city-junction #junction-preview{height:auto}}

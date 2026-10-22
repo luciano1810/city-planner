@@ -396,7 +396,16 @@ function clampPan() {
   panX = Math.max(-maxX, Math.min(maxX, panX)); panY = Math.max(-maxY, Math.min(maxY, panY));
 }
 const frameDraw = window.FrameScheduler.create(renderFrame);
+let nativeVisible=true;
+const workspaceVisible=()=>nativeVisible&&!document.hidden;
+function visibilityChanged(){
+  window.dispatchEvent(new Event('workspace-visibility-change'));
+  if(workspaceVisible())requestDraw();
+}
+document.addEventListener('visibilitychange',visibilityChanged);
+window.terrainAPI?.onVisibilityChange?.(visible=>{nativeVisible=visible;visibilityChanged();});
 let zooming=false,zoomSettleTimer=null,baseLightMinute=null,baseMaterialRevision=null;
+let sceneRevision=0,baseSceneRevision=null;
 function paintCachedBase(context,g,preview=false){
   const scene=window.CityScene,time=scene.time;
   scene.setTime((baseLightMinute??Math.floor(time/60))*60);
@@ -406,27 +415,31 @@ function paintCachedBase(context,g,preview=false){
 const panCache = window.FrameScheduler.createPanCache((context,g)=>paintCachedBase(context,g),{
   incremental:true,previewPaint:(context,g)=>paintCachedBase(context,g,true)
 });
-function invalidatePan(){panCache.invalidate();baseLightMinute=null;baseMaterialRevision=null;}
+function invalidatePan(){panCache.invalidate();baseLightMinute=null;baseMaterialRevision=null;baseSceneRevision=null;}
 function sampleBaseLight(progressive){
   const minute=Math.floor(window.CityScene.time/60),revision=window.CityScene.materialRevision||0;
-  if(baseLightMinute===minute&&baseMaterialRevision===revision||baseLightMinute!==null&&(panCache.pending||drag||zooming))return;
+  if(baseLightMinute===minute&&baseMaterialRevision===revision&&baseSceneRevision===sceneRevision||baseLightMinute!==null&&(panCache.pending||drag||zooming))return;
   // A fast simulation clock must not restart unfinished tiles every tick.
   // Structural edits call invalidatePan and still take effect immediately.
   window.CityScene.commitMaterials?.();
   if(baseLightMinute===null||!panCache.refresh())panCache.invalidate();
-  baseLightMinute=minute;baseMaterialRevision=revision;
+  baseLightMinute=minute;baseMaterialRevision=revision;baseSceneRevision=sceneRevision;
 }
-function baseNeedsRefresh(){return baseLightMinute!==Math.floor(window.CityScene.time/60)||baseMaterialRevision!==(window.CityScene.materialRevision||0);}
+function baseNeedsRefresh(){return baseLightMinute!==Math.floor(window.CityScene.time/60)||baseMaterialRevision!==(window.CityScene.materialRevision||0)||baseSceneRevision!==sceneRevision;}
 function rebaseViewportPan(ratio){
   const previousPanX=panX,previousPanY=panY;panX*=ratio;panY*=ratio;clampPan();
   if(drag){drag.panX+=panX-previousPanX;drag.panY+=panY-previousPanY;}
 }
 function draw() { invalidatePan();frameDraw.flush(); }
 function requestDraw(viewportOnly=false) { if(viewportOnly!==true)invalidatePan();frameDraw.request(); }
+// Daily settlements retain the finished image. Finish any in-flight tiles,
+// then refresh to the latest city; fast days cannot keep restarting previews.
+function requestSceneRefresh(){sceneRevision++;frameDraw.request();}
 // Traffic is composited after the cached ground/building layer. It stays live
 // during gestures without forcing the static scenery to be baked every frame.
 function requestAnimation(){frameDraw.request();}
 function renderFrame() {
+  if(!workspaceVisible())return;
   const dpr = window.devicePixelRatio || 1, width = map.clientWidth, height = map.clientHeight;
   if (map.width !== Math.round(width * dpr) || map.height !== Math.round(height * dpr)) { map.width = Math.round(width * dpr); map.height = Math.round(height * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
@@ -608,6 +621,7 @@ document.addEventListener('keydown', event => { if (document.body.dataset.screen
 new ResizeObserver(requestDraw).observe($('map-frame'));
 restore(); thumbnails();
 window.MapWorkspace = {
+  get visible() { return workspaceVisible(); },
   get terrain() { return terrain; }, get busy() { return busy; },
   paintOverview(context, g) {
     if (!terrain || !vectorLayers) return;
@@ -620,7 +634,7 @@ window.MapWorkspace = {
     context.restore(); context.fill(vectorLayers.lakes,'evenodd'); context.restore();
   },
   get canConfirm() { return Boolean(terrain) && !busy && !terrainDirty; },
-  get geometry() { return geometry(); },get panCacheStats(){return panCache.stats;}, draw, requestDraw, requestAnimation, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
+  get geometry() { return geometry(); },get panCacheStats(){return panCache.stats;}, draw, requestDraw, requestSceneRefresh, requestAnimation, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
   cancelGeneration() {
     requestVersion++; queued=false; clearTimeout(debounce);
     $('loading').hidden=true;

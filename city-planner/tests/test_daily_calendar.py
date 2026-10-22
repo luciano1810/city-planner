@@ -1,5 +1,6 @@
 """Dated construction, daily cashflow, rollback and deterministic restore."""
 import tempfile
+import math
 import unittest
 from unittest.mock import patch
 from tests.test_city import block_city
@@ -76,6 +77,39 @@ class DailyCalendarTests(unittest.TestCase):
         self.assertAlmostEqual(period_factor(0,31),1.)
         self.assertAlmostEqual(period_factor(28,35),3/31+4/28)
         self.assertAlmostEqual(period_factor(365+365+31,365+365+60),1.)
+
+    def test_sub_nanosecond_midnight_remainder_is_settled_exactly_once(self):
+        c=self.city();boundary=24*DAY
+        c.s['simulation']['monthSeconds']=math.nextafter(boundary,0.)
+        c.s['calendar'].update(lastSettlementDay=23,nextSettlementDay=24)
+        remainder=boundary-c.s['simulation']['monthSeconds']
+        self.assertLess(remainder,1e-9)
+        result=advance(c,remainder)
+        self.assertEqual(result['settlementsAdvanced'],1)
+        self.assertEqual(c.s['simulation']['monthSeconds'],boundary)
+        self.assertEqual(c.s['calendar']['lastSettlementDay'],24)
+        advance(c,0)
+        self.assertEqual(len(c.s['dailyHistory']),1)
+
+    def test_near_midnight_tick_does_not_run_an_early_boundary(self):
+        c=self.city();boundary=24*DAY
+        c.s['simulation']['monthSeconds']=boundary-1
+        c.s['calendar'].update(lastSettlementDay=23,nextSettlementDay=24)
+        revision=c.s['revision']
+        days,settlements=advance_calendar(c,1-5e-9)
+        self.assertEqual((days,settlements),(0,0))
+        self.assertEqual(c.s['revision'],revision)
+        self.assertEqual(advance_calendar(c,boundary-c.s['simulation']['monthSeconds']),(1,1))
+
+    def test_tiny_midnight_commit_failure_rolls_back(self):
+        c=self.city();boundary=24*DAY
+        c.s['simulation']['monthSeconds']=math.nextafter(boundary,0.)
+        c.s['calendar'].update(lastSettlementDay=23,nextSettlementDay=24)
+        before=c.snapshot()
+        with patch.object(c,'finance',side_effect=RuntimeError('daily failure')):
+            with self.assertRaisesRegex(RuntimeError,'daily failure'):
+                advance(c,boundary-c.s['simulation']['monthSeconds'])
+        self.assertEqual(c.snapshot(),before)
 
     def test_restore_preserves_progress_and_future_outcome(self):
         c=self.city();self.building(c,c.s['parcels'][0],2,12);advance_calendar(c,4*DAY)

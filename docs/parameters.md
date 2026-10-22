@@ -49,7 +49,7 @@
 | 中心最低岗位数 | `cbdMinimumJobs` | 800 | 岗位 |
 | 中心最低实际就业 | `cbdMinimumEmployed` | 500 | 实际就业者 |
 | 汽车单位里程排放 | `carCO2KgPerKm` | 0.17 | kg/km |
-| 基础施工期限 | `constructionBaseMonths` | 2 | 月 |
+| 基础施工期限（普通新建项目的总施工天数另减半） | `constructionBaseMonths` | 2 | 月 |
 | 压力搬迁阈值 | `relocationStressMonths` | 4 | 月 |
 | 压力迁出阈值 | `exitStressMonths` | 8 | 月 |
 | 住房支出负担阈值 | `housingBurdenThreshold` | 0.5 | 收入比例 |

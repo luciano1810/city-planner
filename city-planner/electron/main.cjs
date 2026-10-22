@@ -46,11 +46,17 @@ function createWindow() {
   window = new BrowserWindow({
     width: 1440, height: 960, minWidth: 930, minHeight: 680,
     backgroundColor: '#f6f7f3', title: '山海 · 城市生长工作台',
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
+      backgroundThrottling: false }
   });
   window.setMenuBarVisibility(false);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  // Disabling timer throttling also keeps document.hidden false in Electron.
+  // Report native visibility separately so painting can still sleep.
+  const reportVisibility = () => window.webContents.send('terrain:visibility', window.isVisible() && !window.isMinimized());
+  for (const event of ['show', 'hide', 'minimize', 'restore']) window.on(event, reportVisibility);
+  window.webContents.on('did-finish-load', reportVisibility);
   window.loadFile(path.join(root, 'renderer/index.html'));
 }
 

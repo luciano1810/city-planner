@@ -2,15 +2,26 @@
 import calendar
 import datetime
 import hashlib
+import math
 
 EPOCH = datetime.date(2026, 1, 1)
 FUTURE = ('planned', 'construction')
 
 
-def day(city):
+def month_start_day(city):
     month = city.s['month']
     start = datetime.date(2026 + month // 12, month % 12 + 1, 1)
-    return (start - EPOCH).days + city.s['simulation']['monthSeconds'] / 86400
+    return (start - EPOCH).days
+
+
+def day(city):
+    return month_start_day(city) + city.s['simulation']['monthSeconds'] / 86400
+
+
+def seconds_until_day(city, target):
+    # Subtract in month-local seconds: converting through fractional absolute
+    # days can round a clock just before midnight up to the following day.
+    return (target - month_start_day(city)) * 86400 - city.s['simulation']['monthSeconds']
 
 
 def date_string(value):
@@ -28,13 +39,14 @@ def offset(key, maximum=7):
     return 1 + int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % maximum
 
 
-def schedule(city, building, *, start=None, months=None):
+def schedule(city, building, *, start=None, months=None, duration_scale=1):
     now = int(day(city))
     building.setdefault('lastAgeDay',now)
     start = now + offset(building['id']) if start is None else int(start)
     months = max(1, building.get('ready', city.s['month'] + 3) - city.s['month']) if months is None else months
     # Site-specific durations prevent identical floor counts completing together.
     end = max(start + 1, add_months(start, months) + offset(building['id'] + ':duration', 13) - 7)
+    end = start + max(1, math.ceil((end - start) * duration_scale))
     building.update(status='planned' if start > now else 'construction', startDay=start, completionDay=end,
                     startDate=date_string(start), completionDate=date_string(end), constructionProgress=0.)
 

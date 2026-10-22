@@ -500,3 +500,73 @@ test('a wide bridge mouth stops at the opposite edge of its narrow receiving roa
  assert(surface.openStart);assert(!surface.openEnd);assert.equal(surface.mouthClips.length,1);
  assert(surface.mouthClips[0].every(p=>p[1]<=-7));assert.equal(surface.mouthClips[0][0][1],-7);
 });
+
+test('junction lane overrides are painted on the corresponding incoming lanes',()=>{
+  const {roads,network}=crossing();
+  const arm=network.junctions[0].approaches.find(a=>a.road==='east-west'&&a.direction===-1);
+  arm.laneTurns=[['right'],['left','straight']];
+  const arrows=buildPlan(roads,network,roadTypes).arrows.filter(a=>a.road==='east-west'&&a.point[0]<0&&a.point[0]>-60);
+  assert.deepEqual(arrows.map(a=>a.turns),arm.laneTurns);
+});
+
+function compactJunctionCluster(factor=1){
+  const nodes=[[0,0],[45.75,-13.44],[13.03,15]].map(p=>p.map(v=>v*factor));
+  const types={...roadTypes,lane:{width:7,walk:true}};
+  const roads=[1,2].map(i=>({id:`main-${i}`,kind:'street',level:0,oneway:false,
+    points:[nodes[i].map(v=>v*-10),nodes[i].map(v=>v*10)]}));
+  roads.push({id:'connector',kind:'lane',level:0,oneway:false,points:[nodes[2],nodes[1]]});
+  const network={junctions:nodes.map((point,index)=>({id:`node-${index}`,point,control:'signals',crossings:true,
+    approaches:roads.flatMap(r=>{
+      if(index===0&&r.id==='connector'||index===1&&r.id==='main-2'||index===2&&r.id==='main-1')return [];
+      const length=Math.hypot(r.points[1][0]-r.points[0][0],r.points[1][1]-r.points[0][1]);
+      const distance=Math.hypot(point[0]-r.points[0][0],point[1]-r.points[0][1]);
+      return (r.id==='connector'?[index===1?-1:1]:[-1,1]).map(direction=>({road:r.id,kind:r.kind,level:r.level,
+        distance,direction,width:types[r.kind].width,incoming:true,outgoing:true,
+        tangent:r.points[1].map((v,k)=>(v-r.points[0][k])/length*direction)}));
+    })}))};
+  return {roads,network,types};
+}
+
+test('compact connected junction loops absorb unusable paving slivers without altering roads',()=>{
+  const {roads,network,types}=compactJunctionCluster(),before=JSON.stringify({roads,network});
+  const plan=buildPlan(roads,network,types);
+  assert.equal(plan.pockets.length,1);
+  assert(plan.pockets[0].radius>2&&plan.pockets[0].radius<3);
+  assert.equal(JSON.stringify({roads,network}),before);
+  const large=compactJunctionCluster(1.7);
+  assert.equal(buildPlan(large.roads,large.network,large.types).pockets.length,0,'retain usable central islands');
+  const bridge=compactJunctionCluster();bridge.roads[2].level=1;
+  for(const j of bridge.network.junctions)for(const arm of j.approaches)if(arm.road==='connector')arm.level=1;
+  assert.equal(buildPlan(bridge.roads,bridge.network,bridge.types).pockets.length,0,'no visual merge across elevations');
+  const curve=compactJunctionCluster();curve.roads[2].points.splice(1,0,[40,10]);
+  assert.equal(buildPlan(curve.roads,curve.network,curve.types).pockets.length,0,'do not fill the chord of a curved street');
+});
+
+test('clustered junction lights move to an approach sidewalk instead of the central roadway',()=>{
+  const {roads,network,types}=compactJunctionCluster(),plan=buildPlan(roads,network,types);
+  const moved=plan.signals.find(s=>s.junction==='node-0'&&s.approach==='main-1:-1');
+  assert.equal(moved.placement,'near');
+  const api=require('../renderer/road-renderer.js');
+  for(const signal of plan.signals)for(const road of roads){
+    const q=sample(road.points,api.nearestDistance(road.points,signal.support)).point;
+    assert(Math.hypot(q[0]-signal.support[0],q[1]-signal.support[1])>=types[road.kind].width/2+.6,
+      'every pole base must stay outside neighboring carriageways');
+  }
+});
+
+test('physical approach metadata advances markings and draws a tapered extra lane',()=>{
+  const {roads,network}=crossing(['street','street']);
+  for(const arm of network.junctions[0].approaches)Object.assign(arm,{crossingDistance:8,stopDistance:12,
+    laneCount:2,baseLaneCount:1,laneWidth:3.5,laneFullDistance:24,laneTaperDistance:48,
+    autoLanes:true,laneTurns:[['left'],['straight','right']]});
+  const plan=buildPlan(roads,network,roadTypes);
+  assert.equal(plan.laneBays.length,4);
+  assert(plan.crosswalks.every(c=>Math.abs(Math.hypot(...c.point)-8)<1e-8));
+  assert(plan.stopLines.every(c=>Math.abs(Math.hypot(...c.point)-12)<1e-8));
+  const arrows=plan.arrows.filter(a=>a.road==='east-west'&&a.travel[0]===1&&a.point[0]<0&&a.point[0]>-40);
+  assert.deepEqual(arrows.map(a=>a.point[1]),[1.75,5.25]);
+  assert(arrows.every(a=>a.laneWidth===3.5));
+  const west=plan.laneBays.find(b=>b.points[0][0]<0&&b.road==='east-west');
+  assert.deepEqual(west.points[0],[-12,3.5]);
+  assert.deepEqual(west.points.at(-1),[-48,7]);
+});

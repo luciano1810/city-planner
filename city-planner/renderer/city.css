@@ -150,3 +150,35 @@ body[data-map-view="map"] .compass{width:58px;height:66px;right:20px;top:76px;bo
 body[data-map-view="map"] .compass svg{width:20px;height:28px}
 body[data-map-view="map"] .compass svg path:last-child{fill:#dc6c63}
 body[data-map-view="map"] .compass svg path:first-child{stroke:#899198}
+
+.junction-preview-wrap{position:relative;margin:12px 0;border:1px solid var(--city-line);border-radius:12px;overflow:hidden;background:#edf3f8}
+#junction-preview{display:block;width:100%;height:auto;aspect-ratio:8/7}
+.junction-north{position:absolute;right:10px;top:8px;font-size:11px;color:#3f536b}
+.junction-signal-heading{display:flex;align-items:center;gap:12px;margin:10px 4px}
+.junction-signal-heading p{margin:3px 0}
+.junction-timing{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.junction-timing .city-field{width:100%;min-width:0;padding:8px}
+.junction-turns{display:flex;flex-wrap:wrap;gap:5px}
+.junction-turns label{display:flex;align-items:center;gap:3px;padding:5px 6px;border-radius:6px;background:#edf4fc;font-size:11px;cursor:pointer}
+.junction-turns label:has(input:checked){color:#086bed;background:#e0efff}
+.junction-turns label:has(input:disabled){opacity:.4;cursor:default}
+.junction-turns input{margin:0;accent-color:#087bff}
+#city-inspector .junction-error{color:#bf3636}
+
+.junction-lane-targets{position:absolute;inset:0;pointer-events:none}
+.junction-lane-target{position:absolute;display:grid;place-items:center;padding:2px;border:1px solid #c4ddf8aa;border-radius:5px;background:#466989cc;color:white;cursor:pointer;pointer-events:auto;min-width:0;min-height:0}
+.junction-lane-target svg{display:block;width:100%;height:100%;fill:currentColor;stroke:none;overflow:visible;pointer-events:none}
+.junction-lane-target:hover,.junction-lane-target.active{background:#087bff;border-color:white;box-shadow:0 0 0 2px #087bff55;z-index:1}
+.junction-lane-target:focus-visible{outline:3px solid #ffbd42;outline-offset:3px;z-index:2}
+.junction-lane-editor{position:absolute;left:10px;right:10px;bottom:10px;z-index:3;padding:12px;background:#fffffff7;border:1px solid #c9ddf5;border-radius:12px;box-shadow:0 5px 20px #203d6626}
+.junction-lane-editor[hidden]{display:none}
+.junction-lane-editor.above{top:10px;bottom:auto}
+.junction-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.junction-editor-heading strong{font-size:12px;line-height:1.6}
+.junction-editor-heading .city-btn{padding:0;min-width:26px;min-height:26px;font-size:18px;background:transparent}
+.junction-lane-editor .junction-turns{gap:8px}
+.junction-lane-editor .junction-turns label{padding:7px 10px;font-size:12px}
+.city-inspector .junction-lane-note{font-size:10px;line-height:1.4;margin:8px 0 0}
+.city-inspector .junction-map-hint{font-size:12px;margin:10px 0 4px;color:#3470aa}
+
+.junction-lane-target svg polygon{stroke:none}

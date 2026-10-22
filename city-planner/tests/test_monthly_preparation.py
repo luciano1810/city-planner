@@ -89,6 +89,26 @@ class MonthlyPreparationTests(unittest.TestCase):
         with patch('city.monthly.Preparation',HeldPreparation):self.call()
         self.assertIsNotNone(self.service.preparation)
 
+    def test_ready_day_commits_the_last_fraction_before_midnight(self):
+        for month, boundary in ((0,24), (0,31), (9,24)):
+            with self.subTest(month=month,boundary=boundary):
+                city=self.city
+                city.s['month']=month
+                city.s['simulation']['monthSeconds']=(boundary-1)*DAY
+                today=int(day(city))
+                city.s['calendar'].update(lastSettlementDay=today,nextSettlementDay=today+1)
+                job=self.service.preparation=HeldPreparation(city)
+                prepared=City.restore(city.snapshot());advance_calendar(prepared,DAY)
+                job.result=prepared
+                city.s['simulation']['monthSeconds']=math.nextafter(boundary*DAY,0.)
+                result=self.call(3*DAY)
+                self.assertEqual(result['settlementsAdvanced'],1)
+                self.assertEqual(city.s['month'],prepared.s['month'])
+                self.assertEqual(city.s['simulation']['monthSeconds'],0. if boundary==31 else boundary*DAY)
+                self.assertEqual(city.s['calendar']['lastSettlementDay'],today+1)
+                self.assertIsNone(self.service.preparation)
+                self.assertIsNone(result['settlement'])
+
     def test_failure_after_commit_rolls_back_and_discards_prepared_rng(self):
         city=self.city;city.s['simulation']['monthSeconds']=DAY-10
         job=self.service.preparation=HeldPreparation(city)

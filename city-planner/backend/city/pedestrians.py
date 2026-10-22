@@ -91,11 +91,11 @@ class Walkers:
                     delta = (d-arm['distance'])*direction
                     if delta>.1:
                         room=min(room,delta/2)
-                clear = clearance(arm,junction['approaches'])
+                clear = arm.get('crossingDistance', clearance(arm,junction['approaches'])+3)-3
                 trim = min(available, room, clear+3)
                 d = arm['distance']+direction*trim
                 cuts[rid].append(sorted([arm['distance'],d]))
-                if room<clear+14:
+                if room<clear+(18 if 'crossingDistance' in arm else 14):
                     continue
                 point,t = sample(line,d)
                 t = [v*direction for v in t]

@@ -1,9 +1,9 @@
-/* One requested material at a time. Only four original atlas bitmaps persist;
+/* One requested material at a time. Only original atlas bitmaps persist;
  * expanded textures are transferred to the scene and never cached here. */
 (function(scope){
   'use strict';
   let startupError=null,preparation=null,busy=false;
-  const atlases=Object.create(null),atlasLoads=new Map(),atlasNames=new Set(['roof','ground','facade','landscape']);
+  const atlases=Object.create(null),atlasLoads=new Map(),atlasNames=new Set(['roof','ground','facade','landscape','building-stages']);
   try{
     scope.importScripts('material-catalog.js','surface-variation.js','material-preparation.js');
     if(typeof scope.OffscreenCanvas!=='function'||typeof scope.createImageBitmap!=='function')throw new Error('OffscreenCanvas and createImageBitmap are required');

@@ -123,7 +123,7 @@ test('a large off-tile building remains a shadow candidate at low sun',()=>{
 
 test('traffic animation requests a composited frame instead of invalidating the base with a synchronous draw',()=>{
   const calls=[],env={active:true,simulation:{running:true},document:{hidden:false},trafficFrame:null,
-    workspace:{requestAnimation:()=>calls.push('animation'),draw:()=>calls.push('full-draw')},
+    workspace:{visible:true,requestAnimation:()=>calls.push('animation'),draw:()=>calls.push('full-draw')},
     requestAnimationFrame:()=>{calls.push('next-frame');return 7;}};
   vm.runInNewContext(section('  function animateTraffic(){','  function syncTrafficAnimation(){')+'\nanimateTraffic();',env);
   assert.deepEqual(calls,['animation','next-frame']);assert.equal(env.trafficFrame,7);
@@ -143,10 +143,34 @@ test('traffic replies refresh the clock and live overlay without forcing a new s
   assert.deepEqual(calls,['clock','controls','details','animation']);
 });
 
+test('daily responses update city controls through retained scene refresh; explicit renders still invalidate',()=>{
+  const calls=[],elements=new Map(),el=id=>{
+    if(!elements.has(id))elements.set(id,{value:'',querySelectorAll:()=>[]});
+    return elements.get(id);
+  };
+  const state={stats:{population:12,treasury:100,jobs:8},policy:{},settings:{},name:'Daily city',month:1,
+    roads:[],stops:[],lines:[],facilities:[],parcels:[],districts:[]};
+  let driver;
+  const env={state,el,trafficState:null,pendingSimulationRender:false,taxiPanel:{render(){}},fmt:String,date:String,escape:String,
+    trafficPlayback:{latest:null,push(){},reset(){},setPaused(){}},
+    syncTrafficAnimation(){},updateTraffic(){},updateSimulationControls(){},renderRenewals(){},renderLegend(){},renderInspector(){},updateHint(){},
+    workspace:{visible:true,requestSceneRefresh:()=>calls.push('refresh'),requestDraw:()=>calls.push('invalidate')},
+    window:{CitySimulation:{Driver:class{constructor(options){driver=options;}}}}};
+  vm.runInNewContext(section('  function render(','  function renderLegend()')+section('  const simulation=','  function pause()'),env);
+  driver.apply({city:state,simulation:{},month:1,sceneTimeSeconds:0,traffic:null});
+  assert.deepEqual(calls,['refresh']);assert.equal(el('ck-pop').textContent,'12');
+  state.stats.population=15;
+  driver.apply({city:state,simulation:{},month:1,sceneTimeSeconds:0,traffic:null});
+  assert.deepEqual(calls,['refresh','refresh']);assert.equal(el('ck-pop').textContent,'15');
+  driver.apply({simulation:{},month:1,sceneTimeSeconds:0,traffic:null});
+  assert.equal(calls.length,2,'ordinary traffic replies need no scene refresh');
+  env.render();assert.equal(calls.at(-1),'invalidate');
+});
+
 test('traffic details follow the selected junction and clear stale samples',()=>{
   const elements=new Map(['junction-phase','junction-countdown','junction-signal-dot'].map(id=>[id,{textContent:'',className:''}]));
   const counts=['vehicles','pedestrians','waiting','passed','pedestrianWaiting','sampling','source'].map(key=>({dataset:{liveTraffic:key},textContent:''}));
-  const env={fmt:String,selected:'second',el:id=>elements.get(id),
+  const env={fmt:String,selected:'second',el:id=>elements.get(id),refreshJunctionPreview(){},
     document:{querySelectorAll:()=>counts,querySelector:()=>null},
     state:{simulation:{sampled:true},network:{junctions:[{id:'first',signal:{}},{id:'second',signal:{}},{id:'uncontrolled'}]}},
     trafficState:{mode:'observed',vehicles:[{},{}],pedestrians:[{}],waiting:1,passed:8,pedestrianWaiting:0,
@@ -207,7 +231,7 @@ test('panel changes repaint transit overlays without rebuilding the base',()=>{
     CustomEvent:class {constructor(type,{detail}){this.type=type;this.detail=detail;}},
     window:{dispatchEvent:event=>calls.push(event.detail)},
     workspace:{requestAnimation:()=>calls.push('overlay'),requestDraw:()=>calls.push('invalidate')}};
-  vm.runInNewContext(section('  function showPanel(next) {','  function render() {'),env);
+  vm.runInNewContext(section('  function showPanel(next) {','  function render('),env);
   env.showPanel('transit');env.showPanel('build');
   assert.deepEqual(calls,['transit','overlay','build','overlay']);assert.equal(env.panel,'build');
 });

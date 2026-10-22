@@ -45,9 +45,10 @@ class Preparation:
     def __init__(self, city):
         self.city=city
         self.signature=(city.s['revision'],city.s['month'])
-        from .construction import day
-        self.start=day(city)*DAY
+        from .construction import seconds_until_day
         self.end=city.s['calendar']['nextSettlementDay']*DAY
+        remaining=seconds_until_day(city,city.s['calendar']['nextSettlementDay'])
+        self.start=self.end-remaining
         self.progress=(0.,'准备日结算')
         self.result=None;self.error=None
         self.cancelled=threading.Event()
@@ -63,7 +64,7 @@ class Preparation:
         draft=copy.deepcopy(draft)
         context=multiprocessing.get_context('spawn')
         self.receiver,sender=context.Pipe(duplex=False)
-        self.process=context.Process(target=prepare_day,args=(draft,self.end-self.start,sender),daemon=True)
+        self.process=context.Process(target=prepare_day,args=(draft,remaining,sender),daemon=True)
         # Starting a spawned process serializes its input. Keep that IPC and
         # result decoding off the request thread as well as the actual solve.
         self.thread=threading.Thread(target=self._receive,args=(sender,),daemon=True)
@@ -100,9 +101,9 @@ class Preparation:
         if self.process.pid is not None and self.process.is_alive():self.process.terminate()
 
     def allowance(self,city,seconds):
-        from .construction import day
+        from .construction import seconds_until_day
         fraction=1. if self.result is not None else self.progress[0]
-        available=self.start+(self.end-self.start)*fraction-day(city)*DAY
+        available=seconds_until_day(city,int(self.end//DAY))-(self.end-self.start)*(1-fraction)
         return min(seconds,DAY,max(0.,available))
 
     def commit(self,city):
@@ -152,7 +153,8 @@ def advance_incremental(service,city,payload):
     if job is not None and job.error:
         error=job.error;job.cancel();service.preparation=None
         raise ValueError('日结算失败，城市结算尚未提交：'+error)
-    accepted=job.allowance(city,seconds) if job else min(seconds,DAY, (int(day(city))+1-day(city))*DAY)
+    clock=city.s['simulation']['monthSeconds']
+    accepted=job.allowance(city,seconds) if job else min(seconds,(int(clock//DAY)+1)*DAY-clock)
     try:result=advance(city,accepted,speed,mode,reset,daylight,settlement=job.commit if job else None)
     except Exception:
         # A failed commit may have touched the returned object's RNG/runtime.
