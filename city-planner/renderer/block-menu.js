@@ -68,10 +68,14 @@
     }
     function position(){
       if(!opened)return;
-      const rect=dock.getBoundingClientRect(),margin=12,width=Math.min(950,innerWidth-margin*2);
-      menu.style.width=width+'px';menu.style.left=Math.max(margin,Math.min(innerWidth-width-margin,rect.x+rect.width/2-width/2))+'px';
-      menu.style.bottom=(innerHeight-rect.top+16)+'px';
-      menu.style.maxHeight=Math.max(150,rect.top-document.querySelector('.city-kpis').getBoundingClientRect().bottom-28)+'px';
+      const rect=dock.getBoundingClientRect(),margin=12;
+      const status=document.querySelector('.workspace-status-tray')?.getBoundingClientRect();
+      const leftEdge=innerWidth>700&&status?status.right+margin:margin;
+      const anchorTop=innerWidth<=700&&status?Math.min(rect.top,status.top):rect.top;
+      const width=Math.min(950,innerWidth-leftEdge-margin);
+      menu.style.width=width+'px';menu.style.left=Math.max(leftEdge,Math.min(innerWidth-width-margin,rect.x+rect.width/2-width/2))+'px';
+      menu.style.bottom=(innerHeight-anchorTop+16)+'px';
+      menu.style.maxHeight=Math.max(150,anchorTop-document.querySelector('.city-kpis').getBoundingClientRect().bottom-28)+'px';
       syncPaging();positionAdvanced();
     }
     function positionAdvanced(){

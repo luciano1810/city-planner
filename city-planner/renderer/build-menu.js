@@ -148,12 +148,15 @@
     function position(){
       if(!opened)return;
       const dockRect=dock.getBoundingClientRect(),margin=12;
-      const width=Math.min(950,innerWidth-margin*2);
+      const status=document.querySelector('.workspace-status-tray')?.getBoundingClientRect();
+      const leftEdge=innerWidth>700&&status?status.right+margin:margin;
+      const anchorTop=innerWidth<=700&&status?Math.min(dockRect.top,status.top):dockRect.top;
+      const width=Math.min(950,innerWidth-leftEdge-margin);
       menu.style.width=width+'px';
-      menu.style.left=Math.max(margin,Math.min(innerWidth-width-margin,dockRect.x+dockRect.width/2-width/2))+'px';
-      menu.style.bottom=(innerHeight-dockRect.top+16)+'px';
+      menu.style.left=Math.max(leftEdge,Math.min(innerWidth-width-margin,dockRect.x+dockRect.width/2-width/2))+'px';
+      menu.style.bottom=(innerHeight-anchorTop+16)+'px';
       const top=document.querySelector('.city-kpis').getBoundingClientRect().bottom+12;
-      menu.style.maxHeight=Math.max(150,dockRect.top-top-16)+'px';
+      menu.style.maxHeight=Math.max(150,anchorTop-top-16)+'px';
       syncPaging();
       positionAdvanced();
     }

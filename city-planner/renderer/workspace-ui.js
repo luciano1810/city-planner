@@ -326,16 +326,36 @@
   fileMenu.append(one('.top-actions'));one('.workspace-files').append(fileMenu);
   const settings=document.createElement('section');settings.id='workspace-settings';settings.className='workspace-settings';settings.hidden=true;
   settings.setAttribute('aria-label','设置');
-  settings.innerHTML='<h3>设置</h3><details class="workspace-help"><summary>操作说明</summary></details>';
-  settings.prepend(one('.workspace-files'));settings.prepend(settings.querySelector('h3'));
+  const settingsTabs=['general','scenario','calibration'];
+  settings.innerHTML=`<header class="workspace-settings-header"><h3>设置</h3><button class="icon-btn" id="workspace-settings-close" aria-label="关闭设置">${icon('close')}</button></header><div class="build-tabs" role="tablist" aria-label="设置分类">${[['general','常规'],['scenario','情景'],['calibration','校准']].map(([key,label],i)=>`<button id="settings-tab-${key}" role="tab" aria-selected="${i===0}" aria-controls="settings-${key}" tabindex="${i===0?0:-1}">${label}</button>`).join('')}</div>${settingsTabs.map((key,i)=>`<section id="settings-${key}" role="tabpanel" aria-labelledby="settings-tab-${key}" ${i?'hidden':''}></section>`).join('')}`;
+  const settingsAnchor=document.createElement('div');settingsAnchor.className='workspace-settings-anchor';
+  settingsAnchor.append($('city-files'),settings);layout.append(settingsAnchor);
+  statusTray.prepend(one('.city-controlbar'));
+  $('settings-general').append(one('.workspace-files'));
+  $('settings-general').insertAdjacentHTML('beforeend','<details class="workspace-help"><summary>操作说明</summary></details>');
   settings.querySelector('.workspace-help').append($('city-hint'));
-  one('.city-controlbar').append(settings);
+  for(const key of ['scenario','calibration'])$('settings-'+key).append(observeMenu.settingsContent[key]);
   const settingsButton=$('city-files');settingsButton.setAttribute('aria-controls',settings.id);settingsButton.setAttribute('aria-expanded','false');
   function setSettings(open){settings.hidden=!open;settingsButton.setAttribute('aria-expanded',String(open));if(!open)fileMenu.open=false;}
+  function selectSettingsTab(key){
+    for(const name of settingsTabs){const active=name===key,node=$('settings-tab-'+name);node.setAttribute('aria-selected',String(active));node.tabIndex=active?0:-1;$('settings-'+name).hidden=!active;}
+  }
+  for(const key of settingsTabs){
+    const node=$('settings-tab-'+key);
+    node.onclick=()=>selectSettingsTab(key);
+    node.addEventListener('keydown',event=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();
+      const next=event.key==='Home'?settingsTabs[0]:event.key==='End'?settingsTabs.at(-1):settingsTabs[(settingsTabs.indexOf(key)+(event.key==='ArrowRight'?1:settingsTabs.length-1))%settingsTabs.length];
+      selectSettingsTab(next);$('settings-tab-'+next).focus();
+    });
+  }
   settingsButton.onclick=()=>setSettings(settings.hidden);
+  $('workspace-settings-close').onclick=()=>{setSettings(false);settingsButton.focus();};
   document.addEventListener('pointerdown',event=>{if(!settings.hidden&&!settings.contains(event.target)&&!settingsButton.contains(event.target))setSettings(false);});
-  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!settings.hidden){setSettings(false);settingsButton.focus();}});
-  settings.addEventListener('click',event=>{if(event.target.closest('button'))setSettings(false);});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!settings.hidden&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();setSettings(false);settingsButton.focus();}},true);
+  settings.addEventListener('click',event=>{if(event.target.closest('#settings-general button, #city-calibration'))setSettings(false);});
+  settings.addEventListener('pointerdown',event=>event.stopPropagation());
 
   const miniFooter=document.createElement('div');miniFooter.className='minimap-footer';
   miniFooter.append(one('.zoom-control'));mini.append(miniFooter,$('measure-hint'));

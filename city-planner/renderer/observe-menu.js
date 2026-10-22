@@ -125,10 +125,8 @@
   }
   function create({button,dock,onOpen}){
     const menu=document.createElement('section');menu.id='workspace-observe-menu';menu.className='build-menu observe-menu';menu.hidden=true;menu.setAttribute('aria-label','观察菜单');
-    menu.innerHTML=`<header class="build-menu-header"><div class="build-tabs" role="tablist" aria-label="观察类型">${[['layers','图层'],['queries','查询'],['reports','数据']].map(([key,label],i)=>`<button id="observe-tab-${key}" role="tab" aria-selected="${i===0}" aria-controls="observe-${key}" tabindex="${i===0?0:-1}">${label}</button>`).join('')}</div><span class="build-menu-caption" id="observe-caption">选择专题图层</span><button id="observe-advanced-toggle" class="city-btn observe-advanced-toggle" aria-haspopup="dialog" aria-controls="observe-advanced-panel" aria-expanded="false">高级 <span aria-hidden="true">⌄</span></button><div class="build-card-paging"><button aria-label="向前浏览观察卡片">‹</button><button aria-label="向后浏览观察卡片">›</button></div><button class="build-menu-close icon-btn" aria-label="收起观察菜单"><svg><use href="#ui-close"/></svg></button></header><section id="observe-layers" role="tabpanel" aria-labelledby="observe-tab-layers"><div class="observe-filters" role="group" aria-label="图层分类">${[['city','城市'],['economy','经济'],['traffic','交通'],['nature','环境']].map(([key,label])=>`<button data-observe-group="${key}" aria-pressed="${key==='city'}">${label}</button>`).join('')}</div><div class="build-cards"></div><div class="observe-display-settings"></div></section><section id="observe-queries" role="tabpanel" aria-labelledby="observe-tab-queries" hidden><div class="build-cards"></div><div class="observe-query-settings"></div><div class="observe-query-actions"></div></section><section id="observe-reports" role="tabpanel" aria-labelledby="observe-tab-reports" hidden><div class="build-cards"></div></section>`;
-    const advanced=document.createElement('section');advanced.id='observe-advanced-panel';advanced.className='build-menu build-advanced observe-advanced';advanced.hidden=true;advanced.setAttribute('role','dialog');advanced.setAttribute('aria-label','观察高级设置');
-    advanced.innerHTML='<header class="build-advanced-header"><strong>观察设置</strong><button class="icon-btn" aria-label="收起观察高级菜单"><svg><use href="#ui-close"/></svg></button></header><div class="build-tabs" role="tablist" aria-label="高级设置分类"><button id="observe-advanced-scenario" role="tab" aria-selected="true" aria-controls="observe-scenario">情景</button><button id="observe-advanced-calibration" role="tab" aria-selected="false" aria-controls="observe-calibration" tabindex="-1">校准</button></div><section id="observe-scenario" role="tabpanel" aria-labelledby="observe-advanced-scenario"></section><section id="observe-calibration" role="tabpanel" aria-labelledby="observe-advanced-calibration" hidden></section>';
-    document.querySelector('.app-layout').append(menu,advanced);button.setAttribute('aria-controls',menu.id);button.setAttribute('aria-expanded','false');
+    menu.innerHTML=`<header class="build-menu-header"><div class="build-tabs" role="tablist" aria-label="观察类型">${[['layers','图层'],['queries','查询'],['reports','数据']].map(([key,label],i)=>`<button id="observe-tab-${key}" role="tab" aria-selected="${i===0}" aria-controls="observe-${key}" tabindex="${i===0?0:-1}">${label}</button>`).join('')}</div><span class="build-menu-caption" id="observe-caption">选择专题图层</span><div class="build-card-paging"><button aria-label="向前浏览观察卡片">‹</button><button aria-label="向后浏览观察卡片">›</button></div><button class="build-menu-close icon-btn" aria-label="收起观察菜单"><svg><use href="#ui-close"/></svg></button></header><section id="observe-layers" role="tabpanel" aria-labelledby="observe-tab-layers"><div class="observe-filters" role="group" aria-label="图层分类">${[['city','城市'],['economy','经济'],['traffic','交通'],['nature','环境']].map(([key,label])=>`<button data-observe-group="${key}" aria-pressed="${key==='city'}">${label}</button>`).join('')}</div><div class="build-cards"></div><div class="observe-display-settings"></div></section><section id="observe-queries" role="tabpanel" aria-labelledby="observe-tab-queries" hidden><div class="build-cards"></div><div class="observe-query-settings"></div><div class="observe-query-actions"></div></section><section id="observe-reports" role="tabpanel" aria-labelledby="observe-tab-reports" hidden><div class="build-cards"></div></section>`;
+    document.querySelector('.app-layout').append(menu);button.setAttribute('aria-controls',menu.id);button.setAttribute('aria-expanded','false');
     const source=$('city-data-panel'),layerControl=$('city-layer'),cards=new Map(),queryCards=new Map();
     let opened=false,tab='layers',group='city',lastLayer=layerControl.value,lastQuery='area',previousRail=null;
     layerControl.closest('label').hidden=true;$('observe-layers').append(layerControl.closest('label'));
@@ -151,9 +149,10 @@
     const querySettings=menu.querySelector('.observe-query-settings');querySettings.append($('city-access-budget').closest('label'),$('city-access-mode').closest('label'));
     menu.querySelector('.observe-query-actions').append($('city-query-clear'));
     for(const [id,label,note,kind] of reports){const node=decorate($(id),kind,label,note);node.dataset.observeReport=kind;$('observe-reports').querySelector('.build-cards').append(node);}
-    $('observe-scenario').append($('city-migration').closest('.city-fields'),$('city-settings'));
+    const settingsContent={scenario:document.createDocumentFragment(),calibration:document.createDocumentFragment()};
+    settingsContent.scenario.append($('city-migration').closest('.city-fields'),$('city-settings'));
     const calibration=$('city-calibration').closest('details');
-    for(const node of [...calibration.children])if(node.tagName!=='SUMMARY')$('observe-calibration').append(node);
+    for(const node of [...calibration.children])if(node.tagName!=='SUMMARY')settingsContent.calibration.append(node);
     source.replaceChildren();
     const paging=menu.querySelector('.build-card-paging'),pageButtons=[...paging.children];
     const currentRow=()=>$('observe-'+tab).querySelector('.build-cards');
@@ -174,7 +173,7 @@
       position();
     }
     function showTab(next){
-      tab=next;toggleAdvanced(false);
+      tab=next;
       for(const key of ['layers','queries','reports']){const active=tab===key,node=$('observe-tab-'+key);node.setAttribute('aria-selected',String(active));node.tabIndex=active?0:-1;$('observe-'+key).hidden=!active;}
       if(tab==='queries'){if(!queryCards.has(CityApp.tool))queryCards.get(lastQuery).click();}
       else if(!['select','pan'].includes(CityApp.tool))document.querySelector('.workspace-dock [data-tool="select"]').onclick();
@@ -182,25 +181,21 @@
     }
     function position(){
       if(!opened)return;
-      const rect=dock.getBoundingClientRect(),margin=12,width=Math.min(950,innerWidth-margin*2);
-      menu.style.width=width+'px';menu.style.left=Math.max(margin,Math.min(innerWidth-width-margin,rect.x+rect.width/2-width/2))+'px';menu.style.bottom=(innerHeight-rect.top+16)+'px';
-      menu.style.maxHeight=Math.max(150,rect.top-document.querySelector('.city-kpis').getBoundingClientRect().bottom-28)+'px';
+      const rect=dock.getBoundingClientRect(),margin=12;
+      const status=document.querySelector('.workspace-status-tray')?.getBoundingClientRect();
+      const leftEdge=innerWidth>700&&status?status.right+margin:margin;
+      const anchorTop=innerWidth<=700&&status?Math.min(rect.top,status.top):rect.top;
+      const width=Math.min(950,innerWidth-leftEdge-margin);
+      menu.style.width=width+'px';menu.style.left=Math.max(leftEdge,Math.min(innerWidth-width-margin,rect.x+rect.width/2-width/2))+'px';menu.style.bottom=(innerHeight-anchorTop+16)+'px';
+      menu.style.maxHeight=Math.max(150,anchorTop-document.querySelector('.city-kpis').getBoundingClientRect().bottom-28)+'px';
       const card=tab==='layers'?cards.get(layerControl.value):null;
       if(card&&!card.hidden){
         const row=currentRow(),bounds=row.getBoundingClientRect(),item=card.getBoundingClientRect();
         if(item.left<bounds.left)row.scrollLeft-=bounds.left-item.left;
         else if(item.right>bounds.right)row.scrollLeft+=item.right-bounds.right;
       }
-      syncPaging();positionAdvanced();
+      syncPaging();
     }
-    function positionAdvanced(){
-      if(advanced.hidden)return;
-      const anchor=$('observe-advanced-toggle').getBoundingClientRect(),margin=12,gap=8,width=Math.min(360,innerWidth-margin*2);
-      advanced.style.width=width+'px';advanced.style.maxHeight=(innerHeight-margin*2)+'px';
-      const height=advanced.offsetHeight,above=anchor.top-gap-margin,below=innerHeight-anchor.bottom-gap-margin,downward=below>=height||below>=above;
-      advanced.style.maxHeight=Math.max(60,downward?below:above)+'px';advanced.style.left=Math.max(margin,Math.min(innerWidth-width-margin,anchor.right-width))+'px';advanced.style.top=(downward?anchor.bottom+gap:Math.max(margin,anchor.top-gap-advanced.offsetHeight))+'px';
-    }
-    function toggleAdvanced(expanded,{focus=false}={}){advanced.hidden=!expanded;$('observe-advanced-toggle').setAttribute('aria-expanded',String(expanded));if(expanded){positionAdvanced();advanced.querySelector('[aria-selected="true"]').focus({preventScroll:true});}else if(focus)$('observe-advanced-toggle').focus({preventScroll:true});}
     function open(){
       if(!CityApp.active)return;
       if(!opened)previousRail=document.querySelector('.workspace-rail [data-category].active')?.dataset.category;
@@ -210,18 +205,15 @@
       opened=true;menu.hidden=false;document.body.classList.add('observe-menu-open');document.body.classList.remove('show-inspector');button.setAttribute('aria-expanded','true');
       filter(layers.find(item=>item[0]===layerControl.value)?.[3]||'city');showTab(tab);
     }
-    function close({focus=false}={}){toggleAdvanced(false);opened=false;menu.hidden=true;document.body.classList.remove('observe-menu-open');button.classList.remove('active');button.setAttribute('aria-expanded','false');if(previousRail)document.querySelectorAll('.workspace-rail [data-category]').forEach(node=>{const active=node.dataset.category===previousRail;node.classList.toggle('active',active);node.setAttribute('aria-pressed',String(active));});previousRail=null;if(focus)button.focus();}
+    function close({focus=false}={}){opened=false;menu.hidden=true;document.body.classList.remove('observe-menu-open');button.classList.remove('active');button.setAttribute('aria-expanded','false');if(previousRail)document.querySelectorAll('.workspace-rail [data-category]').forEach(node=>{const active=node.dataset.category===previousRail;node.classList.toggle('active',active);node.setAttribute('aria-pressed',String(active));});previousRail=null;if(focus)button.focus();}
     function wireTabs(keys,prefix,choose){for(const key of keys){const node=$(prefix+key);node.onclick=()=>choose(key);node.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?keys[0]:event.key==='End'?keys.at(-1):keys[(keys.indexOf(key)+(event.key==='ArrowRight'?1:keys.length-1))%keys.length];choose(next);$(prefix+next).focus();}});}}
     wireTabs(['layers','queries','reports'],'observe-tab-',showTab);
-    wireTabs(['scenario','calibration'],'observe-advanced-',key=>{for(const name of ['scenario','calibration']){const node=$('observe-advanced-'+name),active=name===key;node.setAttribute('aria-selected',String(active));node.tabIndex=active?0:-1;$('observe-'+name).hidden=!active;}positionAdvanced();});
-    $('observe-advanced-toggle').onclick=()=>toggleAdvanced(advanced.hidden);advanced.querySelector('.icon-btn').onclick=()=>toggleAdvanced(false,{focus:true});menu.querySelector('.build-menu-close').onclick=()=>close({focus:true});
+    menu.querySelector('.build-menu-close').onclick=()=>close({focus:true});
     dock.addEventListener('click',event=>{const target=event.target.closest('button');if(target&&target!==button)close();});
-    document.addEventListener('pointerdown',event=>{if(!advanced.hidden&&!advanced.contains(event.target)&&!$('observe-advanced-toggle').contains(event.target))toggleAdvanced(false);},true);
-    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!advanced.hidden){event.preventDefault();event.stopImmediatePropagation();toggleAdvanced(false,{focus:true});}},true);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&opened&&!document.querySelector('dialog[open]'))close({focus:true});});
-    [menu,advanced].forEach(node=>node.addEventListener('pointerdown',event=>event.stopPropagation()));menu.addEventListener('scroll',positionAdvanced,{passive:true});
+    menu.addEventListener('pointerdown',event=>event.stopPropagation());
     layerControl.addEventListener('change',sync);window.addEventListener('city-tool-change',sync);window.addEventListener('city-renewal-change',sync);window.addEventListener('resize',position);new ResizeObserver(position).observe(dock);
-    filter(group);sync();return {open,close,toggle:()=>opened?close():open()};
+    filter(group);sync();return {settingsContent,open,close,toggle:()=>opened?close():open()};
   }
   window.CityObserveMenu={create};
 })();
