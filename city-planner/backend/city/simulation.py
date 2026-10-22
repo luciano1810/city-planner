@@ -120,12 +120,8 @@ def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
         state['elapsedSeconds']+=chunk
         city.s['sceneTimeSeconds']+=daylight_seconds*chunk/seconds
         remaining=max(0.,remaining-chunk)
-        if state['monthSeconds'] >= midnight-1e-8:
-            # Fractional UI ticks can leave less than a nanosecond before
-            # midnight. Consume and snap that remainder so incremental mode
-            # cannot repeatedly accept a tiny step without changing the day.
-            state['monthSeconds'] = midnight
-            month_changed=state['monthSeconds'] >= duration-1e-8
+        if state['monthSeconds'] >= midnight:
+            month_changed=state['monthSeconds'] >= duration
             if month_changed:
                 state['monthSeconds']=0.
                 city.s['month']+=1

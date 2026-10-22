@@ -24,6 +24,9 @@ class ConnectedGrowthTests(unittest.TestCase):
         c=block_city();c.s['settings']['autoGrow']=True;c.rebuild(regenerate=True)
         plans=plan_streets(c);self.assertTrue(plans)
         c.step(5)
+        # Refresh reserved corridors around public facilities added during
+        # simulation before filling the remaining plots in this fixture.
+        c.rebuild(regenerate=True)
         # Street extension now waits for developed frontage rather than time
         # alone. Populate the reserved block without occupying its corridors.
         for p in c.s['parcels']:
@@ -83,7 +86,7 @@ class RegionalRailTests(unittest.TestCase):
 
     def test_external_passenger_journey_and_freight_separation(self):
         c=self.city;passenger=[s['id'] for s in c.s['stops'] if s['role']=='passenger'];freight=[s['id'] for s in c.s['stops'] if s['role']=='freight']
-        with self.assertRaisesRegex(ValueError,'兼容'):c.command(dict(type='line',mode='train',stops=freight))
+        with self.assertRaisesRegex(ValueError,'不是客运站'):c.command(dict(type='line',mode='train',stops=freight))
         c.command(dict(type='line',mode='train',stops=passenger,headway=2))
         p=min(c.s['parcels'],key=lambda p:abs(p['center'][0]-1200))
         journey=c.route(p['id'],passenger[1],False)

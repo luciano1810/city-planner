@@ -39,7 +39,7 @@ function fixture({labels=false}={}){
       events.push(kind+'-car:'+traffic.frameId);trafficCalls.push({kind,traffic,point:car.point});
     }},
     CityPedestrians:{paint(_ctx,people){events.push('pedestrians:'+people[0].frameId);trafficCalls.push({kind:'pedestrians',people});}}};
-  const env={updateRoadValidation(){},trafficMetrics:require('../renderer/traffic-metrics.js'),trafficPeriod:'peak',active:true,state,window,workspace:{terrain:{width:1000,height:1000}},canvas,
+  const env={el:()=>({checked:false}),updateRoadValidation(){},trafficMetrics:require('../renderer/traffic-metrics.js'),trafficPeriod:'peak',active:true,state,window,workspace:{terrain:{width:1000,height:1000}},canvas,
     trafficPlayback:{frame(){
       const id=frames.length+1,frame={frameId:id,vehicles:[{level:0,point:[10+id,10]},{level:1,point:[20+id,20]}],
         pedestrians:[{frameId:id,point:[30+id,30]}],signals:[{phase:id%2?'green':'red'}]};
@@ -151,7 +151,7 @@ test('daily responses update city controls through retained scene refresh; expli
   const state={stats:{population:12,treasury:100,jobs:8},policy:{},settings:{},name:'Daily city',month:1,
     roads:[],stops:[],lines:[],facilities:[],parcels:[],districts:[]};
   let driver;
-  const env={state,el,trafficState:null,pendingSimulationRender:false,taxiPanel:{render(){}},fmt:String,date:String,escape:String,
+  const env={state,el,busDraft:()=>false,trafficState:null,pendingSimulationRender:false,taxiPanel:{render(){}},fmt:String,date:String,escape:String,
     trafficPlayback:{latest:null,push(){},reset(){},setPaused(){}},
     syncTrafficAnimation(){},updateTraffic(){},updateSimulationControls(){},renderRenewals(){},renderLegend(){},renderInspector(){},updateHint(){},
     workspace:{visible:true,requestSceneRefresh:()=>calls.push('refresh'),requestDraw:()=>calls.push('invalidate')},
@@ -193,7 +193,7 @@ test('traffic details follow the selected junction and clear stale samples',()=>
 
 test('construction hover and pointer leave update overlays without discarding completed textures',()=>{
   const listeners=new Map(),calls=[],env={canvas:{addEventListener:(name,handler)=>listeners.set(name,handler)},
-    active:true,pointerPosition:null,hover:null,snapTarget:null,tool:'street',specialTools:[],dragControl:null,
+    active:true,window:{},busDraft:()=>false,busSnap:null,pointerPosition:null,hover:null,snapTarget:null,tool:'street',specialTools:[],dragControl:null,
     draft:[],state:{meta:{roadTypes:{street:{}}}},eventPoint:e=>[e.clientX,e.clientY],magneticPoint:p=>p,
     workspace:{requestDraw:()=>calls.push('invalidate'),requestAnimation:()=>calls.push('overlay')}};
   vm.runInNewContext(section("  canvas.addEventListener('pointermove'","  canvas.addEventListener('pointerup'"),env);
