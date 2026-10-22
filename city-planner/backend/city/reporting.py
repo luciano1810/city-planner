@@ -8,7 +8,7 @@ define('人','population employed movedIn movedOut relocated laborForce overburd
 define('户','households housing pendingHousing housingInConstruction')
 define('岗位','jobs facilityJobs vacantJobs accessJobs publicJobs')
 define('%','unemployment vacancy modeShare mainModeShare burden combinedBurden meanSlope')
-define('栋','buildings construction floorDistribution')
+define('栋','buildings plannedBuildings construction floorDistribution')
 define('km','roadKm railKm autoRoadKm pathKm')
 define('模拟币/m²土地','landValue landP10 landP90')
 define('模拟币/m²建筑/月','rent rentByUse')
@@ -16,7 +16,8 @@ define('人次/典型工作日','trips completedTrips failedTrips boardings tran
 define('分钟/单程','commute commuteP90 commuteMedian meanWait')
 define('无量纲','congestion floorRatio landscape pollutionExposure')
 define('模拟币','treasury propertyValue constructionCost terrainEngineeringCost')
-define('模拟币/月','maintenance revenue firmProfit fareRevenue operationCost')
+define('模拟币/月','firmProfit fareRevenue operationCost')
+define('模拟币/周','maintenance revenue')
 define('m²','developedArea floorArea uses buildableArea publicSpaceArea')
 define('kg CO₂/典型工作日','estimatedCO2')
 define('人次/典型工作日','regionalPassengers')
@@ -44,7 +45,7 @@ def metric_definitions(stats,model):
     if missing: raise ValueError('指标缺少单位定义：'+','.join(sorted(missing)))
     result={}
     for key in stats:
-        period='累计至月末' if key in CUMULATIVE else '模拟月' if key in MONTHLY else '典型工作日' if '/典型工作日' in UNITS[key] or key in ('modeShare','mainModeShare','commute','commuteMedian','commuteP90','commuteDistance','meanWait','congestion') else '月末'
+        period='累计至当前' if key in CUMULATIVE else '最近结算周' if key in ('maintenance','revenue','movedIn','movedOut','relocated','firmOpened','firmClosed') else '模拟月' if key in MONTHLY else '典型工作日' if '/典型工作日' in UNITS[key] or key in ('modeShare','mainModeShare','commute','commuteMedian','commuteP90','commuteDistance','meanWait','congestion') else '当前状态'
         sample='已完成完整旅程；失败需求另列' if key in ('modeShare','mainModeShare','commute','commuteMedian','commuteP90','commuteDistance','meanWait') else '地块等权' if key in ('landValue','landP10','landP90') else '全市实际状态'
         result[key]=dict(label=LABELS.get(key,key),unit=UNITS[key],period=period,scope='全市',sample=sample,model=model,
             estimated=key in ('estimatedCO2','firmProfit','propertyValue','landValue','landP10','landP90','freightTrips','freightKm'))

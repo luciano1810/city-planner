@@ -2,7 +2,7 @@
  * All decoration is deterministic and display-only. No network assets needed. */
 (function(root){
   'use strict';
-  const settings={quality:'high',labels:false,renderer:'textures'};
+  const settings={quality:'auto',labels:false,renderer:'textures'};
   let effectiveQuality='map';
   let clockSeconds=9*3600;
   let preview=false;
@@ -74,14 +74,14 @@
   function configure(next={}){
     // WebGL remains an explicit diagnostic opt-in, never the default detail path.
     if(['textures','webgl'].includes(next.renderer))settings.renderer=next.renderer;
-    if(['high','balanced','map'].includes(next.quality))settings.quality=next.quality==='map'?'map':'high';
+    if(['auto','high','balanced','map'].includes(next.quality))settings.quality=next.quality==='balanced'?'auto':next.quality;
     if(typeof next.labels==='boolean')settings.labels=next.labels;
     return {...settings};
   }
-  // Use the displayed zoom ratio so every map enters detail at 7200%.
+  // Automatic mode enters detail at 7200%; explicit choices survive zooming.
   const detailZoom = 72;
   function resolveQuality(zoom){
-    effectiveQuality=settings.quality==='map'||!(zoom>=detailZoom)?'map':'high';
+    effectiveQuality=settings.quality==='auto'?(zoom>=detailZoom?'high':'map'):settings.quality;
     return effectiveQuality;
   }
   function smooth(a,b,x){const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);}
@@ -203,7 +203,7 @@
     return maxX>=0&&minX<=ctx.canvas.width&&maxY>=0&&minY<=ctx.canvas.height;
   }
   function parcel(ctx,p,scale){
-    const b=p.building;if(!b&&!p.blockCommon&&p.use!=='protected')return;
+    const b=p.building?.status==='planned'?null:p.building;if(!b&&!p.blockCommon&&p.use!=='protected')return;
     // One world-aligned paving material removes the checkerboard of lot grass.
     polygonMaterial(ctx,p.points,b?'paving':'grass',b?0:seed(p.block||p.id));
     if(b&&scale>.28){
@@ -261,7 +261,7 @@
     if(!shadowLayer)shadowLayer=canvas(1);
     if(shadowLayer.width!==ctx.canvas.width||shadowLayer.height!==ctx.canvas.height){shadowLayer.width=ctx.canvas.width;shadowLayer.height=ctx.canvas.height;}
     const layer=shadowLayer.getContext('2d');layer.setTransform(1,0,0,1,0,0);layer.clearRect(0,0,shadowLayer.width,shadowLayer.height);layer.setTransform(ctx.getTransform());
-    for(const p of parcels)if(p.building.status!=='construction')buildingShadow(layer,p,scale);
+    for(const p of parcels)if(!['planned','construction'].includes(p.building.status))buildingShadow(layer,p,scale);
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.filter=`blur(${Math.min(2.2,Math.max(.4,scale*.12))}px)`;ctx.drawImage(shadowLayer,0,0);ctx.restore();
   }
   function distantBuildingShadows(ctx,parcels){
@@ -276,7 +276,7 @@
     }
     ctx.save();ctx.fillStyle=`rgba(26,39,53,${light.strength*1.2})`;
     for(const p of parcels){
-      if(p.building.status==='construction')continue;
+      if(['planned','construction'].includes(p.building.status))continue;
       const m=root.CityGeometry.buildingMassing(p);let cached=distantShadowCache.get(p.building);
       if(!cached||cached.massing!==m||cached.minute!==minute){
         const shape=new Path2D();let count=0;
@@ -409,11 +409,12 @@
     ctx.drawImage(entry.image,box[0],box[1],w,h);
   }
   function building(ctx,p,scale){
+    if(p.building.status==='planned')return;
     if(scale<1.2||preview){paintDistantBuilding(ctx,p);return;}
-    parking(ctx,p,scale);
+    if(p.building.status!=='construction')parking(ctx,p,scale);
     if(p.building.status==='construction'){paintBuilding(ctx,p,scale);return;}
     const m=root.CityGeometry.buildingMassing(p),volumes=[...(m.podium?[m.podium]:[]),...m.volumes],box=[Infinity,Infinity,-Infinity,-Infinity];
-    for(const volume of volumes){const b=bounds(volume.points);box[0]=Math.min(box[0],b[0]-3);box[1]=Math.min(box[1],b[1]-roofLift(volume.height)-4);box[2]=Math.max(box[2],b[2]+3);box[3]=Math.max(box[3],b[3]+3);}
+    for(const volume of volumes){const b=bounds(volume.points);box[0]=Math.min(box[0],b[0]-3);box[1]=Math.min(box[1],b[1]-roofLift(volume.height+(p.building.extensionFloors||0)*3.9)-4);box[2]=Math.max(box[2],b[2]+3);box[3]=Math.max(box[3],b[3]+3);}
     if(!volumes.length)return;
     rasterObject(ctx,p,'building:'+(root.CityOrdinaryRoofs?.assetVersion||0),box,scale,g=>paintBuilding(g,p,scale));
   }
@@ -459,9 +460,22 @@
   }
   function paintBuilding(ctx,p,scale){
     const b=p.building,points=b.footprint;
+    if(b.status==='planned')return;
     if(b.status==='construction'){
       polygonMaterial(ctx,points,'soil',seed(p.id));ctx.save();path(ctx,points);ctx.clip();const [x,y,x1,y1]=bounds(points);
-      ctx.strokeStyle='#b9a16b';ctx.lineWidth=.5;for(let i=x;i<x1;i+=5){path(ctx,[[i,y],[i,y1]],false);ctx.stroke();}for(let j=y;j<y1;j+=5){path(ctx,[[x,j],[x1,j]],false);ctx.stroke();}ctx.restore();return;
+      ctx.strokeStyle='#b9a16b';ctx.lineWidth=.5;for(let i=x;i<x1;i+=5){path(ctx,[[i,y],[i,y1]],false);ctx.stroke();}for(let j=y;j<y1;j+=5){path(ctx,[[x,j],[x1,j]],false);ctx.stroke();}ctx.restore();
+      const top=Math.max(0,((b.constructionProgress||0)-.12)/.88)*(b.height||b.floors*3.3);
+      const layout=root.CityGeometry.buildingMassing(p);
+      for(const v of [...(layout.podium?[layout.podium]:[]),...layout.volumes]){
+        const base=v.base||0,height=Math.min(v.height,top);if(height<=base)continue;
+        const lift=roofLift(height),baseLift=roofLift(base);
+        for(const face of facadeFaces(v)){
+          const a=face.a,z=face.z;path(ctx,[[a[0],a[1]-baseLift],[z[0],z[1]-baseLift],[z[0],z[1]-lift],[a[0],a[1]-lift]]);ctx.fillStyle='#aaa99d';ctx.fill();
+          for(let floor=base+3.3;floor<height;floor+=3.3){path(ctx,[[a[0],a[1]-roofLift(floor)],[z[0],z[1]-roofLift(floor)]],false);ctx.strokeStyle='#d6d2c3';ctx.lineWidth=.3;ctx.stroke();}
+        }
+        path(ctx,v.points.map(([x,y])=>[x,y-lift]));ctx.fillStyle='#cbc8b9';ctx.fill();
+      }
+      return;
     }
     const m=root.CityGeometry.buildingMassing(p);
     if(m.podium)drawBuildingVolume(ctx,p,m.podium,scale);
@@ -480,6 +494,16 @@
         }
       }
       drawBuildingVolume(ctx,p,volume,scale);
+    }
+    if(b.extensionProgress>0){
+      const top=m.volumes.reduce((a,v)=>!a||v.height>a.height?v:a,null);
+      if(top){
+        const base=roofLift(top.height),lift=roofLift(top.height+(b.height||b.floors*3.3)/b.floors*b.extensionFloors*b.extensionProgress);
+        for(const face of facadeFaces(top)){
+          const a=face.a,z=face.z;path(ctx,[[a[0],a[1]-base],[z[0],z[1]-base],[z[0],z[1]-lift],[a[0],a[1]-lift]]);ctx.fillStyle='#aaa99d';ctx.fill();
+        }
+        path(ctx,top.points.map(([x,y])=>[x,y-lift]));ctx.fillStyle='#cbc8b9';ctx.fill();
+      }
     }
   }
   let plantingContext=null;

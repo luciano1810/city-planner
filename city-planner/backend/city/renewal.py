@@ -118,7 +118,7 @@ def preview(city, cmd):
         if p['use'] == 'protected' or p.get('openSpace') or locked(city, p): raise ValueError('选区包含保护用地、公共空间或正在更新的地块')
         if not p.get('connected'): raise ValueError('更新地块需要有效的道路接入')
         b = p.get('building')
-        if b and (b['status'] == 'construction' or b.get('extensionReady')): raise ValueError('请等待现有施工或加层完成后再更新')
+        if b and (b['status'] in ('planned','construction') or b.get('extensionReady')): raise ValueError('请等待现有施工或加层完成后再更新')
     base = stable_id('renewal-plan-', (city.s['serial'], city.s['month'], sorted(p['id'] for p in sources), opts))
     # Stable spatial bands keep untouched phases usable while earlier phases build.
     x0,y0,x1,y1=face.bounds;axis=0 if x1-x0 >= y1-y0 else 1
@@ -308,12 +308,15 @@ def _move(city, project, phase, assignments):
 
 
 def advance(city):
-    """Advance one stage per project per month, before population and employment."""
+    """Advance dated phases at daily boundaries, before weekly allocation."""
+    from .construction import day, add_months, date_string, schedule
     changed=False
     for project in city.s['renewals']:
         if project['status'] in TERMINAL:continue
         phase=next(p for p in project['phases'] if p['status']!='complete')
-        mode=project['options']['mode'];now=city.s['month']
+        mode=project['options']['mode'];now=city.s['month'];today=int(day(city))
+        if phase['status'] in ('demolition','construction') and 'completionDay' not in phase:
+            phase['completionDay']=add_months(today,max(1,phase['ready']-now))
         if phase['status'] in ('planned','waiting'):
             project['status']='waiting';phase['status']='waiting'
             source=[city.parcelmap[pid] for pid in phase['sourceIds']]
@@ -333,27 +336,29 @@ def advance(city):
             if assignments is None:project['reason']='等待足够且可负担的城内住房，尚未搬迁或拆除';continue
             if city.s['settings']['budget'] and city.s['treasury']<phase['cost']:project['reason']='等待本期市政预算';continue
             city.spend(phase['cost'],'建筑翻新' if mode=='renovate' else '街区更新');project['spent']+=phase['cost']
-            phase['started']=now;project['status']='active'
+            phase['started']=now;phase['startDay']=today;phase['startDate']=date_string(today);project['status']='active'
             if mode=='renovate':
-                phase.update(status='construction',ready=now+phase['constructionMonths'])
+                phase.update(status='construction',ready=now+phase['constructionMonths'],completionDay=add_months(today,phase['constructionMonths']))
                 project['reason']='翻新施工中，原有空间继续使用'
             else:
                 _move(city,project,phase,assignments)
                 for p in source:p['building']=None
-                phase.update(status='demolition',ready=now+phase['demolitionMonths'])
+                phase.update(status='demolition',ready=now+phase['demolitionMonths'],completionDay=add_months(today,phase['demolitionMonths']))
                 project['reason']=f'第 {phase["index"]} 期拆除与场地准备'
             city.event('更新',f'{project["name"]}第 {phase["index"]} 期开工');changed=True
-        elif phase['status']=='demolition' and now>=phase['ready']:
+        elif phase['status']=='demolition' and today>=phase['completionDay']:
             old=set(phase['sourceIds']);city.s['parcels']=[p for p in city.s['parcels'] if p['id'] not in old]
             for template in phase['sites']:
                 p=copy.deepcopy(template);b=p.pop('targetBuilding',None);p['renewalProject']=project['id']
                 if b:
                     b.update(id=city.uid('b'),status='construction',ready=now+phase['constructionMonths'],age=0,condition=100.,occupied=0,positions=0,employees=0,vacantMonths=0)
+                    schedule(city,b,start=today,months=phase['constructionMonths'])
+                    phase['completionDay']=max(phase.get('completionDay',today),b['completionDay'])
                     p['building']=b
                 city.s['parcels'].append(p)
-            phase.update(status='construction',ready=now+phase['constructionMonths']);changed=True
+            phase.update(status='construction',ready=now+phase['constructionMonths'],completionDay=max(phase.get('completionDay',today),add_months(today,phase['constructionMonths'])));changed=True
             project['reason']=f'第 {phase["index"]} 期主体施工'
-        elif phase['status']=='construction' and now>=phase['ready']:
+        elif phase['status']=='construction' and today>=phase['completionDay']:
             if mode=='renovate':
                 b=city.parcelmap[phase['sourceIds'][0]]['building'];b.update(condition=100.,lastRenovated=now)
                 b['cost']=b.get('cost',0)+phase['cost']
@@ -366,7 +371,7 @@ def advance(city):
                                                         capacity=max(30,int(p['area']/4)),cost=cost,maintenance=round(cost*.004),created=now))
             phase.update(status='complete',completed=now);changed=True
             if all(p['status']=='complete' for p in project['phases']):project.update(status='complete',ended=now,reason='全部交付，入住、企业入驻与就业由城市需求决定')
-            else:project.update(status='planned',reason='本期已交付，下一月评估后续阶段；可取消未开工阶段')
+            else:project.update(status='planned',reason='本期已交付，次日评估后续阶段；可取消未开工阶段')
             city.event('更新',f'{project["name"]}第 {phase["index"]} 期交付')
     if changed:city.rebuild()
 
@@ -431,7 +436,7 @@ def automatic(city):
     housing_market=HousingMarket(city)
     def eligible(p):
         b=p.get('building')
-        if not b or b['status']=='construction' or b.get('extensionReady') or not p.get('connected') or p['use']=='protected' or p.get('openSpace') or locked(city,p):return False
+        if not b or b['status'] in ('planned','construction') or b.get('extensionReady') or not p.get('connected') or p['use']=='protected' or p.get('openSpace') or locked(city,p):return False
         previous=next((q for q in city.s['renewals'] if q['id']==p.get('renewalProject')),None)
         if previous and now-previous.get('ended',previous['created'])<policy['renewalCooldownMonths']:return False
         return b.get('vacantMonths',0)>=policy['redevelopVacancyMonths'] or b['age']>=policy['renewalMinimumAge']

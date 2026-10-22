@@ -43,7 +43,7 @@ def workplace_supply(city, planned=True, exclude_project=None, exclude_parcels=(
         if p['id'] in replaced or not p.get('connected') or not b or b['use']=='residential':continue
         active=b['status']=='active' and (b.get('businessActive',True) or reopening and b.get('firmCooldown',0)<=city.s['month'])
         if planned or active:
-            rows.append(dict(parcel=p,use=b['use'],capacity=b['capacity'],future=b['status']=='construction'))
+            rows.append(dict(parcel=p,use=b['use'],capacity=b['capacity'],future=b['status'] in ('planned','construction')))
         if planned and b.get('extensionReady'):
             rows.append(dict(parcel=p,use=b['use'],capacity=int(b['footprintArea']*b.get('extensionFloors',1)/USES[b['use']]['space']),future=True))
     return rows

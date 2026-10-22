@@ -39,7 +39,7 @@ function fixture({labels=false}={}){
       events.push(kind+'-car:'+traffic.frameId);trafficCalls.push({kind,traffic,point:car.point});
     }},
     CityPedestrians:{paint(_ctx,people){events.push('pedestrians:'+people[0].frameId);trafficCalls.push({kind:'pedestrians',people});}}};
-  const env={active:true,state,window,workspace:{terrain:{width:1000,height:1000}},canvas,
+  const env={updateRoadValidation(){},trafficMetrics:require('../renderer/traffic-metrics.js'),trafficPeriod:'peak',active:true,state,window,workspace:{terrain:{width:1000,height:1000}},canvas,
     trafficPlayback:{frame(){
       const id=frames.length+1,frame={frameId:id,vehicles:[{level:0,point:[10+id,10]},{level:1,point:[20+id,20]}],
         pedestrians:[{frameId:id,point:[30+id,30]}],signals:[{phase:id%2?'green':'red'}]};
@@ -134,7 +134,7 @@ test('traffic replies refresh the clock and live overlay without forcing a new s
     if(!elements.has(id))elements.set(id,{});return elements.get(id);
   };
   el('signal-demand').value='normal';
-  const env={active:true,state:{simulation:{sampled:false}},simulation:{running:true},el,
+  const env={updateRoadValidation(){},trafficMetrics:require('../renderer/traffic-metrics.js'),trafficPeriod:'peak',active:true,state:{simulation:{sampled:false}},simulation:{running:true},el,
     trafficState:{mode:'normal',waiting:0,passed:2,signals:[{phase:'green',remaining:5}],vehicles:[],pedestrians:[]},
     updateSceneClock:()=>calls.push('clock'),updateSimulationControls:()=>calls.push('controls'),
     workspace:{requestAnimation:()=>calls.push('animation'),requestDraw:()=>calls.push('invalidate')}};

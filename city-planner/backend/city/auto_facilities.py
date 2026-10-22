@@ -56,7 +56,7 @@ class Context:
     def __init__(self, city):
         self.city = city
         self.population = sum(h['size'] for h in city.s['households'])
-        self.built = [p for p in city.s['parcels'] if p.get('building') and p['building']['status'] != 'construction']
+        self.built = [p for p in city.s['parcels'] if p.get('building') and p['building']['status'] not in ('planned','construction')]
         self.tree = STRtree([Point(p['center']) for p in self.built])
         self.roads = {r['id']: r for r in city.s['roads'] if r['level'] == 0 and r['kind'] in ('street', 'avenue', 'lane')}
         self.road_shapes = {k: LineString(r['points']) for k, r in self.roads.items()}

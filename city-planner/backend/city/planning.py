@@ -73,7 +73,7 @@ def occupancy_index(city):
 
 
 def settled_building(parcel):
-    return bool(parcel.get('building') and parcel['building'].get('status')!='construction')
+    return bool(parcel.get('building') and parcel['building'].get('status') not in ('planned','construction'))
 
 
 def lane_growth_budget(city):

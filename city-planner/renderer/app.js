@@ -529,26 +529,24 @@ function thumbnails() {
 
 for (const key of settings) $(key).addEventListener('input', () => { updateRanges(); scheduleGenerate(); });
 document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => selectPreset(button.dataset.preset)));
-// The same two modes are available while preparing terrain and planning a city.
-$('map-frame').insertAdjacentHTML('beforeend','<div class="map-view-switch" role="group" aria-label="显示模式"><button data-view="high" aria-pressed="false">精细视图</button><button data-view="map" aria-pressed="true">地图视图</button><span id="map-view-auto">缩放自动切换</span></div>');
+// Share the chosen mode across terrain, city and observation controls.
+$('map-frame').insertAdjacentHTML('beforeend','<div class="map-view-switch" role="group" aria-label="显示模式"><button data-view="auto" aria-pressed="true">自动</button><button data-view="high" aria-pressed="false">精细视图</button><button data-view="map" aria-pressed="false">地图视图</button><span id="map-view-auto">自动切换 · 当前：地图视图</span></div>');
 function syncDisplayControls(quality){
-  const automatic=quality==='map'&&window.CityScene?.settings.quality!=='map';
+  const mode=window.CityScene?.settings.quality||'auto';
   if(document.body.dataset.mapView!==quality){document.body.dataset.mapView=quality;updateLegend();window.CityApp?.refreshLegend();}
   document.querySelectorAll('[data-view]').forEach(b=>{
-    const chosen=b.dataset.view===quality;
+    const chosen=b.dataset.view===mode;
     if(b.classList.contains('active')!==chosen){b.classList.toggle('active',chosen);b.setAttribute('aria-pressed',String(chosen));}
   });
-  const field=$('city-render-quality');if(field&&field.value!==quality)field.value=quality;
-  const note=automatic?'已自动切换 · 放大至 7200% 进入精细视图':quality==='map'?'地图视图 · 点击精细视图查看细节':'精细视图 · 缩小自动切换地图';
-  for(const id of ['map-view-auto','city-view-note'])if($(id)&&$(id).textContent!==note)$(id).textContent=note;
+  const field=$('city-render-quality');if(field&&field.value!==mode)field.value=mode;
+  const viewName=quality==='map'?'地图视图':'精细视图';
+  const note=mode==='auto'?`自动切换 · 当前：${viewName}`:`固定${viewName}`;
+  if($('map-view-auto').textContent!==note)$('map-view-auto').textContent=note;
 }
-function setDisplayMode(quality,{focus=true}={}){
+function setDisplayMode(quality){
   window.CityScene?.configure({quality});
   try{localStorage.setItem('shanhai-scene-v1',JSON.stringify(window.CityScene.settings));}catch{}
-  if(terrain&&quality==='high'&&focus){
-    if(zoom<window.CityScene.detailZoom){setZoom(window.CityScene.detailZoom);return;}
-  }
-  if(terrain)syncDisplayControls(window.CityScene.resolveQuality(zoom));
+  syncDisplayControls(window.CityScene.resolveQuality(zoom));
   requestDraw();
 }
 document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setDisplayMode(button.dataset.view)));
@@ -641,7 +639,7 @@ window.MapWorkspace = {
     terrainStateChanged();
   },
   applyDisplay(preferences) {
-    setDisplayMode(preferences.view==='map'?'map':'high',{focus:false});
+    setDisplayMode(['auto','high','map'].includes(preferences.view)?preferences.view:'auto');
     if(contour!==preferences.contours)$('contours').click();
     if(grid!==preferences.grid)$('grid').click();
   },

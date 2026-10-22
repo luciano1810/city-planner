@@ -3,15 +3,23 @@ const assert=require('node:assert/strict');
 const scene=require('../renderer/scene-renderer.js');
 const map=require('../renderer/map-renderer.js');
 
-test('detail starts at 7200% zoom and explicit map choice persists',()=>{
-  scene.configure({quality:'high'});
+test('automatic detail starts at 7200% without changing the chosen mode',()=>{
+  scene.configure({quality:'auto'});
   for(const zoom of [1,4,60,71.99])assert.equal(scene.resolveQuality(zoom),'map');
   assert.equal(scene.resolveQuality(72),'high');
   assert.equal(scene.resolveQuality(512),'high');
   assert.equal(scene.resolveQuality(71.99),'map');
-  scene.configure({quality:'map'});assert.equal(scene.resolveQuality(512),'map');
-  scene.configure({quality:'balanced'});assert.equal(scene.settings.quality,'high');
+  assert.equal(scene.settings.quality,'auto');
+  scene.configure({quality:'balanced'});assert.equal(scene.settings.quality,'auto');
   assert.equal(scene.resolveQuality(72),'high');
+});
+
+test('explicit detail and map modes remain fixed at every zoom',()=>{
+  for(const quality of ['high','map']){
+    scene.configure({quality});
+    for(const zoom of [1,4,60,71.99,72,512,1])assert.equal(scene.resolveQuality(zoom),quality);
+    assert.equal(scene.settings.quality,quality);
+  }
 });
 
 test('map roads remain readable at overview scale and suppress small paths and underground links',()=>{
@@ -105,4 +113,16 @@ test('long destination names wrap into at most two readable lines',()=>{
   assert.deepEqual(map.wrapText('Central University',measure,110),['Central','University']);
   assert.deepEqual(map.wrapText('山海城市公共文化艺术中心',measure,80),['山海城市公共文化','艺术中心']);
   const long=map.wrapText('A'.repeat(50),measure,100);assert.equal(long.length,2);assert(long[1].endsWith('…'));assert(long.every(s=>measure(s)<=100));
+});
+
+
+test('planned buildings stay invisible until their dated start; construction has a distinct footprint',()=>{
+  const points=[[0,0],[0,20],[20,20],[20,0],[0,0]],paints=[];
+  const ctx=new Proxy({},{set(o,k,v){if(k==='fillStyle')paints.push(v);o[k]=v;return true;},get(o,k){return k in o?o[k]:()=>{};}});
+  const building={footprint:points,use:'residential',status:'planned'};
+  const state={parcels:[{id:'dated',points,building}],facilities:[],roads:[],meta:{roadTypes:{}}};
+  const options={scale:1,inView:()=>true,visible:()=>true,label:()=>{}};
+  map.paint(ctx,state,options);assert.equal(paints.length,0);
+  building.status='construction';map.paint(ctx,state,options);assert(paints.includes('#c7b68e'));
+  paints.length=0;building.status='active';map.paint(ctx,state,options);assert(paints.includes(map.palette.building));
 });

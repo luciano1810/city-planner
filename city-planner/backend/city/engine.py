@@ -1,4 +1,4 @@
-"""Authoritative monthly land-use/transport simulation in metric coordinates.
+"""Authoritative daily construction and weekly land-use/transport simulation in metric coordinates.
 
 Households have one worker each; trips represent typical working-day morning and
 evening periods. Capacity is assigned per direction and segment, never inferred
@@ -27,14 +27,14 @@ from .blocks import prepare_blocks, grow_block_commons
 from . import naming
 from . import renewal
 from . import signals
-from . import simulation
+from . import simulation, construction
 from . import housing
 from .employment import facility_workplaces, sync_facilities, facility_capacity
 from .business import BusinessMarket, workplace_supply
 from . import special_buildings, auto_facilities
 from . import road_clearance
 
-MODEL_VERSION = 'shanhai-city-10'
+MODEL_VERSION = 'shanhai-city-11'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
 
 
@@ -70,6 +70,8 @@ class City:
         self.s['gateway']=None
         self.s['sceneTimeSeconds']=9*3600.
         self.s['simulation']=simulation.initial_state()
+        self.s['calendar']=dict(nextWeekDay=7,lastWeekDay=0,projectCredit=0.,migrationCredit=0.,monthRevenue=0.,monthMaintenance=0.,monthMovedIn=0.,monthMovedOut=0.,monthRelocated=0.)
+        self.s['weeklyHistory']=[]
         self.s.update(firms=[], localPaths=[], growthAttempts=[], laneCadenceVersion=2, districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
         self.s.update(streetPlans=[],plannedBlocks=0,regionalServices=[],regionalFlows=[],growthCenters=[],blockLayouts=[],renewals=[])
         self.undo, self.redo = [], []
@@ -90,7 +92,7 @@ class City:
                 number(p[1], 0, self.terrain.height, '纵坐标')]
 
     def event(self, category, message, point=None):
-        self.s['events'].append(dict(month=self.s['month'], category=category, message=message,point=point))
+        self.s['events'].append(dict(month=self.s['month'], date=construction.date_string(construction.day(self)), category=category, message=message,point=point))
         self.s['events'] = self.s['events'][-250:]
 
     def snapshot(self):
@@ -100,7 +102,7 @@ class City:
                     runtime=self.runtime())
 
     def runtime(self):
-        return copy.deepcopy(dict(edges={e['id']: {k:e[k] for k in ('time','traffic','ratio')} for e in self.network['edges']},
+        return copy.deepcopy(dict(edges={e['id']: {k:e[k] for k in ('time','traffic','ratio','trafficPeriods') if k in e} for e in self.network['edges']},
                                   trips=getattr(self,'trips',[]), paths=self.paths,
                                   liveTraffic=self.live_traffic.snapshot() if self.live_traffic else None))
 
@@ -118,7 +120,7 @@ class City:
 
     @classmethod
     def restore(cls, data):
-        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9'):
+        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10'):
             raise ValueError('存档格式或模型版本不受支持')
         city = cls(data['terrain'], data['state']['name'])
         s = copy.deepcopy(data['state'])
@@ -164,12 +166,12 @@ class City:
         unclassified=s['constructionCost']-sum(accounts.values())
         if unclassified<-.01: raise ValueError('建设分项支出超过累计支出')
         if unclassified>.01: accounts['历史建设（未分项）']=accounts.get('历史建设（未分项）',0)+unclassified
-        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9'):
+        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10'):
             s['version']=MODEL_VERSION
             s['policy']['version']=POLICY['version']
-            s['migrationNote']='已迁移到模型 10；保留既有建筑、街区与校准值，新增信号等待、路口配时与实景交通'
+            s['migrationNote']='已迁移到模型 11；保留既有建筑、街区与校准值，施工改为逐日推进，财政与市场改为每周结算'
             s['policy']['version']=POLICY['version']
-        required = set(city.s)
+        required = set(city.s) - {'calendar','weeklyHistory'}
         if not required <= set(s) or s['version'] != MODEL_VERSION:
             raise ValueError('存档缺少必要字段')
         if any(not isinstance(s[k], list) for k in ['roads','stops','lines','parcels','households','facilities','events','history']):
@@ -215,7 +217,7 @@ class City:
             number(h['income'],1,100000000,'家庭月收入')
             homes[h['home']]+=1
             b=pm[h['home']]['building']
-            if b['use']!='residential' or b['status']=='construction' or homes[h['home']]>b['capacity']:
+            if b['use']!='residential' or b['status'] in ('planned','construction') or homes[h['home']]>b['capacity']:
                 raise ValueError('存档住房占用无效')
             if h.get('job'):
                 q=pm.get(h['job']);job=q.get('building') if q else None
@@ -228,6 +230,15 @@ class City:
             if p.get('building') and not Polygon(p['points']).buffer(.01).covers(Polygon(p['building']['footprint'])):
                 raise ValueError('存档建筑超出地块')
         city.s = s
+        if 'calendar' not in s:
+            # A legacy monthly amount is not a completed weekly cashflow.
+            s['legacyMonthlyAccounts']={key:s.get(key,0) for key in ('revenue','maintenance','movedIn','movedOut','relocated')}
+            for key in s['legacyMonthlyAccounts']:
+                s[key]=0
+                s['stats'][key]=0
+        simulation.ensure_calendar(city)
+        construction.migrate(city)
+        construction.validate(city)
         city.parcelmap = pm
         renewal.validate(city)
         special_buildings.validate(city)
@@ -1096,79 +1107,101 @@ class City:
         callback=getattr(self,'_monthly_progress',None)
         if callback:callback(fraction,label)
 
+    @staticmethod
+    def use_name(use):
+        return USES[use]['name']
+
     def step(self, months=1, *, advance_clock=True, return_view=True):
+        """Fast-forward through the same daily/weekly calendar used by live play."""
         months=number(months,1,24,'推进月份',True)
-        before=(copy.deepcopy(self.s),self.rng.getstate(),self.runtime())
-        try:
-            for _ in range(months):
-                if advance_clock:simulation.shift_month(self,self.s['month'])
-                self.s['month']+=1
-                self.s['movedIn']=self.s['movedOut']=self.s['relocated']=0
-                self.s['migrationFlows']=[]
-                self.monthly_progress(0,'街区与道路')
-                if grow_lanes(self):
-                    self.rebuild(regenerate=True)
-                if grow_public_spaces(self):
-                    self.rebuild()
-                renewal.advance(self)
-                self.monthly_progress(.14,'建筑与路网')
-                self.complete_projects()
-                update_entrances(self)
-                self.build_graphs()
-                update_firms(self)
-                self.monthly_progress(.24,'就业与迁居')
-                self.match_jobs()
-                self.populate()
-                self.match_jobs()
-                self.monthly_progress(.36,'交通分配')
-                self.assign_traffic()
-                self.monthly_progress(.56,'住房与土地')
-                self.update_market()
-                self.monthly_progress(.72,'建设与更新')
-                renewal.automatic(self)
-                self.redevelop()
-                if auto_facilities.grow(self):self.rebuild()
-                if special_buildings.grow_parking(self):self.rebuild()
-                self.develop()
-                self.monthly_progress(.88,'公共空间与财政')
-                if grow_block_commons(self):self.rebuild()
-                update_entrances(self)
-                clustered_districts(self)
-                if special_buildings.grow_cbd(self):update_entrances(self)
-                self.finance()
-                self.s['revision']+=1
-                self.monthly_progress(.94,'统计与可达性')
-                self.summarize()
-                observe_changes(self)
-                self.s['history'].append(dict(copy.deepcopy(self.s['stats']),model=MODEL_VERSION))
-                if self.s['month'] % 12 == 0:
-                    stats=self.s['stats']
-                    self.s['annual'].append(dict(year=self.s['month']//12,month=self.s['month'],population=stats['population'],jobs=stats['jobs'],movedIn=sum(r['movedIn'] for r in self.s['history'][-12:]),movedOut=sum(r['movedOut'] for r in self.s['history'][-12:]),revenue=sum(r['revenue'] for r in self.s['history'][-12:]),maintenance=sum(r['maintenance'] for r in self.s['history'][-12:])))
-                    self.event('年报',f"城市发展第 {self.s['month']//12} 年：人口 {stats['population']}，"
-                               f"就业 {stats['employed']}，建筑 {stats['buildings']} 栋，"
-                               f"土地估值中位数 {stats['landValue'] or 0:.0f} 币/m²")
-            # Editing undo never silently rolls economic time backward.
-            self.undo=[]
-            self.redo=[]
-        except Exception:
-            self.s,state,runtime=before
-            self.rng.setstate(state)
-            self.rebuild()
-            self.restore_runtime(runtime)
-            raise
-        self.monthly_progress(1,'结算已准备')
+        # advance_clock is retained for callers of the old API. Economic time
+        # can no longer advance independently of the authoritative calendar.
+        simulation.step_months(self, months)
         return self.view() if return_view else None
 
+    def settle_week(self, factor):
+        self._period_factor=factor
+        try:
+            self.s['movedIn']=self.s['movedOut']=self.s['relocated']=0
+            self.s['migrationFlows']=[]
+            self.monthly_progress(.14,'建筑与路网')
+            update_entrances(self)
+            self.build_graphs()
+            update_firms(self)
+            self.monthly_progress(.24,'就业与迁居')
+            self.match_jobs()
+            self.populate()
+            self.match_jobs()
+            self.monthly_progress(.36,'交通分配')
+            self.assign_traffic()
+            self.monthly_progress(.56,'住房与土地')
+            self.update_market()
+            self.monthly_progress(.72,'建设评估')
+            self.redevelop()
+            self.develop()
+            self.monthly_progress(.88,'财政周结算')
+            update_entrances(self)
+            clustered_districts(self)
+            self.finance()
+            self.s['revision']+=1
+            self.monthly_progress(.94,'统计与可达性')
+            self.summarize()
+            for key in ('movedIn','movedOut','relocated'):
+                self.s['calendar']['month'+key[0].upper()+key[1:]]+=self.s[key]
+            stamp=construction.date_string(construction.day(self))
+            self.s['weeklyHistory'].append(dict(copy.deepcopy(self.s['stats']),date=stamp,day=int(construction.day(self)),model=MODEL_VERSION))
+            self.s['weeklyHistory']=self.s['weeklyHistory'][-1040:]
+            self.undo=[];self.redo=[]
+        finally:
+            self.__dict__.pop('_period_factor',None)
+        self.monthly_progress(1,'周结算已准备')
+
+    def close_month(self):
+        """Monthly infrastructure cadence and archival report, not a cash debit."""
+        if grow_lanes(self):self.rebuild(regenerate=True)
+        if grow_public_spaces(self):self.rebuild()
+        renewal.automatic(self)
+        if auto_facilities.grow(self):self.rebuild()
+        if special_buildings.grow_parking(self):self.rebuild()
+        if grow_block_commons(self):self.rebuild()
+        clustered_districts(self)
+        if special_buildings.grow_cbd(self):
+            for p in self.s['parcels']:
+                b=p.get('building')
+                if b and b['status'] in ('planned','construction') and 'completionDay' not in b:construction.schedule(self,b)
+            update_entrances(self)
+        self.summarize()
+        observe_changes(self)
+        ledger=self.s['calendar']
+        self.s['history'].append(dict(copy.deepcopy(self.s['stats']),revenue=ledger['monthRevenue'],maintenance=ledger['monthMaintenance'],movedIn=ledger['monthMovedIn'],movedOut=ledger['monthMovedOut'],relocated=ledger['monthRelocated'],model=MODEL_VERSION))
+        for key in ('monthRevenue','monthMaintenance','monthMovedIn','monthMovedOut','monthRelocated'):ledger[key]=0.
+        if self.s['month'] % 12 == 0:
+            rows=self.s['history'][-12:];stats=self.s['stats']
+            self.s['annual'].append(dict(year=self.s['month']//12,month=self.s['month'],population=stats['population'],jobs=stats['jobs'],movedIn=sum(r['movedIn'] for r in rows),movedOut=sum(r['movedOut'] for r in rows),revenue=sum(r['revenue'] for r in rows),maintenance=sum(r['maintenance'] for r in rows)))
+            self.event('年报',f"城市发展第 {self.s['month']//12} 年：人口 {stats['population']}，建筑 {stats['buildings']} 栋")
+
+    def refresh_construction_stats(self):
+        buildings=[p['building'] for p in self.s['parcels'] if p.get('building')]
+        self.s['stats'].update(buildings=sum(b['status']!='planned' for b in buildings),
+            plannedBuildings=sum(b['status']=='planned' for b in buildings),
+            construction=sum(b['status']=='construction' for b in buildings))
+
     def complete_projects(self):
-        for p in self.s['parcels']:
-            b=p.get('building')
-            if b:
-                b['age']+=1
-                if b['status']!='construction' and b.get('lastRenovated')!=self.s['month']:
-                    b['condition']=round(max(20,b.get('condition',100)-.08),2)
-                if b['status']=='construction' and self.s['month']>=b['ready']:
-                    b['status']='active'
-                    self.event('竣工',f"{USES[b['use']]['name']}竣工，可用{'住宅' if b['use']=='residential' else '岗位空间'} {b['capacity']}",p['center'])
+        # Compatibility entry point; dated jobs never finish merely because
+        # the enclosing calendar month changed.
+        return construction.advance(self)[0]
+
+    def finish_extension(self,p):
+        b=p['building'];extra=b.pop('extensionFloors',1)
+        b['floorArea']=round(b['floorArea']/b['floors']*(b['floors']+extra),1)
+        b['floors']+=extra
+        b.update(building_style(p,b['use'],b['floors']))
+        if b.get('landmark')=='cbd_skyscraper':b['height']=round(b['floors']*3.9,1)
+        b['usableArea']=round(b['floorArea']*b['usableRatio'],1)
+        b['useAreas']={b['use']:b['floorArea']}
+        b['capacity']=max(1,int(b['floorArea']/(self.s['policy']['householdSpace'] if b['use']=='residential' else USES[b['use']]['space'])))
+        for key in ('extensionReady','extensionStartDay','extensionCompletionDay','extensionProgress'):b.pop(key,None)
+        self.event('竣工','建筑加层完工',p['center'])
 
     def available_homes(self):
         occupied=Counter(h['home'] for h in self.s['households'])
@@ -1183,8 +1216,8 @@ class City:
             p=self.parcelmap[h['home']]
             burden=p['rent']*self.s['policy']['householdSpace']/h['income']
             h['burden']=burden
-            h['unemployedMonths']=h.get('unemployedMonths',0)+1 if not h.get('job') else 0
-            h['stress']=h.get('stress',0)+1 if burden>self.s['policy']['housingBurdenThreshold'] or not p['connected'] or h.get('commuteFailed',False) or h['unemployedMonths']>=self.s['policy']['unemploymentStressMonths'] else max(0,h.get('stress',0)-1)
+            h['unemployedMonths']=h.get('unemployedMonths',0)+getattr(self,'_period_factor',1.) if not h.get('job') else 0
+            h['stress']=h.get('stress',0)+getattr(self,'_period_factor',1.) if burden>self.s['policy']['housingBurdenThreshold'] or not p['connected'] or h.get('commuteFailed',False) or h['unemployedMonths']>=self.s['policy']['unemploymentStressMonths'] else max(0,h.get('stress',0)-getattr(self,'_period_factor',1.))
             if h['stress']>=self.s['policy']['relocationStressMonths']:
                 choice=matcher.choose(h['income'],h['car'],exclude=p['id'],job=h.get('job'))
                 if choice:
@@ -1203,6 +1236,9 @@ class City:
         self.s['households']=surviving
         queue=housing.ensure_queue(self)
         arrivals=housing.migration_rate(self,sum(matcher.jobs.values()))
+        if hasattr(self,'_period_factor'):
+            credit=self.s['calendar']['migrationCredit']+arrivals*self._period_factor
+            arrivals=int(credit+1e-9);self.s['calendar']['migrationCredit']=max(0.,credit-arrivals)
         counts=Counter()
         for r in queue:counts[r['income'],r['car']]+=r['count']
         for _ in range(arrivals):
@@ -1362,6 +1398,15 @@ class City:
                 load=max(self.road_load[('am',e['id'])],self.road_load[('pm',e['id'])])/2
                 e['traffic']=load
                 e['ratio']=load/max(1,cfg['capacity']*e.get('terrainCapacity',1)*e.get('signalCapacityFactor',1)) if cfg['capacity'] else 0
+                capacity=max(1,cfg['capacity']*e.get('terrainCapacity',1)*e.get('signalCapacityFactor',1)) if cfg['capacity'] else 0
+                # Peak periods cover two hours. Off-peak is an activity sample,
+                # so it has no calibrated hourly rate or volume/capacity ratio.
+                e['trafficPeriods']={}
+                for period in ('am','off','pm'):
+                    vehicles=self.road_load[(period,e['id'])]
+                    hourly=vehicles/2 if period!='off' and capacity else None
+                    e['trafficPeriods'][period]=dict(vehicles=vehicles,hourly=hourly,
+                        ratio=hourly/capacity if hourly is not None else None)
                 before_time=e['time']
                 e['time']=e.get('freeTime',e['length']/1000/cfg['speed']*60)*(1+.6*min(5,e['ratio'])**2)
                 changes.append(abs(e['time']-before_time)/max(.001,before_time))
@@ -1420,8 +1465,9 @@ class City:
             p['priceDrivers']={k:round(v,2) for k,v in drivers.items()}
             if not p['connected']: target=35
             previous_price=p['landValue']
-            limit=p['landValue']*self.s['policy']['priceMonthlyLimit']
-            p['landValue']=round(max(15,p['landValue']+max(-limit,min(limit,(target-p['landValue'])*self.s['policy']['priceSmoothing']))),2)
+            factor=getattr(self,'_period_factor',1.)
+            limit=p['landValue']*((1+self.s['policy']['priceMonthlyLimit'])**factor-1)
+            p['landValue']=round(max(15,p['landValue']+max(-limit,min(limit,(target-p['landValue'])*(1-(1-self.s['policy']['priceSmoothing'])**factor)))),2)
             p['landChange']=round((p['landValue']/max(1,previous_price)-1)*100,2)
             b=p.get('building')
             if b:
@@ -1432,16 +1478,16 @@ class City:
                           else 1-vacancy+business_market.gap(p,b['use'])/max(1,b['capacity']))
                 base*=.85+.0015*b.get('condition',100)
                 rent_target=base*(.65+accessibility*.5+p['cluster']*.2+min(1,pressure)*.35-vacancy*.2+terrain['scenic']*.12-terrain['lowland']*.12)
-                p['rent']=round(max(2,p['rent']+(rent_target-p['rent'])*self.s['policy']['rentSmoothing']),2)
-                b['vacantMonths']=b.get('vacantMonths',0)+1 if b['status'] in ('active','vacant') and b['occupied']==0 else 0
+                p['rent']=round(max(2,p['rent']+(rent_target-p['rent'])*(1-(1-self.s['policy']['rentSmoothing'])**factor)),2)
+                b['vacantMonths']=b.get('vacantMonths',0)+factor if b['status'] in ('active','vacant') and b['occupied']==0 else 0
                 b['propertyValue']=round(p['rent']*b['floorArea']*12*.75/.06)
                 b['status']='vacant' if b.get('vacantMonths',0)>=12 else b['status']
-                if b['status']=='vacant' and p['connected'] and self.rng.random()<.15:
+                if b['status']=='vacant' and p['connected'] and self.rng.random()<1-.85**factor:
                     b['status']='active'
             else:
                 p['rent']=round(10*(.7+accessibility*.6),2)
-            p.setdefault('history',[]).append(dict(month=self.s['month'],land=p['landValue'],rent=p['rent'],jobs=jobs))
-            p['history']=p['history'][-240:]
+            p.setdefault('history',[]).append(dict(month=self.s['month'],date=construction.date_string(construction.day(self)),land=p['landValue'],rent=p['rent'],jobs=jobs))
+            p['history']=p['history'][-1040:]
             p['reason']='道路未接入' if not p['connected'] else '保护用地' if p['use']=='protected' else f"30 分钟内可达 {jobs} 个岗位；坡度 {terrain['slope']*100:.1f}%；工程成本 ×{terrain['costFactor']:.2f}；土地估值 {p['landValue']:.0f} 币/m²"
 
     def redevelop(self):
@@ -1455,19 +1501,12 @@ class City:
                 self.event('更新',f"{USES[b['use']]['name']}持续空置，进入重新开发")
 
     def develop(self):
-        # Finish already committed additions, keeping existing occupied floors.
+        # Date-less extensions can arrive from legacy tools or saves.
         for p in self.s['parcels']:
             b=p.get('building')
-            if b and b.get('extensionReady') and self.s['month']>=b['extensionReady']:
-                extra=b.pop('extensionFloors',1)
-                b['floorArea']=round(b['floorArea']/b['floors']*(b['floors']+extra),1)
-                b['floors']+=extra
-                b.update(building_style(p,b['use'],b['floors']))
-                if b.get('landmark')=='cbd_skyscraper':b['height']=round(b['floors']*3.9,1)
-                b['usableArea']=round(b['floorArea']*b['usableRatio'],1)
-                b['useAreas']={b['use']:b['floorArea']}
-                b['capacity']=max(1,int(b['floorArea']/(self.s['policy']['householdSpace'] if b['use']=='residential' else USES[b['use']]['space'])))
-                b.pop('extensionReady',None)
+            if b and b.get('extensionReady') and 'extensionCompletionDay' not in b:
+                if b['extensionReady']<=self.s['month']:self.finish_extension(p)
+                else:construction.schedule_extension(self,b,b['extensionReady']-self.s['month'])
         # Infill and vertical growth compete BEFORE greenfield proposals. Their
         # reserved capacity enters expected supply, so new projects cannot take
         # all demand first or double-book the same future residents/jobs.
@@ -1483,6 +1522,7 @@ class City:
                 extra=min(2,desired_floors(self,p,use)-b['floors'],int(gap*.6/max(1,floor_capacity)))
                 if extra<1 or b.get('occupied',0)/max(1,b['capacity'])<=.7:continue
                 b['extensionFloors']=extra;b['extensionReady']=self.s['month']+6
+                construction.schedule_extension(self,b,6)
                 b['extensionCost']=round(b['footprintArea']*extra*USES[use]['cost']*p['terrain']['costFactor'])
                 b['cost']+=b['extensionCost']
                 if use=='residential':housing_market.reserve(p,int(floor_capacity*extra),p['rent'])
@@ -1499,16 +1539,21 @@ class City:
         fare=sum(t.get('fee',0) for t in getattr(self,'trips',[]) if t.get('mode')=='public')*self.s['policy']['workingDaysPerMonth']
         tax=sum(h['income'] for h in self.s['households'])*self.s['settings']['taxRate']
         facility_maintenance=sum(f.get('maintenance',12000) for f in self.s['facilities'])
-        self.s['maintenance']=round(maintenance+station_maintenance+operation+facility_maintenance)
+        factor=getattr(self,'_period_factor',1.)
+        self.s['maintenance']=round((maintenance+station_maintenance+operation+facility_maintenance)*factor,2)
         self.s['operatingAccounts']=dict(roadMaintenance=round(maintenance),stationMaintenance=round(station_maintenance),facilityMaintenance=round(facility_maintenance),vehicleLease=round(sum(l.get('fleet',0)*TRANSIT_TYPES[l['mode']]['vehicleCost'] for l in self.s['lines'])),transitOperation=round(operation),tax=round(tax),fares=round(fare))
-        self.s['revenue']=round(fare+tax)
+        self.s['revenue']=round((fare+tax)*factor,2)
+        self.s['operatingAccounts']={k:round(v*factor,2) for k,v in self.s['operatingAccounts'].items()}
+        if 'calendar' in self.s:
+            self.s['calendar']['monthRevenue']+=self.s['revenue']
+            self.s['calendar']['monthMaintenance']+=self.s['maintenance']
         self.s['treasury']+=self.s['revenue']-self.s['maintenance']
 
     def summarize(self):
         naming.ensure_names(self)
         pop=sum(h['size'] for h in self.s['households'])
         buildings=[p for p in self.s['parcels'] if p.get('building')]
-        ready=[p for p in buildings if p['building']['status']!='construction']
+        ready=[p for p in buildings if p['building']['status'] not in ('planned','construction')]
         units=sum(p['building']['capacity'] for p in ready if p['building']['use']=='residential')
         positions=sum(p['building'].get('positions',0) for p in ready if p['building']['use']!='residential')
         facility_positions=sum(f.get('positions',0) for f in self.s['facilities'])
@@ -1524,7 +1569,7 @@ class City:
         self.s['stats']=dict(month=self.s['month'],population=pop,households=len(self.s['households']),
             jobs=positions,facilityJobs=facility_positions,employed=employed,unemployment=(1-employed/len(self.s['households']))*100 if self.s['households'] else None,
             housing=units,vacancy=(1-len(self.s['households'])/units)*100 if units else None,
-            buildings=len(buildings),construction=sum(p['building']['status']=='construction' for p in buildings),
+            buildings=sum(p['building']['status']!='planned' for p in buildings),plannedBuildings=sum(p['building']['status']=='planned' for p in buildings),construction=sum(p['building']['status']=='construction' for p in buildings),
             roadKm=sum(r['length'] for r in self.s['roads'] if group(r)=='road')/1000,
             railKm=sum(r['length'] for r in self.s['roads'] if group(r)!='road')/1000,
             landValue=float(np.median(values)) if values else None,rent=float(np.median(rents)) if rents else None,
@@ -1557,11 +1602,21 @@ class City:
         naming.ensure_names(self)
         # Household details remain authoritative server state; maps receive aggregates.
         residents=Counter()
+        commute_sums=Counter();commute_counts=Counter();commute_failures=Counter()
         for h in self.s['households']:
             residents[h['home']]+=h['size']
+            minutes=h.get('commute')
+            if isinstance(minutes,(int,float)) and not isinstance(minutes,bool) and math.isfinite(minutes) and minutes>=0:
+                commute_sums[h['home']]+=minutes
+                commute_counts[h['home']]+=1
+            if h.get('commuteFailed'):
+                commute_failures[h['home']]+=1
         parcels=copy.deepcopy(self.s['parcels'])
         for p in parcels:
             p['population']=residents[p['id']]
+            count=commute_counts[p['id']]
+            p['commuteStats']=dict(mean=commute_sums[p['id']]/count if count else None,
+                                   count=count,failed=commute_failures[p['id']])
             b=p.get('building')
             if b and 'footprintArea' not in b:
                 b['footprintArea']=round(Polygon(b['footprint']).area,1)

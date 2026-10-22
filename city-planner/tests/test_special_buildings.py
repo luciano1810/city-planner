@@ -162,10 +162,14 @@ class SpecialBuildingTests(unittest.TestCase):
         self.assertTrue(boundary.covers(Point(p['center'])))
         self.assertGreaterEqual(b['floors'], 36)
         self.assertGreater(b['height'], 120)
-        self.assertEqual(b['status'], 'construction')
+        self.assertEqual(b['status'], 'planned')
         self.assertEqual(b['positions'], 0)
         self.assertFalse(special.grow_cbd(c))
-        c.s['month'] = b['ready']
+        from city.construction import EPOCH
+        import datetime
+        date=EPOCH+datetime.timedelta(days=b['completionDay'])
+        c.s['month']=(date.year-2026)*12+date.month-1
+        c.s['simulation']['monthSeconds']=(date.day-1)*86400
         c.complete_projects()
         self.assertEqual(b['status'], 'active')
         self.assertEqual(City.restore(c.snapshot()).parcelmap[p['id']]['building']['landmark'], 'cbd_skyscraper')
@@ -199,8 +203,12 @@ class SpecialBuildingTests(unittest.TestCase):
         self.assertTrue(special.grow_cbd(c))
         self.assertEqual(p['building']['capacity'], before)
         self.assertGreater(p['building']['extensionFloors'], 0)
-        c.s['month'] = p['building']['extensionReady']
-        c.develop()
+        from city.construction import EPOCH
+        import datetime
+        date=EPOCH+datetime.timedelta(days=p['building']['extensionCompletionDay'])
+        c.s['month']=(date.year-2026)*12+date.month-1
+        c.s['simulation']['monthSeconds']=(date.day-1)*86400
+        c.complete_projects()
         self.assertGreater(p['building']['capacity'], before)
         self.assertGreater(p['building']['height'], 120)
 

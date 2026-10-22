@@ -95,11 +95,11 @@
     const fill=(points,color)=>{if(!points?.length)return;path(ctx,points,true);ctx.fillStyle=color;ctx.fill();};
     for(const p of state.parcels){
       if(!inView(p.points))continue;
-      const b=p.building;
+      const b=p.building?.status==='planned'?null:p.building;
       if(p.use==='protected'||p.openSpace==='park')fill(p.points,palette.park);
       else if(b&&['commercial','office'].includes(b.use))fill(p.points,palette.commercial);
       else if(b&&['industrial','warehouse'].includes(b.use))fill(p.points,palette.industrial);
-      if(b&&scale>=.075){fill(b.footprint,palette.building);ctx.strokeStyle=palette.buildingEdge;ctx.lineWidth=.6/scale;ctx.stroke();}
+      if(b&&scale>=.075){fill(b.footprint,b.status==='construction'?'#c7b68e':palette.building);ctx.strokeStyle=palette.buildingEdge;ctx.lineWidth=.6/scale;ctx.stroke();}
       if(b?.name&&(scale>=.85||p.id===selected)&&visible(b.center||p.center))label(b.name,b.center||p.center,11,palette.text,p.id===selected?115:16,'center',{kind:'building',id:p.id});
     }
     for(const f of state.facilities){

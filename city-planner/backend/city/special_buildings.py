@@ -296,7 +296,7 @@ def grow_cbd(city):
         region = cbd_area(district)
         towers = [p for p in city.s['parcels'] if p.get('building', {}) and p['building'].get('landmark') == 'cbd_skyscraper'
                   and region.covers(Point(p['center']))]
-        if any(p['building']['status'] == 'construction' or p['building'].get('extensionReady') for p in towers):
+        if any(p['building']['status'] in ('planned','construction') or p['building'].get('extensionReady') for p in towers):
             continue
         if len(towers) >= max(1, district.get('buildings', 6)//18):
             continue
@@ -324,6 +324,8 @@ def grow_cbd(city):
                            extensionCost=round(footprint.area*(floors-old['floors'])*USES['office']['cost']),
                            landmark='cbd_skyscraper', towerVariant=rng.randrange(3), targetFloors=floors)
                 old['cost'] += old['extensionCost']
+                from .construction import schedule_extension
+                schedule_extension(city,old,12)
             else:
                 area = round(footprint.area*floors, 1)
                 b = dict(id=city.uid('b'), use='office', floors=floors, floorArea=area, footprintArea=round(footprint.area, 1),
@@ -333,8 +335,10 @@ def grow_cbd(city):
                          landmark='cbd_skyscraper', towerVariant=rng.randrange(3), **building_style(p, 'office', floors))
                 b.update(height=round(floors*3.9, 1), usableArea=round(area*b['usableRatio'], 1), useAreas={'office': area})
                 p['building'] = b
+                from .construction import schedule
+                schedule(city,b)
             p['reason'] = 'CBD 自动地标开发：商务楼群内生成摩天楼'
-            city.event('建设', 'CBD 摩天楼开工，规划 '+str(floors)+' 层', p['center'])
+            city.event('建设', 'CBD 摩天楼已列入施工计划，规划 '+str(floors)+' 层', p['center'])
             gap -= extra_capacity
             made = True
             break
@@ -344,7 +348,7 @@ def grow_cbd(city):
 def grow_parking(city):
     if not city.s['settings'].get('autoGrow', True) or city.s['settings']['growth'] <= 0:
         return False
-    built = [p for p in city.s['parcels'] if p.get('building') and p['building']['status'] != 'construction']
+    built = [p for p in city.s['parcels'] if p.get('building') and p['building']['status'] not in ('planned','construction')]
     existing = [f for f in city.s['facilities'] if f['kind'] in PARKING]
     if len(built) < 6 or len(existing) >= max(1, math.ceil(len(built)/16)):
         return False

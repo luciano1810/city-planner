@@ -95,7 +95,7 @@ def neighbourhood_infill(city, built):
     for q in built:
         if not q.get('connected') or q['building']['use'] not in ('residential','commercial','office'):continue
         paths,_=shortest_paths(city.graphs['walk'],q['id'],weight=local_cost)
-        strength=.4 if q['building']['status']=='construction' else 1
+        strength=.4 if q['building']['status'] in ('planned','construction') else 1
         for pid,minutes in paths.items():
             if pid==q['id'] or pid not in city.parcelmap:continue
             p=city.parcelmap[pid]
@@ -114,7 +114,7 @@ def center_radius(city, center, built, distances):
     """Expand with completed, reachable urban land near this particular core."""
     policy=city.s['policy'];base=policy['businessCoreRadius']
     maximum=max(base,policy['businessCoreMaximumRadius'])
-    area=sum(p['area'] for p in built if p['building']['status']!='construction'
+    area=sum(p['area'] for p in built if p['building']['status'] not in ('planned','construction')
              and p['building']['use'] in ('residential','commercial','office')
              and math.dist(p['center'],center['point'])<=maximum
              and distances.get(p['id'],math.inf)*policy['walkingMetersPerMinute']<=maximum*2)
@@ -177,7 +177,7 @@ def update_location_context(city):
         for q in neighbours:
             if q['id']==p['id']:continue
             b=q['building'];weight=math.exp(-math.dist(p['center'],q['center'])/city.s['policy']['neighbourhoodAffinityRadius'])
-            weights[b['use']]+=weight*(.4 if b['status']=='construction' else 1)*min(1,b.get('footprintArea',500)/500)
+            weights[b['use']]+=weight*(.4 if b['status'] in ('planned','construction') else 1)*min(1,b.get('footprintArea',500)/500)
         p['useAffinity']={use:1-math.exp(-value/3) for use,value in weights.items()}
         key,d=addresses.get(p['id'],(None,0))
         distances=[q-d for q in street_faces[key] if abs(q-d)>.1]
@@ -260,7 +260,7 @@ def planned_supply(city, *, housing_credit=1.):
         if p['id'] in replaced:continue
         b=p.get('building')
         if not b:continue
-        supply[b['use']]+=b['capacity']*(housing_credit if b['use']=='residential' and b['status']=='construction' else 1)
+        supply[b['use']]+=b['capacity']*(housing_credit if b['use']=='residential' and b['status'] in ('planned','construction') else 1)
         if b.get('extensionReady'):
             from .parameters import USES
             space=city.s['policy']['householdSpace'] if b['use']=='residential' else USES[b['use']]['space']
@@ -293,8 +293,8 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
                 '更新项目已预留此地块' if locked(city,p) else
                 '坡度超过 45%，保留为不可开发陡坡' if p['terrain'].get('maxSlope',p['terrain']['slope'])>.45 else
                 '发展速度为零，已停止新开发' if city.s['settings']['growth']<=0 else
-                '每月新项目名额为零' if city.s['settings']['maxProjects']<=0 else None)
-        p['developmentReason']=reason or '等待本月开发评估'
+                '新项目名额为零' if city.s['settings']['maxProjects']<=0 else None)
+        p['developmentReason']=reason or '等待本周开发评估'
         if not reason:candidates.append(p)
     startup=sum(h['size'] for h in city.s['households'])<100
 
@@ -336,6 +336,9 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
             ranked[use].append((score,p));eligible[p['id']].add(use)
     for rows in ranked.values():rows.sort(key=lambda row:(-row[0],row[1]['id']))
     used=set();max_projects=int(city.s['settings']['maxProjects']*city.s['settings']['growth']);started=0
+    if hasattr(city,'_period_factor'):
+        credit=city.s['calendar']['projectCredit']+max_projects*city._period_factor
+        max_projects=int(credit+1e-9);city.s['calendar']['projectCredit']=max(0.,credit-max_projects)
     # Rejected proposals do not consume construction slots. Each parcel is tried once.
     for attempt in range(len(candidates)):
         if started>=max_projects:break
@@ -430,6 +433,8 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
             footprint=[list(q) for q in footprint.exterior.coords],center=list(footprint.centroid.coords[0]),capacity=cap,status='construction',ready=city.s['month']+policy['constructionBaseMonths']+floors//2,
             age=0,occupied=0,positions=0,employees=0,cost=round(cost),vacantMonths=0,**style(p,use,floors))
         b=p['building']
+        from .construction import schedule, day
+        schedule(city,b,start=int(day(city))+1+started%7)
         if len(footprint.exterior.coords)>7 and use in ('residential','commercial'):b['form']='courtyard'
         b['usableArea']=round(floor_area*b['usableRatio'],1);b['useAreas']={use:round(floor_area,1)}
         started+=1
@@ -447,7 +452,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
         if not options:
             p['developmentReason']='；'.join(sorted(exclusions[p['id']])) or '规划用途没有可行的开发方案'
         elif any(needed(use,p) for use in options):
-            p['developmentReason']=f'本月新建名额已用尽（{started}/{max_projects}），等待下月选址'
+            p['developmentReason']=f'本周新建名额已用尽（{started}/{max_projects}），等待下周选址'
         elif options=={'residential'}:
             p['developmentReason']=f"本地通勤范围内住房缺口 {housing_market.gap(p):.0f} 户；可负担空房与已承诺住房已按就业地点抵扣，等待局部需求"
         else:
@@ -455,7 +460,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
             p['developmentReason']=f"需求未达开工门槛（缺口至少 {policy['minimumProjectUnits']} 或占目标 {policy['minimumDevelopmentDemand']:.0%}）；"+'；'.join(rows)
             if exclusions[p['id']]:p['developmentReason']+='；'+'；'.join(sorted(exclusions[p['id']]))
     city.s['housingDemand']=dict(waiting=city.s['pendingHousing'],target=round(targets['residential'],1),
-        completed=sum(p['building']['capacity'] for p in city.s['parcels'] if p.get('building') and p['building']['use']=='residential' and p['building']['status']!='construction'),
+        completed=sum(p['building']['capacity'] for p in city.s['parcels'] if p.get('building') and p['building']['use']=='residential' and p['building']['status'] not in ('planned','construction')),
         planned=round(full_supply['residential'],1),effective=round(supply['residential'],1),
         constructionCredit=1.,month=city.s['month'],started=started,projectLimit=max_projects,**housing_market.summary())
     for p in city.s['parcels']:

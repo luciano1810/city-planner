@@ -178,7 +178,7 @@ def future_homes(city, exclude_project=None):
         if p['id'] in replaced or not p.get('connected') or not b or b['use'] != 'residential':
             continue
         rows.append(dict(access=p['id'], units=max(0, b['capacity']-occupied[p['id']]), rent=p['rent'],
-                         future=b['status'] == 'construction'))
+                         future=b['status'] in ('planned','construction')))
         if b.get('extensionReady'):
             rows.append(dict(access=p['id'], units=int(b['footprintArea']*b.get('extensionFloors', 1)/city.s['policy']['householdSpace']),
                              rent=p['rent'], future=True))
@@ -195,7 +195,7 @@ class HousingMarket:
         # households or create workers until those workplaces actually open.
         from .business import BusinessMarket, workplace_supply
         future = sorted((p for p in city.s['parcels'] if p.get('connected') and p.get('building')
-                         and p['building']['use'] != 'residential' and p['building']['status'] == 'construction'), key=lambda p: p['id'])
+                         and p['building']['use'] != 'residential' and p['building']['status'] in ('planned','construction')), key=lambda p: p['id'])
         if future:
             supply=workplace_supply(city,planned=False)
             supply.extend(dict(parcel=p,use=p['building']['use'],capacity=p['building']['capacity'],future=True) for p in future)

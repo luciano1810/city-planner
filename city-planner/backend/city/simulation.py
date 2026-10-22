@@ -29,17 +29,107 @@ def validate(state, month):
         raise ValueError('无效的模拟速度')
 
 
-def shift_month(city, previous_month):
-    """Legacy month commands use the same calendar and retain the time of day."""
-    state = city.s['simulation']
-    before = state['monthSeconds']
-    day = min(int(before // DAY), month_days(previous_month+1)-1)
-    after = day*DAY + before % DAY
-    elapsed = month_days(previous_month)*DAY + after-before
-    state['monthSeconds'] = after
-    state['elapsedSeconds'] += elapsed
-    state['sampled'] = True
-    # Discrete monthly steps do not change the viewing illumination.
+def ensure_calendar(city):
+    from .construction import day
+    now = int(day(city))
+    city.s.setdefault('calendar', dict(nextWeekDay=now+7, lastWeekDay=now,
+        projectCredit=0., migrationCredit=0., monthRevenue=0., monthMaintenance=0.))
+    city.s.setdefault('weeklyHistory', [])
+    state = city.s['calendar']
+    if not isinstance(state,dict):raise ValueError('无效的周结算状态')
+    for key in ('projectCredit','migrationCredit','monthRevenue','monthMaintenance','monthMovedIn','monthMovedOut','monthRelocated'):
+        state.setdefault(key, 0.)
+        if type(state[key]) not in (int,float) or not math.isfinite(state[key]) or state[key]<0:
+            raise ValueError('无效的周结算余额')
+    for key in ('nextWeekDay','lastWeekDay'):
+        if type(state.get(key)) is not int or state[key] < 0:
+            raise ValueError('无效的周结算日期')
+    if state['nextWeekDay'] <= state['lastWeekDay']:
+        raise ValueError('无效的周结算间隔')
+    return state
+
+
+def period_factor(start, end):
+    """Convert actual days to monthly rate fractions, including leap months."""
+    import datetime
+    from .construction import EPOCH
+    return sum(1 / calendar.monthrange((EPOCH+datetime.timedelta(days=d)).year,
+               (EPOCH+datetime.timedelta(days=d)).month)[1] for d in range(start, end))
+
+
+def daily_boundary(city, month_changed=False):
+    from . import construction, renewal
+    ledger=ensure_calendar(city)
+    today=int(construction.day(city))
+    _,network_changed=construction.advance(city)
+    if network_changed:
+        from .urban import update_entrances
+        update_entrances(city)
+        city.build_graphs()
+        city.live_traffic=None
+    before_moves={key:city.s[key] for key in ('movedIn','movedOut','relocated')}
+    renewal.advance(city)
+    for key,previous in before_moves.items():
+        ledger['month'+key[0].upper()+key[1:]]+=city.s[key]-previous
+    weekly = today >= ledger['nextWeekDay']
+    if weekly:
+        factor=period_factor(ledger['lastWeekDay'], today)
+        ledger['lastWeekDay']=today
+        ledger['nextWeekDay']=today+7
+        city.settle_week(factor)
+    else:
+        city.refresh_construction_stats()
+        city.s['revision']+=1
+        city.undo=[];city.redo=[]
+    if month_changed:
+        city.close_month()
+    return int(weekly)
+
+
+def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
+    """Process every midnight, dated construction event and weekly close."""
+    from .construction import day
+    ensure_calendar(city)
+    state=city.s['simulation'];remaining=float(seconds);weeks=0;days=0
+    while remaining > 1e-9:
+        duration=month_days(city.s['month'])*DAY
+        midnight=(int(state['monthSeconds']//DAY)+1)*DAY
+        chunk=min(remaining,midnight-state['monthSeconds'])
+        state['monthSeconds']+=chunk
+        state['elapsedSeconds']+=chunk
+        city.s['sceneTimeSeconds']+=daylight_seconds*chunk/seconds
+        remaining=max(0.,remaining-chunk)
+        if state['monthSeconds'] >= midnight-1e-8:
+            month_changed=state['monthSeconds'] >= duration-1e-8
+            if month_changed:
+                state['monthSeconds']=0.
+                city.s['month']+=1
+            if settlement is not None and int(day(city)) >= city.s['calendar']['nextWeekDay']:
+                settlement(city)
+                weeks+=1
+            else:
+                weeks+=daily_boundary(city,month_changed)
+            days+=1
+            state=city.s['simulation']
+    if not seconds:city.s['sceneTimeSeconds']+=daylight_seconds
+    return days,weeks
+
+
+def step_months(city, months):
+    """A month button fast-forwards dated events; it never invokes a batch build."""
+    import datetime
+    from .construction import EPOCH, day
+    now=EPOCH+datetime.timedelta(days=day(city))
+    index=city.s['month']+months
+    target=datetime.date(2026+index//12,index%12+1,min(now.day,month_days(index)))
+    seconds=((target-EPOCH).days-int(day(city)))*DAY
+    before=(copy.deepcopy(city.s),city.rng.getstate(),city.runtime(),copy.deepcopy(city.undo),copy.deepcopy(city.redo))
+    try:
+        advance_calendar(city,seconds)
+    except Exception:
+        city.s,rng,runtime,city.undo,city.redo=before
+        city.rng.setstate(rng);city.rebuild();city.restore_runtime(runtime)
+        raise
 
 
 def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_seconds=None, *, settlement=None):
@@ -56,32 +146,19 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
         daylight_seconds = seconds if rate < DAY else seconds / rate
     if type(daylight_seconds) not in (int, float) or not math.isfinite(daylight_seconds) or not 0 <= daylight_seconds <= MAX_STEP:
         raise ValueError('无效的光照推进时长')
-    crosses_month = state['monthSeconds']+seconds >= month_days(city.s['month'])*DAY
+    crosses_day = seconds > 0 and int((state['monthSeconds']+seconds)//DAY) > int(state['monthSeconds']//DAY)
     before = (copy.deepcopy(city.s), city.rng.getstate(), city.runtime(),
-              copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_month else None
+              copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_day else None
     initial_month = city.s['month']
     previous_live = city.live_traffic
-    prepared_view = None
     def road_signature():
         return [(r['id'],r['kind'],r['level'],r['oneway'],r['points']) for r in city.s['roads']]
-    previous_roads = copy.deepcopy(road_signature()) if crosses_month and previous_live else None
+    previous_roads = copy.deepcopy(road_signature()) if crosses_day and previous_live else None
     try:
         if speed is not None:
             state['speed'] = speed
-        remaining = float(seconds)
-        while remaining > 1e-9:
-            duration = month_days(city.s['month'])*DAY
-            chunk = min(remaining, duration-state['monthSeconds'])
-            state['monthSeconds'] += chunk
-            state['elapsedSeconds'] += chunk
-            city.s['sceneTimeSeconds'] += daylight_seconds * chunk / seconds
-            remaining = max(0., remaining-chunk)
-            if state['monthSeconds'] >= duration-1e-8:
-                state['monthSeconds'] = 0.
-                if settlement is None:city.step(1, advance_clock=False)
-                else:prepared_view=settlement(city)
-                state = city.s['simulation']
-        if not seconds:city.s['sceneTimeSeconds']+=daylight_seconds
+        days,weeks=advance_calendar(city,seconds,daylight_seconds,settlement)
+        state=city.s['simulation']
         target = state['elapsedSeconds']
         live = city.live_traffic
         if live is None and previous_live and previous_roads == road_signature():
@@ -109,18 +186,9 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
         if seconds:
             state['sampled'] = sampled
         result = dict(simulation=copy.deepcopy(state), sceneTimeSeconds=city.s['sceneTimeSeconds'],
-                      month=city.s['month'], monthsAdvanced=city.s['month']-initial_month,
+                      month=city.s['month'], monthsAdvanced=city.s['month']-initial_month, daysAdvanced=days, weeksAdvanced=weeks,
                       traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
-        if result['monthsAdvanced']:
-            if prepared_view is None:result['city']=city.view()
-            else:
-                # The heavy map/statistics projection is already prepared in
-                # the worker. Rebase only fields changed by the live clock.
-                prepared_view.update(simulation=copy.deepcopy(state),sceneTimeSeconds=city.s['sceneTimeSeconds'],
-                    month=city.s['month'],name=city.s['name'],liveTraffic=result['traffic'],
-                    canUndo=bool(city.undo),canRedo=bool(city.redo))
-                if 'saveGroup' in city.s:prepared_view['saveGroup']=city.s['saveGroup']
-                result['city']=prepared_view
+        if days:result['city']=city.view()
         return result
     except Exception:
         if before:
