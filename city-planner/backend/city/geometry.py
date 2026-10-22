@@ -23,7 +23,7 @@ def stable_id(prefix, text):
 
 
 def group(road):
-    return 'road' if road['kind'] in ROAD_KINDS else road['kind']
+    return 'road' if road['kind'] in ROAD_KINDS else 'rail' if road['kind'] in ('train', 'metro') else road['kind']
 
 
 def curve_points(controls, curved=True, spacing=8):
@@ -339,7 +339,7 @@ def make_network(roads, stops, terrain, parcels=()):
                 connect(road['id'], a, other['id'], b, point)
     stop_projection = {}
     for stop in stops:
-        compatible = [r for r in roads if r['kind'] in FRONTAGE_ROADS] if stop['mode']=='bus' else [r for r in roads if r['kind']==stop['mode']]
+        compatible = [r for r in roads if r['kind'] in FRONTAGE_ROADS] if stop['mode']=='bus' else [r for r in roads if group(r)==group({'kind':stop['mode']})]
         if not compatible:
             stop_projection[stop['id']] = None
             continue

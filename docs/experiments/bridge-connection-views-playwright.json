@@ -1,0 +1,71 @@
+[
+  {
+    "scenario": "bridge-to-ground",
+    "connections": [
+      {
+        "road": "r-1",
+        "point": [
+          2100,
+          2000
+        ]
+      }
+    ],
+    "crossings": [
+      {
+        "id": 0,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 8,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 1,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 4,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 9,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 10,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 11,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 2,
+        "from": 0,
+        "to": 1
+      }
+    ],
+    "webgl": true,
+    "stats": {
+      "engine": "WebGL / Three.js r180",
+      "ambientOcclusion": true,
+      "vehicleAtlas": true,
+      "pedestrianAtlas": true,
+      "pedestrians": 68,
+      "calls": 53,
+      "triangles": 55094,
+      "meshes": 9,
+      "windows": 0,
+      "failure": null
+    },
+    "vehicles": 15,
+    "errors": []
+  }
+]

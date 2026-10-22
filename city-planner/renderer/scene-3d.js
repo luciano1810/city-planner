@@ -346,7 +346,7 @@
     const radius=Math.min(1800,Math.max(width/sx,height/sy)*.75+100);Object.assign(sun.shadow.camera,{left:-radius,right:radius,top:radius,bottom:-radius,near:1,far:2500});sun.shadow.camera.updateProjectionMatrix();
     clear(carsGroup);const batch=new Batch(),near=p=>p[0]>region[0]-20&&p[0]<region[2]+20&&p[1]>region[1]-20&&p[1]<region[3]+20;
     const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes);
-    for(const v of traffic?.vehicles||[])if(!root.RoadRenderer.upperVehicle(v,layout)&&!root.RoadRenderer.undergroundCovered(v,layout,state.meta.roadTypes)&&near(v.point))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
+    for(const v of traffic?.vehicles||[])if(!root.RoadRenderer.upperVehicle(v,layout)&&near(v.point))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
     let pedestrians=0;for(const p of traffic?.pedestrians||[])if(near(p.point)){root.CityPedestrians.build3D(batch,p,{solid,cloth});pedestrians++;}
     batch.flush(carsGroup);
     renderer.render(scene,camera);const beautyCalls=renderer.info.render.calls,beautyTriangles=renderer.info.render.triangles;
@@ -363,7 +363,7 @@
     if(!renderer)return;
     const layout=root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes),batch=new Batch();
     clear(carsGroup);
-    for(const v of traffic?.vehicles||[])if(root.RoadRenderer.upperVehicle(v,layout)&&!root.RoadRenderer.undergroundCovered(v,layout,state.meta.roadTypes))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
+    for(const v of traffic?.vehicles||[])if(root.RoadRenderer.upperVehicle(v,layout))car(batch,{...v,z:root.RoadRenderer.vehicleHeight(v,layout)});
     batch.flush(carsGroup);
     const staticVisible=staticGroup.visible,groundVisible=ground.visible;
     staticGroup.visible=false;ground.visible=false;

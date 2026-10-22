@@ -1,0 +1,135 @@
+[
+  {
+    "scenario": "bridge-to-ground",
+    "connections": [
+      {
+        "road": "r-1",
+        "point": [
+          2100,
+          2000
+        ]
+      }
+    ],
+    "crossings": [
+      {
+        "id": 0,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 8,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 1,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 2,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 9,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 10,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 11,
+        "from": 1,
+        "to": 0
+      }
+    ],
+    "webgl": true,
+    "stats": {
+      "engine": "WebGL / Three.js r180",
+      "ambientOcclusion": true,
+      "vehicleAtlas": true,
+      "pedestrianAtlas": true,
+      "pedestrians": 68,
+      "calls": 55,
+      "triangles": 55464,
+      "meshes": 9,
+      "windows": 0,
+      "failure": null
+    },
+    "vehicles": 15,
+    "errors": []
+  },
+  {
+    "scenario": "ground-to-bridge",
+    "connections": [
+      {
+        "road": "r-1",
+        "point": [
+          2100,
+          2000
+        ]
+      }
+    ],
+    "crossings": [
+      {
+        "id": 0,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 4,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 1,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 2,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 3,
+        "from": 1,
+        "to": 0
+      },
+      {
+        "id": 5,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 6,
+        "from": 0,
+        "to": 1
+      },
+      {
+        "id": 7,
+        "from": 0,
+        "to": 1
+      }
+    ],
+    "webgl": true,
+    "stats": {
+      "engine": "WebGL / Three.js r180",
+      "ambientOcclusion": true,
+      "vehicleAtlas": true,
+      "pedestrianAtlas": true,
+      "pedestrians": 36,
+      "calls": 49,
+      "triangles": 29304,
+      "meshes": 9,
+      "windows": 0,
+      "failure": null
+    },
+    "vehicles": 10,
+    "errors": []
+  }
+]

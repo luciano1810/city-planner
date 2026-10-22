@@ -163,7 +163,7 @@
   // Distances and projection are measured in CSS pixels, including tilted maps.
   function roadSnap(point,roads,junctions,{kind='street',level=0,sx=1,sy=sx,radius=14,exclude=null}={}){
     if(!point||!(sx>0&&sy>0))return null;
-    const family=k=>['lane','street','avenue','highway','motorway','path'].includes(k)?'road':k;
+    const family=k=>['lane','street','avenue','highway','motorway','path'].includes(k)?'road':['train','metro'].includes(k)?'rail':k;
     const eligible=roads.filter(r=>r.id!==exclude&&family(r.kind)===family(kind));
     const ids=new Set(eligible.map(r=>r.id));let best=null;
     function offer(p,type,priority,road){

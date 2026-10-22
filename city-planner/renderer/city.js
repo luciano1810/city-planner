@@ -22,7 +22,7 @@
   let currentSave=null;
   let trafficState=null,scenePreviewMinute=null;
   let mapHitLabels=[];
-  let snapTarget=null, pointerPosition=null,dragOrigin=null;
+  let snapTarget=null, pointerPosition=null;
   const snappedPoints=new WeakMap();
   function cloneDraftPoint(p){const q=p.slice();if(snappedPoints.has(p))snappedPoints.set(q,snappedPoints.get(p));return q;}
   function roadConnections(){return [draft[0],draft.at(-1)].filter(Boolean).flatMap(p=>{const r=snappedPoints.get(p);return r?[{road:r.road,point:p.slice(),...(r.junction?{junction:r.junction}:{})}]:[];});}
@@ -113,7 +113,7 @@
         <button class="city-tool" data-tool="line">按顺序选择地图站点</button>
         <p class="city-note" id="city-stop-order">尚未选择站点</p>
         <div class="city-row"><button class="city-btn primary" id="city-create-line">开通线路</button><button class="city-btn" id="city-clear-line">清空</button></div>
-        <h3>运营线路</h3><div class="city-list" id="city-line-list"></div><details><summary>铁路货运服务</summary><p class="city-note">先在铁路上建立本地货场与边界货场。客运站不能装卸货物。</p><div class="city-fields"><label>本地货场<select class="city-field" id="city-freight-start"></select></label><label>区域货场<select class="city-field" id="city-freight-end"></select></label><label>每日货列<input class="city-field" id="city-freight-trains" type="number" min="1" max="48" value="4"></label><label>每列载重 / 吨<input class="city-field" id="city-freight-tonnes" type="number" min="10" max="5000" value="500"></label></div><button class="city-btn" id="city-create-freight">开通货运服务</button><div id="city-freight-list"></div></details>
+        <p class="city-note">铁路与地铁轨道可互相吸附连接，火车与地铁线路可共用两种轨道及客运站。跨层需在吸附点选择接入。</p><h3>运营线路</h3><div class="city-list" id="city-line-list"></div><details><summary>铁路货运服务</summary><p class="city-note">先在铁路上建立本地货场与边界货场。客运站不能装卸货物。</p><div class="city-fields"><label>本地货场<select class="city-field" id="city-freight-start"></select></label><label>区域货场<select class="city-field" id="city-freight-end"></select></label><label>每日货列<input class="city-field" id="city-freight-trains" type="number" min="1" max="48" value="4"></label><label>每列载重 / 吨<input class="city-field" id="city-freight-tonnes" type="number" min="10" max="5000" value="500"></label></div><button class="city-btn" id="city-create-freight">开通货运服务</button><div id="city-freight-list"></div></details>
       </div>
       <div class="city-panel" id="city-data-panel" hidden>
         <h3>光照与材质</h3><div class="city-fields">
@@ -591,15 +591,6 @@
     if(ok){clearTimeout(previewTimer);previewTicket++;draft=[];editingRoad=null;preview=null;toolDrafts.delete(tool);}
     updateHint();workspace.draw();
   }
-  function chooseLayerConnection(point,accept,cancel=()=>{}){
-    if(!snappedPoints.has(point)){accept(point);return;}
-    const contact=snappedPoints.get(point),target=state.roads.find(r=>r.id===contact.road);
-    let decided=false;
-    dialog(`<h2>选择跨层道路关系</h2><p>与${escape(target?.name||'目标道路')}平行修建，或在此接入。平行方向接入会生成平滑分叉，橙色预览显示实际路线。</p><div class="city-row"><button class="city-btn" id="road-keep-parallel">平行修建</button><button class="city-btn primary" id="road-connect-level">接入普通路</button></div>`);
-    el('city-dialog').addEventListener('close',()=>{if(!decided)cancel();},{once:true});
-    el('road-keep-parallel').onclick=()=>{decided=true;snappedPoints.delete(point);el('city-dialog').close();accept(point);status('保持分层独立，不建立接入口');};
-    el('road-connect-level').onclick=()=>{decided=true;el('city-dialog').close();accept(point);};
-  }
   function handlePoint(point,event=null){
     if(specialTools.includes(tool)){const cmd=specialCommand(point);command(cmd).then(ok=>{if(ok){specialPreview=null;scheduleSpecialPreview();}});return;}
     if(tool==='renewal'){const p=pick(point,'parcel');if(p){renewalSelection=renewalSelection.includes(p.id)?renewalSelection.filter(id=>id!==p.id):[...renewalSelection,p.id];renewalPreview=null;renderRenewals();workspace.draw();}return;}
@@ -608,19 +599,24 @@
       if(event){
         const g=workspace.geometry,t=workspace.terrain;
         const index=window.CityGeometry.roadControlAt(draft,point,t.width*g.scale/state.meta.width,t.height*g.scale/state.meta.height);
-        if(index>=0){dragOrigin=draft[index];dragControl=index;canvas.setPointerCapture(event.pointerId);return;}
+        if(index>=0){dragControl=index;canvas.setPointerCapture(event.pointerId);return;}
       }
       point=magneticPoint(point);hover=point;
       const replace=event?0:Number(el('city-coordinate-index').value);
       const accept=p=>{if(replace>0&&replace<=draft.length)draft[replace-1]=p;else draft.push(p);schedulePreview();updateHint();workspace.draw();};
-      chooseLayerConnection(point,accept);
+      if(snappedPoints.has(point)){
+        const selectedPoint=point,contact=snappedPoints.get(point),target=state.roads.find(r=>r.id===contact.road);
+        dialog(`<h2>选择跨层道路关系</h2><p>与${escape(target?.name||'目标道路')}平行修建，或在此接入。平行方向接入会生成平滑分叉，橙色预览显示实际路线。</p><div class="city-row"><button class="city-btn" id="road-keep-parallel">平行修建</button><button class="city-btn primary" id="road-connect-level">接入普通路</button></div>`);
+        el('road-keep-parallel').onclick=()=>{snappedPoints.delete(selectedPoint);el('city-dialog').close();accept(selectedPoint);status('保持分层独立，不建立接入口');};
+        el('road-connect-level').onclick=()=>{el('city-dialog').close();accept(selectedPoint);};
+      }else accept(point);
       return;
     }
     if(tool==='stop'){command({type:'stop',mode:el('city-mode').value,name:el('city-stop-name').value,point,role:el('city-mode').value==='train'?el('city-station-role').value:'passenger',external:el('city-mode').value==='train'&&el('city-station-external').checked});return;}
     if(['school','park','plaza','clinic'].includes(tool)){command({type:'facility',kind:tool,point});return;}
     if(tool==='line'){
       const stop=pick(point,'stop');
-      if(stop&&stop.mode===el('city-mode').value&&!lineStops.includes(stop.id)){lineStops.push(stop.id);updateHint();workspace.draw();}
+      if(stop&&(stop.mode===el('city-mode').value||['train','metro'].includes(stop.mode)&&['train','metro'].includes(el('city-mode').value))&&!lineStops.includes(stop.id)){lineStops.push(stop.id);updateHint();workspace.draw();}
       else status('请选择兼容且未重复的站点');
       return;
     }
@@ -654,12 +650,7 @@
     if(draft.length||state.meta.roadTypes[tool])workspace.draw();
   });
   canvas.addEventListener('pointerleave',()=>{pointerPosition=null;snapTarget=null;hover=null;workspace.draw();});
-  canvas.addEventListener('pointerup',()=>{
-    if(dragControl===null)return;
-    const index=dragControl,origin=dragOrigin,point=draft[index];dragControl=null;dragOrigin=null;
-    const apply=p=>{draft[index]=p;schedulePreview();updateHint();workspace.draw();};
-    chooseLayerConnection(point,apply,()=>apply(origin));
-  });
+  canvas.addEventListener('pointerup',()=>{dragControl=null;});
   canvas.addEventListener('pointercancel',()=>{dragControl=null;});
   canvas.addEventListener('dblclick',event=>{
     if(active&&state?.meta.roadTypes[tool]){event.preventDefault();finish();}

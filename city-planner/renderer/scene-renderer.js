@@ -371,13 +371,14 @@
     }
     for(const pass of ['sidewalk','curb','surface'])for(const r of roads){
       const cfg=types[r.kind],motor=motorKinds.has(r.kind),rail=!motor&&r.kind!=='path',walk=cfg.walk&&r.level===0&&motor;
+      if(root.RailRenderer?.isRail(r))continue;
       if(pass==='sidewalk'&&!walk)continue;
       ctx.save();
       for(const cut of r.mouthClips||[]){
         ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(...cut[0]);for(const p of cut.slice(1))ctx.lineTo(...p);ctx.closePath();ctx.clip('evenodd');
       }
       ctx.lineCap=r.openStart||r.openEnd?'butt':'round';
-      path(ctx,r.points,false);ctx.setLineDash(level<0&&pass==='curb'?[5,4]:[]);
+      path(ctx,r.points,false);ctx.setLineDash(level<0?[7/scale,4/scale]:[]);
       if(pass==='sidewalk'){
         ctx.lineWidth=cfg.width+(r.kind==='avenue'?9:6);ctx.strokeStyle=material(ctx,'paving',seed(r.id));
       }else if(pass==='curb'){
@@ -477,7 +478,7 @@
         }
       }
     }
-    for(const car of traffic?.vehicles||[])if(visible(car.point)&&!root.RoadRenderer.undergroundCovered(car,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes),state.meta.roadTypes)){
+    for(const car of traffic?.vehicles||[])if(visible(car.point)){
       ctx.save();const z=root.RoadRenderer.vehicleHeight(car,root.RoadRenderer.connections(state.roads,state.network,state.meta.roadTypes));ctx.translate(car.point[0],car.point[1]-.28*z);ctx.rotate(car.heading);
       const style=variation.vehicle(car.id),front=style.length*style.scale*.46,side=style.width*style.scale*.34;
       for(const y of [-side,side]){

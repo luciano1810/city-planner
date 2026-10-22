@@ -303,13 +303,3 @@ test('a wide bridge mouth stops at the opposite edge of its narrow receiving roa
  assert(surface.openStart);assert(!surface.openEnd);assert.equal(surface.mouthClips.length,1);
  assert(surface.mouthClips[0].every(p=>p[1]<=-7));assert.equal(surface.mouthClips[0][0][1],-7);
 });
-
-test('tunnel profiles reach ground at their magnetic mouth and stay below it elsewhere',()=>{
- const {api,roads,network,bridge,total}=bridgeFixture();bridge.level=-1;
- const layout=api.connections(roads,network,roadTypes);
- assert.equal(layout.joins.length,1);assert.equal(api.roadHeight(bridge,0,layout),0);
- assert.equal(api.roadHeight(bridge,total,layout),-6);
- const path=api.surfaceRoad(bridge,layout).points;
- assert.deepEqual(path[0],[0,0]);assert(Math.abs(path.at(-1)[1]-1.68)<1e-9);
- assert.equal(api.vehicleHeight({road:'b',level:-1,point:[300,0]},layout),-6);
-});

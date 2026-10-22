@@ -51,7 +51,7 @@ def check_roads(city, occupied, kind, level, road_id=None):
         hit = occupied.intersection(site)
         if hit.area <= .1:
             continue
-        if f['kind'] == 'train_station' and kind == 'train' and level == 0:
+        if f['kind'] == 'train_station' and kind in ('train','metro') and level == 0:
             if Polygon(f['railCorridor']).buffer(.2).covers(hit):
                 continue
         raise ValueError('路线与' + CATALOG[f['kind']]['name'] + '预留用地冲突')
@@ -80,7 +80,7 @@ def propose(city, cmd):
                   height={'airport': 32, 'port': 28, 'train_station': 16}[kind]*scale)
     bounds = (-w/2, -d/2, w/2, d/2)
     if kind == 'train_station':
-        rails = [r for r in city.s['roads'] if r['kind'] == 'train' and r['level'] == 0]
+        rails = [r for r in city.s['roads'] if r['kind'] in ('train','metro') and r['level'] == 0]
         if not rails:
             raise ValueError('请先铺设地面铁路，再在铁路旁放置火车站')
         rail = min(rails, key=lambda r: LineString(r['points']).distance(Point(origin)))
@@ -126,7 +126,7 @@ def propose(city, cmd):
         hit = shape.intersection(LineString(road['points']).buffer(ROAD_TYPES[road['kind']]['width']/2+1))
         if hit.area <= .1:
             continue
-        if kind == 'train_station' and road['kind'] == 'train' and road['level'] == 0 and Polygon(result['railCorridor']).covers(hit):
+        if kind == 'train_station' and road['kind'] in ('train','metro') and road['level'] == 0 and Polygon(result['railCorridor']).covers(hit):
             continue
         raise ValueError('建筑与已有道路或轨道冲突')
     for f in city.s['facilities']:

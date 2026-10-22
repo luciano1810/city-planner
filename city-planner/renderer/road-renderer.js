@@ -52,7 +52,7 @@
     const joins=[];
     for(const [id,arms] of incident){
       if(!arms.some(a=>a.level===0)||!arms.some(a=>a.level!==0))continue;
-      const point=network.nodes[id],extent=Math.min(80,Math.max(...arms.map(a=>approachClearance(a,{point,approaches:arms},roadMap)))+12);
+      const point=network.nodes[id],extent=Math.min(60,Math.max(...arms.map(a=>clearDistance(a,arms)))+12);
       joins.push({id,point,approaches:arms,extent,level:0});
     }
     const ramps=new Map();
@@ -61,6 +61,21 @@
       if(a.distance>.1&&a.distance<length-.1)continue;
       if(!ramps.has(r.id))ramps.set(r.id,[]);
       ramps.get(r.id).push({distance:a.distance,flat:j.extent+2});
+    }
+    // Rail ramps follow confirmed graph contacts, never a visual crossing.
+    const railNodes=new Map();
+    for(const e of network.edges||[])if(['train','metro'].includes(e.kind))for(const node of [e.a,e.b]){
+      if(!railNodes.has(node))railNodes.set(node,new Set());railNodes.get(node).add(e.road);
+    }
+    for(const r of roads)if(['train','metro'].includes(r.kind)&&r.level!==0){
+      const length=measure(r.points).length;
+      for(const e of network.edges||[])if(e.road===r.id)for(const [node,d] of [[e.a,e.startDistance],[e.b,e.endDistance]]){
+        if(d>.1&&d<length-.1)continue;
+        if([...railNodes.get(node)||[]].some(id=>roadMap.get(id)?.level===0)){
+          if(!ramps.has(r.id))ramps.set(r.id,[]);
+          ramps.get(r.id).push({distance:d,flat:0});
+        }
+      }
     }
     const result={joins,ramps,roadMap,surfaces:new Map()};connectionPlans.set(network,result);return result;
   }
@@ -79,7 +94,7 @@
     for(const ramp of layout.ramps.get(road.id)||[]){
       const t=Math.max(0,Math.min(1,(Math.abs(distance-ramp.distance)-ramp.flat)/90));
       height=Math.min(height,6*t*t*(3-2*t));
-    }return height?height*road.level:0;
+    }return height*road.level;
   }
   function projectPoint(point,road,layout){
     return [point[0],point[1]-.28*roadHeight(road,nearestDistance(road.points,point),layout)];
@@ -123,19 +138,6 @@
     }
     return road?roadHeight(road,nearestDistance(road.points,vehicle.point),layout):6*vehicle.level;
   }
-  function undergroundCovered(vehicle,layout,types){
-    if(vehicle.level>=0||vehicleHeight(vehicle,layout)>-.5)return false;
-    const point=[vehicle.point[0],vehicle.point[1]-.28*vehicleHeight(vehicle,layout)];
-    return [...layout.roadMap.values()].some(r=>r.level===0&&Math.hypot(...sample(r.points,nearestDistance(r.points,point)).point.map((v,i)=>v-point[i]))<types[r.kind].width/2+3);
-  }
-  function clipUnderground(ctx,roads,types,inView){
-    for(const r of roads)if(r.level===0&&inView(r.points)){
-      const radius=types[r.kind].width/2+(types[r.kind].walk?3:1);
-      const outline=[...offsetPath(r.points,radius),...offsetPath(r.points,-radius).reverse()];
-      ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(...outline[0]);for(const p of outline.slice(1))ctx.lineTo(...p);ctx.closePath();ctx.clip('evenodd');
-      for(const p of [r.points[0],r.points.at(-1)]){ctx.beginPath();ctx.rect(-100000,-100000,200000,200000);ctx.moveTo(p[0]+radius,p[1]);ctx.arc(...p,radius,0,Math.PI*2);ctx.clip('evenodd');}
-    }
-  }
   function clipJoin(ctx,j){ctx.beginPath();ctx.arc(...j.point,j.extent,0,Math.PI*2);ctx.clip();}
   function paintConnections(ctx,state,scale,layout,joins){
     for(const j of joins){
@@ -170,23 +172,6 @@
     }
     return distance;
   }
-  function approachClearance(arm,junction,roadMap){
-    // A curved merge departs from the main road; extrapolating its almost
-    // parallel endpoint tangent erases hundreds of metres of lane markings.
-    if(!junction.approaches.some(a=>a.level!==arm.level))return clearDistance(arm,junction.approaches);
-    const road=roadMap.get(arm.road),length=measure(road.points).length;
-    const available=arm.direction>0?length-arm.distance:arm.distance;
-    const others=[...new Map(junction.approaches.filter(a=>a.road!==arm.road).map(a=>[a.road,a])).values()];
-    for(let d=2;d<Math.min(120,available);d+=2){
-      const at=sample(road.points,arm.distance+arm.direction*d);
-      if(others.every(other=>{
-        const r=roadMap.get(other.road),near=sample(r.points,nearestDistance(r.points,at.point));
-        const dot=Math.abs(at.tangent[0]*near.tangent[0]+at.tangent[1]*near.tangent[1]);
-        return Math.hypot(at.point[0]-near.point[0],at.point[1]-near.point[1])>other.width/2+arm.width/2*dot+2;
-      }))return Math.max(arm.width/2+2,d);
-    }
-    return Math.min(120,available);
-  }
   function buildPlan(roads,network,roadTypes){
     if(plans.has(network))return plans.get(network);
     const roadMap=new Map(roads.map(r=>[r.id,r])),arrows=[],crosswalks=[],stopLines=[],signals=[],pedestrianSignals=[];
@@ -204,7 +189,7 @@
     for(const junction of junctions){
       for(const arm of junction.approaches){
         const road=roadMap.get(arm.road);if(!road)continue;
-        const length=measure(road.points).length,clearance=approachClearance(arm,junction,roadMap);
+        const length=measure(road.points).length,clearance=clearDistance(arm,junction.approaches);
         const available=arm.direction>0?length-arm.distance:arm.distance;
         // Neighbouring junctions bound the approach; frontage nodes do not.
         let room=available;
@@ -436,7 +421,6 @@
     };
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
     for(const level of levels){
-      ctx.save();if(level<0)clipUnderground(ctx,roads,roadTypes,inView);
       const visibleRoads=roads.filter(r=>r.level===level&&inView(r.points));
       // Outline every road first, then fill the connected surface. A later
       // road's casing must never draw a barrier across an at-grade junction.
@@ -454,7 +438,8 @@
         paintConnections(ctx,state,scale,layout,joins);
         for(const j of level===1?joins:[]){ctx.save();clipJoin(ctx,j);paint(ctx,state,{scale,selected:null,inView,visible,traffic:null,stage:'details',vehicles:false,signals:false,levels:[0]});ctx.restore();}
       }
-      if(stage==='surface'){ctx.restore();continue;}
+      if(stage!=='surface'&&root.RailRenderer)root.RailRenderer.paint(ctx,visibleRoads.map(r=>surfaceRoad(r,layout)),scale,{visible,contextRoads:roads.filter(r=>root.RailRenderer.isRail(r)).map(r=>surfaceRoad(r,layout))});
+      if(stage==='surface')continue;
       if(scale>=.2){
         ctx.lineWidth=Math.max(.35,.55/scale);ctx.setLineDash([4,6]);
         for(const line of plan.centerlines)if(line.level===level&&inView(line.points)){
@@ -483,7 +468,6 @@
         if(signals)paintSignals(ctx,plan,{scale,visible,traffic,level});
       }
       for(const car of vehicles?traffic?.vehicles||[]:[])if((car.level===level||level===1&&upperVehicle(car,layout))&&visible(car.point)){
-        if(undergroundCovered(car,layout,roadTypes))continue;
         if(root.CityScene){root.CityScene.vehicle(ctx,{...car,point:[car.point[0],car.point[1]-.28*vehicleHeight(car,layout)]},scale);continue;}
         ctx.save();ctx.translate(...car.point);ctx.rotate(car.heading);
         ctx.fillStyle='#203c3240';ctx.fillRect(-2.25+.6,-.95+.6,4.5,1.9);
@@ -492,11 +476,10 @@
         ctx.fillStyle=car.speed<.2?'#f7604d':'#b66d51';ctx.fillRect(-2.3,-.8,.35,.45);ctx.fillRect(-2.3,.35,.35,.45);ctx.restore();
       }
       for(const road of visibleRoads)if(road.id===selected){path(surfaceRoad(road,layout).points);ctx.strokeStyle='#d78b39';ctx.lineWidth=2/scale;ctx.stroke();}
-      ctx.restore();
     }
     ctx.restore();
   }
-  const api={connections,nearestDistance,roadHeight,projectPoint,projectPath,surfaceRoad,upperVehicle,vehicleHeight,undergroundCovered,slice,clipJoin,sample,turnsFor,buildPlan,junctionCorners,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection,paintSignals,paint};
+  const api={connections,nearestDistance,roadHeight,projectPoint,projectPath,surfaceRoad,upperVehicle,vehicleHeight,slice,clipJoin,sample,turnsFor,buildPlan,junctionCorners,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection,paintSignals,paint};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.RoadRenderer=api;
 })(typeof window==='undefined'?{}:window);

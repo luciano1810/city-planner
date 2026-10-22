@@ -293,7 +293,8 @@ class City:
                     self.add(drive,e['b'],e['a'],e['time']+delay,'car',e['id'],length=e['length'],signalDelay=delay)
             if e['kind'] in rails:
                 for a,b in [(e['a'],e['b']), (e['b'],e['a'])]:
-                    self.add(rails[e['kind']],a,b,e['time'],e['kind'],e['id'],length=e['length'])
+                    for mode in (('train','metro') if e['kind'] in ('train','metro') else ('tram',)):
+                        self.add(rails[mode],a,b,e['time'],e['kind'],e['id'],length=e['length'])
         for p in self.s['parcels']:
             a = p.get('access')
             if not a:
@@ -378,7 +379,7 @@ class City:
                 line['reason'] = '站点或基础设施缺失'
                 line['breakPoints']=[stopmap[s]['point'] for s in line['stops'] if s in stopmap and (not self.network['stops'].get(s) or not stopmap[s].get('enabled',True))]
                 continue
-            if any((stopmap[s]['mode'] != line['mode'] or stopmap[s].get('role','passenger')!='passenger') for s in line['stops']):
+            if any((group({'kind':stopmap[s]['mode']}) != group({'kind':line['mode']}) or stopmap[s].get('role','passenger')!='passenger') for s in line['stops']):
                 line['reason'] = '站点方式不兼容'
                 continue
             graph = drive if line['mode'] == 'bus' else rails[line['mode']]
@@ -818,7 +819,7 @@ class City:
         for i in ((0,len(pts)-1) if cmd.get('snap', True) else ()):
             candidates=[]
             for road in self.s['roads']:
-                if group(road)!=('road' if kind in ROAD_KINDS else kind):
+                if group(road)!=group({'kind':kind}):
                     continue
                 line=LineString(road['points'])
                 if road['level']==level:
@@ -864,7 +865,7 @@ class City:
             pts=controls=routed
             shape=LineString(pts);shape_mode='polyline';adjusted=True
         for road in self.s['roads']:
-            if road['level']==level and group(road)==('road' if kind in ROAD_KINDS else kind):
+            if road['level']==level and group(road)==group({'kind':kind}):
                 if shape.intersection(LineString(road['points'])).length>2:
                     raise RoadConflict('路线与已有设施重叠',shape.intersection(LineString(road['points'])).representative_point().coords[0])
         special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level)
@@ -883,7 +884,7 @@ class City:
         for contact in cmd.get('connections', []):
             target=next((r for r in self.s['roads'] if r['id']==contact.get('road')), None)
             point=self.point(contact.get('point'))
-            if target is None or group(target)!=('road' if kind in ROAD_KINDS else kind):
+            if target is None or group(target)!=group({'kind':kind}):
                 raise ValueError('吸附目标道路不存在或类型不兼容，请重新吸附')
             if min(math.dist(point, pts[0]), math.dist(point, pts[-1])) > .05:
                 raise ValueError('跨层接入口必须位于所绘道路的端点')
