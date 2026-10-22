@@ -17,6 +17,8 @@
   const vehicleLighting=raster.create({limit:96,budget:12*1024*1024,dispose:item=>{item.image.width=item.image.height=1;}});
   const atlases={};let assetVersion=0,materialRevision=0,materialGeneration=0;
   const synchronousMaterials=preparation.create({canvas,atlases});
+  const thumbnailContexts=new WeakSet(),thumbnailPatterns=new WeakMap();
+  const thumbnailTiles=raster.create({limit:32,budget:8*1024*1024,dispose:entry=>{entry.image.width=entry.image.height=1;}});
   const unpublishedMaterials=new Set(),materialRequests=new Map();
   let materialViewKey=null,materialViewEpoch=0;
   // Keep a small real texture when the expanded field leaves the LRU. A
@@ -145,6 +147,7 @@
   function material(ctx,name,variant=0){
     const cfg=materialCatalog.pick(name,variant);
     if(settings.quality==='map')return `rgb(${cfg.rgb.join(',')})`;
+    if(thumbnailContexts.has(ctx))return thumbnailMaterial(ctx,name,cfg);
     let cache=patterns.get(ctx);if(!cache){cache=new Map();patterns.set(ctx,cache);}
     // Prefilter before repeating. CanvasPattern's per-pixel interpolation alone
     // aliases a 256 px source into an 8 px roof tile at overview zoom.
@@ -161,6 +164,25 @@
       const p=ctx.createPattern(tile,'repeat');p.setTransform(new DOMMatrix().scale(meters/tile.width));cache.set(key,p);
     }
     return cache.get(key);
+  }
+  function useThumbnailMaterials(ctx){thumbnailContexts.add(ctx);return ctx;}
+  function thumbnailMaterial(ctx,name,cfg){
+    // Menu cards use small calibrated source tiles. They must not enqueue
+    // expanded world fields, evict map textures, or advance materialRevision.
+    let cache=thumbnailPatterns.get(ctx);
+    if(!cache||cache.version!==assetVersion){cache={version:assetVersion,patterns:new Map()};thumbnailPatterns.set(ctx,cache);}
+    const t=ctx.getTransform(),pixels=cfg.meters*Math.min(Math.hypot(t.a,t.b),Math.hypot(t.c,t.d));
+    const size=2**Math.max(2,Math.min(8,Math.ceil(Math.log2(Math.max(1,pixels)))));
+    const key=`${name}:${cfg.index}:${assetVersion}`,patternKey=key+':'+size;
+    if(!cache.patterns.has(patternKey)){
+      let entry=thumbnailTiles.get(key);
+      if(!entry){const image=synchronousMaterials.baseTexture(name,cfg.index);entry=thumbnailTiles.set(key,{image},image.width*image.height*4);}
+      let tile=entry.image;
+      if(size<tile.width){tile=canvas(size);const g=tile.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(entry.image,0,0,size,size);}
+      const pattern=ctx.createPattern(tile,'repeat');pattern.setTransform(new DOMMatrix().scale(cfg.meters/tile.width));
+      cache.patterns.set(patternKey,pattern);
+    }
+    return cache.patterns.get(patternKey);
   }
   function polygonMaterial(ctx,points,name,variant=0){path(ctx,points);ctx.fillStyle=material(ctx,name,variant);ctx.fill();}
   function ground(ctx,g,terrain,vectorLayers){
@@ -1251,6 +1273,7 @@
   }
   const api={onSurface,streetsideGround,streetsideParking,rasterObject,medians,get stats(){return {engine:'Canvas / texture sprites',vehicleAtlases:Object.keys(vehicleAtlases),vehicleSprites:vehicleSprites.size,vehicleShadows:vehicleShadows.size,vehicleLighting:{...vehicleLighting.stats,limit:96,fieldsPerSprite:4},buildingCache:objectRasters.stats,materialPreparation:{...materialJobs?.stats,...materialFields.stats},models:0};},materialMeters,configure,resolveQuality,detailZoom,get effectiveQuality(){return effectiveQuality;},get settings(){return {...settings};},get time(){return clockSeconds;},get assetsReady(){return Object.keys(canopyAtlases).length===Object.keys(canopySources).length&&Object.keys(atlases).length===4&&Boolean(fountainAtlas);},get materialInventory(){return Object.fromEntries(Object.keys(materialCatalog.catalog).map(n=>[n,materialCatalog.count(n)]));},get treeSpecies(){return materialCatalog.treeSpecies;},lightingAt,setTime,shadowOffset,seed,random,inside,edgeDistance,treesFor,streetTreesFor,plantingIndex,material,texture,treeSprite,lampsFor,ground,water,parcel,castShadow,buildingShadow,buildingShadows,facadeFaces,facadeWindows,building,vegetation,facilityGround,bridgeStructure,roadBandBoundary,roadSurfaces,vehicle,atmosphere};
   api.withPreview=withPreview;
+  api.useThumbnailMaterials=useThumbnailMaterials;
   Object.defineProperty(api,'preview',{get(){return preview;}});
   api.commitMaterials=commitMaterials;api.setMaterialView=setMaterialView;
   Object.defineProperty(api,'materialFallbacks',{get(){return materialFallbacks.stats;}});

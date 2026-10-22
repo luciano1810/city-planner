@@ -8,7 +8,7 @@ const source=fs.readFileSync(require.resolve('../renderer/scene-renderer.js'),'u
 const MiB=1024*1024;
 
 function harness(){
-  const calls={requests:[],animations:0,synchronous:0},canvases=[];
+  const calls={requests:[],animations:0,synchronous:0,thumbnailSources:0},canvases=[];
   let jobs;
   function context(image={width:2048,height:2048,draws:[]},scale=64){
     let matrix={a:scale,b:0,c:0,d:scale,e:0,f:0};
@@ -32,7 +32,9 @@ function harness(){
     SceneMaterials:{pick:(_name,index=0)=>({index,meters:12,rgb:[120,130,140]})},
     SurfaceVariation:{profile:()=>({factor:2,size:1024})},
     SceneRasterCache:raster,
-    SceneMaterialPreparation:{create:()=>({texture(){
+    SceneMaterialPreparation:{create:()=>({baseTexture(){
+      calls.thumbnailSources++;const image=document.createElement('canvas');image.width=image.height=256;return image;
+    },texture(){
       calls.synchronous++;throw new Error('Async material lookup must not synthesize on the rendering thread');
     }})},
     SceneMaterialJobs:{create(options){jobs=options;return {
@@ -55,6 +57,35 @@ function originalSource(image){
   while(image.draws?.length)image=image.draws.at(-1).source;
   return image;
 }
+
+test('thumbnail materials stay textured without requesting or publishing world fields',()=>{
+  const {scene,context,ready,calls}=harness(),ctx=scene.useThumbnailMaterials(context());
+  const thumbnail=scene.material(ctx,'roof',0);
+  assert.equal(thumbnail.image.width,256);assert.equal(thumbnail.image.width*thumbnail.matrix.a,12);
+  assert.equal(calls.thumbnailSources,1);
+  assert.deepEqual(calls.requests,[]);assert.equal(scene.materialRevision,0);assert.equal(calls.animations,0);
+  assert.equal(scene.materialPreparation.entries,0);assert.equal(scene.materialFallbacks.entries,0);
+  assert.strictEqual(scene.material(ctx,'roof',0),thumbnail,'reopening a card reuses its pattern');
+  const small=scene.material(scene.useThumbnailMaterials(context(undefined,2)),'roof',0);
+  assert.equal(small.image.width,32);assert.equal(small.image.width*small.matrix.a,12);
+  assert.equal(calls.thumbnailSources,1,'different cards share a small source tile');
+
+  const map=context();scene.material(map,'roof',0);
+  assert.deepEqual(calls.requests,['roof:0:field'],'normal map contexts still prepare detailed fields');
+  ready(0);scene.commitMaterials();
+  assert.equal(scene.material(map,'roof',0).image.width,1024);
+  assert.strictEqual(scene.material(ctx,'roof',0),thumbnail,'world publication cannot replace menu patterns');
+  assert.equal(calls.synchronous,0,'cards never synthesize expanded fields on the rendering thread');
+});
+
+test('thumbnail sources are bounded independently of the map material cache',()=>{
+  const {scene,context,calls}=harness(),ctx=scene.useThumbnailMaterials(context());
+  const oldest=scene.material(ctx,'roof',0).image;
+  for(let i=1;i<=32;i++)scene.material(ctx,'roof',i);
+  assert.equal(oldest.width,1,'the 8 MiB thumbnail source cache releases its oldest bitmap');
+  assert.equal(calls.thumbnailSources,33);assert.deepEqual(calls.requests,[]);
+  assert.equal(scene.materialPreparation.entries,0);assert.equal(scene.materialRevision,0);
+});
 
 test('ready material batches publish patterns and object rasters together, without synchronous synthesis',()=>{
   const {scene,context,ready,calls}=harness(),ctx=context(),object={};

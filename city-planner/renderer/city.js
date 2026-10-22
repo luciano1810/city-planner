@@ -325,7 +325,9 @@
     el('city-special-controls').hidden=!specialTools.includes(tool);
     el('city-special-rotation').disabled=el('city-special-rotate').disabled=tool==='train_station';
     if(el('measure').getAttribute('aria-pressed')==='true') el('measure').click();
-    schedulePreview();if(specialTools.includes(tool)&&hover)scheduleSpecialPreview();updateHint(); workspace.requestDraw();
+    // Tools and their drafts only affect the live overlay. Invalidating the
+    // static base here briefly replaces finished textures with preview tiles.
+    schedulePreview();if(specialTools.includes(tool)&&hover)scheduleSpecialPreview();updateHint();workspace.requestAnimation();
   }
   function updateHint() {
     const names=state?.meta.roadTypes;
@@ -387,6 +389,7 @@
     ['build','transit','data'].forEach(p=>el(`city-${p}-panel`).hidden=p!==next);
     document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===next));
     window.dispatchEvent(new CustomEvent('city-panel-change',{detail:next}));
+    workspace.requestAnimation();
   }
   function render() {
     if(!state)return;
@@ -755,7 +758,7 @@
     if(event.code==='Space'){event.preventDefault();space=true;}
     if(event.key==='Backspace'&&draft.length){event.preventDefault();draft.pop();schedulePreview();updateHint();workspace.requestDraw();}
     if(event.key.toLowerCase()==='r'&&specialTools.includes(tool)&&tool!=='train_station'){event.preventDefault();el('city-special-rotate').click();}
-    if(event.key==='Escape'){editingRoad=null;editingLine=null;preview=null;draft=[];lineStops=[];toolDrafts.delete(tool);sourceParcel=null;inspectedRoute=null;clearTimeout(previewTimer);previewTicket++;if(specialTools.includes(tool))setTool('select');updateHint();workspace.requestDraw();}
+    if(event.key==='Escape'){editingRoad=null;editingLine=null;preview=null;draft=[];lineStops=[];toolDrafts.delete(tool);sourceParcel=null;inspectedRoute=null;clearTimeout(previewTimer);previewTicket++;if(specialTools.includes(tool))setTool('select');updateHint();workspace.requestAnimation();}
     if(event.key==='Enter'&&draft.length){event.preventDefault();finish();}
     if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();command({type:event.shiftKey?'redo':'undo'});}
   });
@@ -869,7 +872,9 @@
       }
       }
       if(!p.connected){path(p.points,true);ctx.strokeStyle='#b75848';ctx.lineWidth=1.3/scale;ctx.setLineDash([4/scale,3/scale]);ctx.stroke();ctx.setLineDash([]);}
-      if(p.id===selected||p.id===sourceParcel){path(p.points,true);ctx.strokeStyle='#e3933f';ctx.lineWidth=2.5/scale;ctx.stroke();}
+      // Detailed parcel highlights are painted after the cached base below;
+      // baking them here would leave stale outlines after changing tools.
+      if(!rich&&(p.id===selected||p.id===sourceParcel)){path(p.points,true);ctx.strokeStyle='#e3933f';ctx.lineWidth=2.5/scale;ctx.stroke();}
     }
     for(const walkway of cartographic?[]:state.localPaths||[]){if(scale<.22||!walkway.points.some(visible))continue;path(walkway.points);ctx.strokeStyle=rich?window.CityScene.material(ctx,'paving',0):walkway.kind==='neighbourhood'?'#bdad8d':'#d7cdb8';ctx.lineWidth=Math.max(walkway.width,1/scale);ctx.stroke();}
     for(const f of cartographic?[]:state.facilities)if(window.CitySpecialBuildings.names[f.kind]&&inView(f.points))window.CitySpecialBuildings.ground(ctx,f,scale);
@@ -1224,9 +1229,9 @@
     for(const [id,mature,variant] of [['valley-empty',false,'valley'],['valley-grown',true,'valley'],['blocks-empty',false,'blocks'],['blocks-grown',true,'blocks']])el(id).onclick=()=>task(async()=>{activate(await api('scenario',{mature,variant}));el('city-dialog').close();if(variant==='blocks')workspace.focus([2265,2390],8);status(mature?'已打开城市自然生长结果':'路网已就绪，可以推进月份观察城市生长');});
   };
   el('city-grid-demo').onclick=()=>command({type:'demo'}).then(()=>{if(state.roads.length)workspace.focus(state.roads[Math.floor(state.roads.length/2)].points[0],3);});
-  el('city-finish').onclick=finish;el('city-cancel').onclick=()=>{draft=[];editingRoad=null;preview=null;toolDrafts.delete(tool);clearTimeout(previewTimer);previewTicket++;updateHint();workspace.requestDraw();};
-  el('city-special-rotate').onclick=()=>{el('city-special-rotation').value=(Number(el('city-special-rotation').value)+15)%360;scheduleSpecialPreview();workspace.requestDraw();};
-  for(const id of ['city-special-size','city-special-rotation','city-special-name'])el(id).oninput=()=>{scheduleSpecialPreview();workspace.requestDraw();};
+  el('city-finish').onclick=finish;el('city-cancel').onclick=()=>{draft=[];editingRoad=null;preview=null;toolDrafts.delete(tool);clearTimeout(previewTimer);previewTicket++;updateHint();workspace.requestAnimation();};
+  el('city-special-rotate').onclick=()=>{el('city-special-rotation').value=(Number(el('city-special-rotation').value)+15)%360;scheduleSpecialPreview();workspace.requestAnimation();};
+  for(const id of ['city-special-size','city-special-rotation','city-special-name'])el(id).oninput=()=>{scheduleSpecialPreview();workspace.requestAnimation();};
   el('city-undo').onclick=()=>command({type:'undo'});el('city-redo').onclick=()=>command({type:'redo'});
   el('city-play').onclick=()=>{if(simulation.running)pause();else simulation.start();};
   el('city-speed').oninput=()=>simulation.setSpeed(window.CitySimulation.speeds[Number(el('city-speed').value)]).catch(()=>{});
@@ -1240,8 +1245,8 @@
   el('city-clear-line').onclick=()=>{lineStops=[];updateHint();workspace.requestDraw();};
   el('city-coordinate-apply').onclick=()=>{const point=[Number(el('city-coordinate-x').value),Number(el('city-coordinate-y').value)];if(point.some(v=>!Number.isFinite(v))||point[0]<0||point[1]<0||point[0]>state.meta.width||point[1]>state.meta.height){status('坐标超出世界范围',true);return;}handlePoint(point);};
   el('city-object-picker').onchange=()=>{const id=el('city-object-picker').value;if(!id)return;const object=[...state.parcels,...state.roads,...state.stops,...state.lines,...state.facilities,...state.districts].find(o=>o.id===id);const point=object.center||object.point||object.points?.[0]||state.stops.find(s=>s.id===object.stops?.[0])?.point;if(point){workspace.focus(point,5);el('city-coordinate-x').value=Math.round(point[0]);el('city-coordinate-y').value=Math.round(point[1]);}inspect(id);};
-  el('city-shape').onchange=()=>{schedulePreview();updateHint();workspace.requestDraw();};
-  el('city-level').onchange=el('city-oneway').onchange=el('city-auto-route').onchange=()=>{schedulePreview();updateHint();workspace.requestDraw();};
+  el('city-shape').onchange=()=>{schedulePreview();updateHint();workspace.requestAnimation();};
+  el('city-level').onchange=el('city-oneway').onchange=el('city-auto-route').onchange=()=>{schedulePreview();updateHint();workspace.requestAnimation();};
   el('city-auto-renew').onchange=()=>command({type:'settings',values:{autoRenew:el('city-auto-renew').checked}});
   el('city-auto-grow').onchange=()=>command({type:'settings',values:{autoGrow:el('city-auto-grow').checked}});
   el('city-query-clear').onclick=()=>{queryResult=null;workspace.requestDraw();};

@@ -153,3 +153,59 @@ test('construction hover and pointer leave update overlays without discarding co
   listeners.get('pointerleave')();assert.equal(env.hover,null);
   assert(calls.every(call=>call==='overlay'),'moving a construction preview cannot rebuild the scene underneath it');
 });
+
+test('switching dock tools preserves drafts and only refreshes their live overlays',()=>{
+  const calls=[],elements=new Map(),el=id=>{
+    if(!elements.has(id))elements.set(id,{value:'',checked:false,getAttribute:()=> 'false'});
+    return elements.get(id);
+  };
+  el('city-shape').value='curve';el('city-level').value='1';el('city-oneway').checked=true;
+  const env={clearTimeout(){},pause(){},specialTimer:0,specialTicket:0,specialPreview:{},
+    tool:'street',toolDrafts:new Map(),draft:[[10,20],[30,40]],cloneDraftPoint:p=>p.slice(),
+    lineStops:['stop-1'],editingRoad:'road-1',editingLine:null,sourceParcel:'parcel-1',inspectedRoute:{},
+    preview:{},dragControl:0,hover:null,specialTools:['airport'],el,
+    canvas:{classList:{toggle(){}}},document:{querySelectorAll:()=>[]},
+    schedulePreview:()=>calls.push('preview'),scheduleSpecialPreview:()=>calls.push('special'),
+    updateHint:()=>calls.push('hint'),
+    workspace:{requestAnimation:()=>calls.push('overlay'),requestDraw:()=>calls.push('invalidate')}};
+  vm.runInNewContext(section('  function setTool(next) {','  function updateHint() {'),env);
+  for(const tool of ['pan','select','renewal','airport','area','street'])env.setTool(tool);
+  assert.deepEqual(env.draft,[[10,20],[30,40]]);
+  assert.deepEqual([...env.lineStops],['stop-1']);assert.equal(env.editingRoad,'road-1');
+  assert.equal(el('city-shape').value,'curve');assert.equal(el('city-level').value,'1');assert.equal(el('city-oneway').checked,true);
+  for(const key of ['sourceParcel','inspectedRoute','preview','dragControl'])assert.equal(env[key],null);
+  assert.equal(calls.filter(call=>call==='overlay').length,6);assert(!calls.includes('invalidate'));
+});
+
+test('panel changes repaint transit overlays without rebuilding the base',()=>{
+  const calls=[],env={panel:'build',el:()=>({}),document:{querySelectorAll:()=>[]},
+    CustomEvent:class {constructor(type,{detail}){this.type=type;this.detail=detail;}},
+    window:{dispatchEvent:event=>calls.push(event.detail)},
+    workspace:{requestAnimation:()=>calls.push('overlay'),requestDraw:()=>calls.push('invalidate')}};
+  vm.runInNewContext(section('  function showPanel(next) {','  function render() {'),env);
+  env.showPanel('transit');env.showPanel('build');
+  assert.deepEqual(calls,['transit','overlay','build','overlay']);assert.equal(env.panel,'build');
+});
+
+test('road card direction and geometry controls refresh drafts without invalidating textures',()=>{
+  const calls=[],elements=new Map(),env={el:id=>{
+    if(!elements.has(id))elements.set(id,{});return elements.get(id);
+  },schedulePreview:()=>calls.push('preview'),updateHint:()=>calls.push('hint'),
+  workspace:{requestAnimation:()=>calls.push('overlay'),requestDraw:()=>calls.push('invalidate')}};
+  vm.runInNewContext(section("  el('city-shape').onchange=", "  el('city-auto-renew').onchange="),env);
+  for(const id of ['city-shape','city-level','city-oneway','city-auto-route'])elements.get(id).onchange();
+  assert.deepEqual(calls,Array(4).fill(['preview','hint','overlay']).flat());
+});
+
+test('parcel selection and route origins never get baked into the detailed base',()=>{
+  for(const key of ['selected','sourceParcel']){
+    const f=fixture(),base=f.context(false),overlay=f.context(),strokes=[];
+    base.stroke=()=>strokes.push('base:'+base.strokeStyle);
+    overlay.stroke=()=>strokes.push('overlay:'+overlay.strokeStyle);
+    f.env[key]='near';f.paint(base,f.g,'base');f.paint(overlay,f.g,'overlay');
+    assert(!strokes.includes('base:#e3933f'),'transient outline cannot survive in the cached bitmap');
+    assert.equal(strokes.filter(s=>s==='overlay:#e3933f').length,1);
+    strokes.length=0;f.env[key]=null;f.paint(overlay,f.g,'overlay');
+    assert(!strokes.includes('overlay:#e3933f'),'clearing selection removes its outline on the next overlay');
+  }
+});
