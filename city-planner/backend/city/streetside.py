@@ -89,9 +89,10 @@ def update(city):
     parcels, facilities, roads = city.s['parcels'], city.s['facilities'], city.s['roads']
     # This also runs after entrance updates; unchanged traffic graphs need no
     # repeated geometry work. The signature deliberately ignores derived fields.
-    key = repr(([(p['id'],p['points'],(p.get('building') or {}).get('footprint'),(p.get('building') or {}).get('status'),p.get('road'),p.get('entrance'),p.get('connected'),p.get('openSpace'),p.get('use')) for p in parcels],
+    key = repr(([(p['id'],p['points'],(p.get('building') or {}).get('footprint'),(p.get('building') or {}).get('status'),p.get('road'),p.get('entrance'),p.get('connected'),p.get('openSpace'),p.get('use'),p.get('block')) for p in parcels],
                 [(f['id'],f.get('points'),f.get('accessPath'),f.get('accessRoad'),f.get('accessWidth'),f.get('connected')) for f in facilities],
-                [(r['id'],r['kind'],r['level'],r['points']) for r in roads]))
+                [(r['id'],r['kind'],r['level'],r['points']) for r in roads],
+                [(b['id'],b['points']) for b in city.s.get('blockLayouts',[])]))
     if key == getattr(city, '_streetside_key', None):
         return
     city._streetside_key = key
@@ -103,10 +104,15 @@ def update(city):
     sites += [(f['id'], Polygon(f['points']), f) for f in facilities if f.get('points')]
     tree = STRtree([s[1] for s in sites])
     developed = [s[1] for s in sites if s[2].get('building') or s[2].get('accessPath')]
-    # Close only narrow seams (up to 6 m) between occupied sites. Larger empty
-    # plots remain undeveloped; parks and road surfaces are explicitly excluded.
+    # Continue the same paving across the spaces between developed sites.
+    # Closing fills gaps up to 24 m without expanding the outer urban edge.
+    # Known block outlines also cover wider internal gaps; reserved sites,
+    # parks, water and roads remain outside this derived surface.
     joined = unary_union(developed)
-    seams = joined.buffer(3.05,join_style=2).buffer(-3.05,join_style=2).difference(unary_union([s[1] for s in sites])).difference(exclusions)
+    active_blocks = {p.get('block') for p in parcels if p.get('building') and p['building'].get('status') != 'planned'}
+    block_ground = [Polygon(b['points']) for b in city.s.get('blockLayouts',[]) if b['id'] in active_blocks]
+    reserved = unary_union([Polygon(p['points']) for p in parcels]+[s[1] for s in sites])
+    seams = unary_union([joined.buffer(12.05,join_style=2).buffer(-12.05,join_style=2),*block_ground]).difference(reserved).difference(exclusions)
     paved = [p for p in polygons(seams) if city.terrain.buildable(p,.25)]
     plans = []
     for obj in parcels+facilities:
