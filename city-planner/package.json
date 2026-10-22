@@ -36,7 +36,8 @@
     "test:rail-system:visual": "node scripts/check-rail-reconstruction.cjs",
     "test:rail-system:development": ".venv/bin/python scripts/check_rail_development.py",
     "test:rail-system:lifecycle": "node scripts/check-rail-lifecycle.cjs",
-    "test:rail-system:overlay": "node scripts/check-rail-overlay.cjs"
+    "test:rail-system:overlay": "node scripts/check-rail-overlay.cjs",
+    "test:transit-management:visual": "node scripts/check-transit-management.cjs"
   },
   "devDependencies": {
     "electron": "^44.9.1"
