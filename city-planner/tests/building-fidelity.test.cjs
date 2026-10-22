@@ -21,7 +21,7 @@ test('cached Canvas rendering gives the occupied setback walls windows and paint
   assert(Math.max(...terrace.points.map(p=>p[1]))>Math.max(...upper.points.map(p=>p[1])),
     'depth-only sorting would wrongly repaint the lower roof over the upper one');
   const window={CityGeometry:geometry,SceneMaterials:require('../renderer/material-catalog.js'),
-    SurfaceVariation:require('../renderer/surface-variation.js'),SceneRasterCache:require('../renderer/raster-cache.js'),
+    SurfaceVariation:require('../renderer/surface-variation.js'),SceneRasterCache:require('../renderer/raster-cache.js'),SceneMaterialPreparation:require('../renderer/material-preparation.js'),
     CityOrdinaryRoofs:{drawCanvas(_ctx,_parcel,volume){painted.push(volume);windowCounts.push(glassPanes);}}};
   const document={createElement(){return {width:0,height:0,getContext:()=>canvasContext(color=>{if(color==='#344e60')glassPanes++;})};}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../renderer/scene-renderer.js'),'utf8'),{window,document});

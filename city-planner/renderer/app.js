@@ -309,7 +309,8 @@ function buildVectorLayers() {
   const riverClip = new Path2D(); riverClip.rect(0,0,width,height); riverClip.addPath(ocean);
   return { ocean, water, waterStroke, lakes, rivers, riverClip, land, levels, interval };
 }
-function paintMap(context, g) {
+function paintMap(context, g, phase='all') {
+  if(phase==='overlay'){window.CityApp?.paint(context,g,phase);return;}
   const scale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
   const quality=window.CityScene?.resolveQuality(zoom)||'map',flat=quality==='map';
   syncDisplayControls(quality);
@@ -354,7 +355,7 @@ function paintMap(context, g) {
     }
   }
   context.restore();
-  window.CityApp?.paint(context, g);
+  window.CityApp?.paint(context, g, phase);
 }
 function updateMeasureHint() {
   $('measure-hint').hidden = !measuring;
@@ -394,7 +395,38 @@ function clampPan() {
   const maxX = Math.max(0, (source.width * g.scale - g.width) / 2), maxY = Math.max(0, (source.height * g.scale - g.height) / 2);
   panX = Math.max(-maxX, Math.min(maxX, panX)); panY = Math.max(-maxY, Math.min(maxY, panY));
 }
-function draw() {
+const frameDraw = window.FrameScheduler.create(renderFrame);
+let zooming=false,zoomSettleTimer=null,baseLightMinute=null,baseMaterialRevision=null;
+function paintCachedBase(context,g,preview=false){
+  const scene=window.CityScene,time=scene.time;
+  scene.setTime((baseLightMinute??Math.floor(time/60))*60);
+  try{return preview?scene.withPreview(()=>paintMap(context,g,'base')):paintMap(context,g,'base');}
+  finally{scene.setTime(time);}
+}
+const panCache = window.FrameScheduler.createPanCache((context,g)=>paintCachedBase(context,g),{
+  incremental:true,previewPaint:(context,g)=>paintCachedBase(context,g,true)
+});
+function invalidatePan(){panCache.invalidate();baseLightMinute=null;baseMaterialRevision=null;}
+function sampleBaseLight(progressive){
+  const minute=Math.floor(window.CityScene.time/60),revision=window.CityScene.materialRevision||0;
+  if(baseLightMinute===minute&&baseMaterialRevision===revision||baseLightMinute!==null&&(panCache.pending||drag||zooming))return;
+  // A fast simulation clock must not restart unfinished tiles every tick.
+  // Structural edits call invalidatePan and still take effect immediately.
+  window.CityScene.commitMaterials?.();
+  if(baseLightMinute===null||!panCache.refresh())panCache.invalidate();
+  baseLightMinute=minute;baseMaterialRevision=revision;
+}
+function baseNeedsRefresh(){return baseLightMinute!==Math.floor(window.CityScene.time/60)||baseMaterialRevision!==(window.CityScene.materialRevision||0);}
+function rebaseViewportPan(ratio){
+  const previousPanX=panX,previousPanY=panY;panX*=ratio;panY*=ratio;clampPan();
+  if(drag){drag.panX+=panX-previousPanX;drag.panY+=panY-previousPanY;}
+}
+function draw() { invalidatePan();frameDraw.flush(); }
+function requestDraw(viewportOnly=false) { if(viewportOnly!==true)invalidatePan();frameDraw.request(); }
+// Traffic is composited after the cached ground/building layer. It stays live
+// during gestures without forcing the static scenery to be baked every frame.
+function requestAnimation(){frameDraw.request();}
+function renderFrame() {
   const dpr = window.devicePixelRatio || 1, width = map.clientWidth, height = map.clientHeight;
   if (map.width !== Math.round(width * dpr) || map.height !== Math.round(height * dpr)) { map.width = Math.round(width * dpr); map.height = Math.round(height * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
@@ -404,11 +436,32 @@ function draw() {
     // Pan is stored in CSS pixels. Rebase it with the fitted map scale so the
     // same world coordinate stays centred on fullscreen/inspector/window resize.
     const ratio=Math.max(width/source.width,height/source.height)/Math.max(lastViewport.width/source.width,lastViewport.height/source.height);
-    panX*=ratio;panY*=ratio;
+    rebaseViewportPan(ratio);
   }
   lastViewport={terrain,width,height};
   clampPan(); const g = geometry();
-  paintMap(ctx,g); paintMeasurement(ctx,g);
+  const metricScale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
+  const detail=window.CityScene?.resolveQuality(zoom)==='high'&&window.CityScene.settings.renderer==='textures';
+  let reused=false;
+  if(detail&&!measuring&&window.CityApp?.canCacheBase){
+    // A refinement batch shares one minute sample. New light waits for that
+    // batch; atmosphere/traffic stay live, and explicit edits invalidate now.
+    if(!drag&&!zooming)window.CityScene.setMaterialView?.(g,dpr);
+    sampleBaseLight(metricScale>=1.2);
+    reused=panCache.draw(ctx,g,dpr,Boolean(drag||zooming));
+    if(!reused&&panCache.prepare(g,dpr,metricScale>=1.2))reused=panCache.draw(ctx,g,dpr);
+    if(reused&&!drag&&!zooming&&panCache.pending){
+      // New zoom densities first show complete massing. Refine small regions
+      // at rest instead of synchronously baking hundreds of detailed roofs.
+      panCache.refine(6);ctx.clearRect(0,0,width,height);panCache.draw(ctx,g,dpr);
+      if(panCache.pending||baseNeedsRefresh())frameDraw.request();
+    }
+    if(reused)paintMap(ctx,g,'overlay');
+  }else{
+    panCache.invalidate();
+  }
+  if(!reused)paintMap(ctx,g);
+  paintMeasurement(ctx,g);
   $('zoom-value').textContent = `${Math.round(zoom * 100)}%`;
   $('zoom-in').disabled = zoom >= 512; $('zoom-out').disabled = zoom <= 1;
   const ruler = currentScale(g,Math.max(60,Math.min(140,g.width*.25)));
@@ -421,10 +474,15 @@ function fit() { lastViewport=null; zoom = 1; panX = 0; panY = 0; draw(); }
 function setZoom(next, anchorX = map.clientWidth / 2, anchorY = map.clientHeight / 2) {
   if (!terrain) return;
   next = Math.max(1, Math.min(512, next));
-  const ratio = next / zoom;
+  const ratio = next / zoom,previousPanX=panX,previousPanY=panY;
   panX = (panX - anchorX + map.clientWidth / 2) * ratio + anchorX - map.clientWidth / 2;
   panY = (panY - anchorY + map.clientHeight / 2) * ratio + anchorY - map.clientHeight / 2;
-  zoom = next; draw();
+  zoom = next; clampPan();zooming=true;
+  // Keep a held pointer's origin consistent if wheel/pinch input interleaves.
+  if(drag){drag.panX+=panX-previousPanX;drag.panY+=panY-previousPanY;}
+  clearTimeout(zoomSettleTimer);
+  zoomSettleTimer=setTimeout(()=>{zoomSettleTimer=null;zooming=false;requestAnimation();},160);
+  requestDraw(true);
 }
 async function exportPNG() {
   if (!terrain || busy) return;
@@ -489,7 +547,7 @@ function setDisplayMode(quality){
   window.CityScene?.configure({quality});
   try{localStorage.setItem('shanhai-scene-v1',JSON.stringify(window.CityScene.settings));}catch{}
   syncDisplayControls(window.CityScene.resolveQuality(zoom));
-  draw();
+  requestDraw();
 }
 document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setDisplayMode(button.dataset.view)));
 $('reset').addEventListener('click', () => { selectPreset(selected); toast('已恢复当前地貌的默认参数'); });
@@ -530,12 +588,15 @@ map.addEventListener('pointerdown', event => {
 map.addEventListener('pointermove', event => {
   if (measuring && terrain && measurePoints.length === 1) {
     const rect = map.getBoundingClientRect();
-    measureHover = MapGeometry.screenToMap(event.clientX-rect.left,event.clientY-rect.top,geometry(),source.width,source.height); draw(); return;
+    measureHover = MapGeometry.screenToMap(event.clientX-rect.left,event.clientY-rect.top,geometry(),source.width,source.height); requestDraw(); return;
   }
-  if (!drag) return; panX = drag.panX + event.clientX - drag.x; panY = drag.panY + event.clientY - drag.y; draw();
+  if (!drag) return; panX = drag.panX + event.clientX - drag.x; panY = drag.panY + event.clientY - drag.y; clampPan(); requestDraw(true);
 });
-map.addEventListener('pointerup', () => { drag = null; });
-map.addEventListener('pointercancel', () => { drag = null; });
+function finishPan(){if(!drag)return;drag=null;requestDraw(true);}
+map.addEventListener('pointerup', finishPan);
+map.addEventListener('pointercancel', finishPan);
+map.addEventListener('lostpointercapture', finishPan);
+window.addEventListener('blur', finishPan);
 map.addEventListener('keydown', event => {
   if (event.key === 'Escape' && measuring) { $('measure').click(); return; }
   if (event.key.startsWith('Arrow')) { event.preventDefault(); if (event.key === 'ArrowLeft') panX += 30; if (event.key === 'ArrowRight') panX -= 30; if (event.key === 'ArrowUp') panY += 30; if (event.key === 'ArrowDown') panY -= 30; draw(); }
@@ -544,7 +605,7 @@ map.addEventListener('keydown', event => {
   if (event.key === '0') fit();
 });
 document.addEventListener('keydown', event => { if (document.body.dataset.screen === 'terrain' && !document.querySelector('dialog[open]') && event.key === 'Enter' && !['BUTTON','SELECT'].includes(event.target.tagName)) { event.preventDefault(); generate(); } });
-new ResizeObserver(draw).observe($('map-frame'));
+new ResizeObserver(requestDraw).observe($('map-frame'));
 restore(); thumbnails();
 window.MapWorkspace = {
   get terrain() { return terrain; }, get busy() { return busy; },
@@ -559,7 +620,7 @@ window.MapWorkspace = {
     context.restore(); context.fill(vectorLayers.lakes,'evenodd'); context.restore();
   },
   get canConfirm() { return Boolean(terrain) && !busy && !terrainDirty; },
-  get geometry() { return geometry(); }, draw, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
+  get geometry() { return geometry(); },get panCacheStats(){return panCache.stats;}, draw, requestDraw, requestAnimation, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
   cancelGeneration() {
     requestVersion++; queued=false; clearTimeout(debounce);
     $('loading').hidden=true;
