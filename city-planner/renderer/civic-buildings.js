@@ -145,7 +145,6 @@
       }
       if(!sewage){block(-.32,.12,10,.035,.035,h-10,'metal');}
     }
-    label(names[f.kind],0,Y(-.45),Math.min(4,w/14),'#344b4b');
     for(const x of [-.44,.44])lamp(X(x),Y(.38));
     detailing.refine(f,out);
   }

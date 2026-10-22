@@ -8,8 +8,10 @@ from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import nearest_points, unary_union
 from shapely.strtree import STRtree
 
-from .geometry import ROAD_TYPES, stable_id, curve_points, building_footprint
-from .planning import plan_streets, grow_block_streets, occupancy_index, street_extension_ready
+from .geometry import ROAD_TYPES, stable_id, building_footprint, branch_anchors
+from .planning import block_street_candidates, construct_streets, occupancy_index, street_extension_ready, lane_growth_budget, settled_building
+from .street_priority import StreetPriorities
+from .lane_growth import lane_alignment
 
 from .parameters import POLICY
 from .auto_facilities import sensitive_site_safe
@@ -25,78 +27,59 @@ def grow_lanes(city):
     """
     if not city.s['settings'].get('autoGrow', True) or city.s['settings']['growth'] <= 0:
         return False
-    if plan_streets(city):
-        return grow_block_streets(city)
-    if city.s.get('plannedBlocks',0): return False
+    budget=lane_growth_budget(city)
+    if not budget:return False
     attempted=city.s.setdefault('growthAttempts',[])
+    if city.s.get('laneClearanceVersion',1)<2:
+        # Old saves also recorded failed proposals as permanent exclusions.
+        # Retain built branches, but retry gaps rejected by the old double buffer.
+        attempted[:]=[r['growthKey'] for r in city.s['roads'] if r.get('generated') and r.get('growthKey')]
+        city.s['laneClearanceVersion']=2
     tried=set(attempted)
-    primary=[r for r in city.s['roads'] if r['level']==0 and r['kind'] in ('street','avenue') and not r.get('generated')]
-    footprints=[Polygon(p['building']['footprint']).buffer(5) for p in city.s['parcels'] if p.get('building')]
+    # Snapshot the parents: a road built this month can branch only after a
+    # later rebuild and after its own frontage has developed.
+    primary=[r for r in city.s['roads'] if r['level']==0 and r['kind'] in ('street','avenue','lane')]
+    footprints=[Polygon(p['building']['footprint']) for p in city.s['parcels'] if p.get('building')]
     protected=[Polygon(p['points']) for p in city.s['parcels'] if p['use']=='protected' or p.get('openSpace')]
     obstacles=unary_union(footprints+protected)
-    made=0;index_data=occupancy_index(city)
+    blocks=unary_union([Polygon(b['points']) for b in city.network['blocks']])
+    priorities=StreetPriorities(city)
+    index_data=occupancy_index(city)
+    candidates=block_street_candidates(city,priorities,index_data)
+    shapes={r['id']:LineString(r['points']) for r in primary}
     for road in primary:
-        shape=LineString(road['points'])
-        for index in range(3,max(4,int((shape.length-35)/52)),6):
-            d=35+index*52
-            if d>shape.length-50:
-                continue
+        shape=shapes[road['id']]
+        for index,d in branch_anchors(road):
             start=shape.interpolate(d)
             a,b=shape.interpolate(d-2),shape.interpolate(d+2)
             angle=math.atan2(b.y-a.y,b.x-a.x)
             for side in (-1,1):
+                heading=angle+side*math.pi/2
+                # Closed blocks have their own reserved subdivision plans.
+                if blocks.covers(Point(start.x+math.cos(heading)*30,start.y+math.sin(heading)*30)):continue
                 ident=stable_id('lane-',(road['id'],index,side))
                 if ident in tried:
                     continue
-                if made>=city.s['policy']['autoLanesPerMonth']:
-                    return made>0
-                if not street_extension_ready(city,start,index_data):continue
-                attempted.append(ident);tried.add(ident)
+                if not road.get('generated') and not street_extension_ready(city,start,index_data):continue
+                nearby=[p for p in city.s['parcels'] if p['road']==road['id'] and p.get('connected')
+                        and Point(p['center']).distance(start)<120]
+                # Parent frontage must itself fill: a crowded main road must
+                # not cause an empty child to sprout grandchildren.
+                if road.get('generated') and (sum(settled_building(p) for p in nearby)<city.s['policy']['streetGrowthMinimumBuildings']
+                    or sum(p['area'] for p in nearby if settled_building(p) or p.get('openSpace'))
+                       /max(1,sum(p['area'] for p in nearby))<city.s['policy']['streetFillThreshold']):continue
                 seed=random.Random(ident)
-                points=[list(start.coords[0])]
-                heading=angle+side*math.pi/2
                 length=seed.uniform(min(130,city.s['policy']['laneMaximumLength']),city.s['policy']['laneMaximumLength'])
-                for hop in range(math.ceil(length/30)):
-                    choices=[]
-                    previous=points[-1]
-                    for turn in (0,-.22,.22,-.45,.45):
-                        theta=heading+turn
-                        q=[previous[0]+math.cos(theta)*30,previous[1]+math.sin(theta)*30]
-                        segment=LineString([previous,q])
-                        try:
-                            city.terrain.valid_link(segment,'lane',0)
-                        except ValueError:
-                            continue
-                        if segment.buffer(ROAD_TYPES['lane']['width']/2+1).intersects(obstacles):
-                            continue
-                        f=city.terrain.features(segment)
-                        choices.append((f['costFactor']+abs(turn)*.6+f['lowland'],theta,q))
-                    if not choices:
-                        break
-                    _,heading,q=min(choices,key=lambda v:v[0])
-                    points.append(q)
-                if len(points)<4:
-                    continue
-                # Join an encountered road instead of leaving a false visual crossing.
-                candidate=LineString(curve_points(points))
                 others=[r for r in city.s['roads'] if r['id']!=road['id'] and r['level']==0 and r['kind'] in ('street','avenue','lane')]
-                crossing=[]
-                for other in others:
-                    inter=candidate.intersection(LineString(other['points']))
-                    for p in list(inter.geoms) if hasattr(inter,'geoms') else [inter]:
-                        if p.geom_type=='Point' and candidate.project(p)>35:
-                            crossing.append((candidate.project(p),p))
-                if crossing:
-                    distance,p=min(crossing,key=lambda v:v[0])
-                    points=[list(candidate.interpolate(x).coords[0]) for x in np.arange(0,distance,12)]+[list(p.coords[0])]
-                try:
-                    city.add_road(dict(points=points,kind='lane',level=0,shape='curve',name='自动社区支路'))
-                    created=city.s['roads'][-1]
-                    created.update(generated=True,parent=road['id'],growthKey=ident)
-                    made+=1
-                except ValueError:
-                    continue
-    return made>0
+                points=lane_alignment(city,start,heading,length,obstacles,others)
+                if points is None:continue
+                line=LineString(points)
+                priority=priorities.evaluate(line,priorities.nearby(line,origin=start,heading=heading))
+                if priority is None:continue
+                candidates.append(dict(id=ident,parent=road['id'],priority=priority,
+                    command=dict(points=points,kind='lane',level=0,shape='polyline',snap=False,name='自动社区支路')))
+    return construct_streets(city,candidates,budget)
+
 
 
 def grow_public_spaces(city):
@@ -216,14 +199,16 @@ def update_entrances(city):
                     length=line.length,minutes=city.terrain.profile(line,'path')['walkTime']))
                 degrees[p['id']]+=1;degrees[q['id']]+=1
     city.s['localPaths']=paths+block_walkways(city)
+    from . import streetside
+    streetside.update(city)
 
 
 def update_firms(city):
     """One explicitly labelled industry group per occupied business building."""
     firms=city.s.setdefault('firms',[])
     by_place={f['parcel']:f for f in firms if f['status']=='active'}
-    population=sum(h['size'] for h in city.s['households'])
-    external=city.s['settings']['externalJobs']
+    from .business import BusinessMarket, workplace_supply
+    market=BusinessMarket(city,kind='jobs',supply=workplace_supply(city,planned=False,reopening=True))
     for p in city.s['parcels']:
         b=p.get('building')
         if not b or b['use']=='residential' or b['status']!='active' or not p['connected']:
@@ -239,14 +224,12 @@ def update_firms(city):
         rent=p['rent']*b['floorArea']
         freight=(p.get('freightTime') if p.get('freightTime') is not None else 120)
         freight_cost=freight*max(1,occupied)*8 if b['use'] in ('industrial','warehouse') else 0
-        industry_base={'commercial':.10,'office':.18,'industrial':.14,'warehouse':.06}[b['use']]
-        local=population*industry_base
-        regional=external*({'commercial':.04,'office':.4,'industrial':.4,'warehouse':.16}[b['use']])
-        same=max(1,sum(1 for q in city.s['parcels'] if q.get('building') and q['building']['use']==b['use'] and q['building']['status']=='active'))
-        sales=(local+regional)/same*9000*(.65+min(1,p.get('accessWorkers',0)/200)*.35)
+        local=market.local_allocations[b['use']][p['id']]
+        regional=market.external_allocations[b['use']][p['id']]
+        sales=(local+regional)*9000*(.65+min(1,p.get('accessWorkers',0)/200)*.35)
         cost=rent+occupied*4200+freight_cost
         firm.update(space=b['floorArea'],capacity=b['capacity'],jobs=b.get('positions',0),employees=occupied,
-                    revenue=round(sales),cost=round(cost),profit=round(sales-cost),externalDemand=round(regional/same,1),localDemand=round(local/same,1),freightCost=round(freight_cost))
+                    revenue=round(sales),cost=round(cost),profit=round(sales-cost),externalDemand=round(regional,1),localDemand=round(local,1),freightCost=round(freight_cost))
         firm['lossMonths']=firm['lossMonths']+1 if sales<cost*.6 else max(0,firm['lossMonths']-1)
         b['businessActive']=True
         if firm['lossMonths']>=9:
@@ -268,13 +251,20 @@ def update_firms(city):
             firm.update(status='closed',closed=city.s['month'])
 
 
-def spatial_summary(city,parcels):
+def spatial_summary(city,parcels,facilities=None):
     ids={p['id'] for p in parcels}
     families=[h for h in city.s['households'] if h['home'] in ids]
     jobs=sum(p['building'].get('positions',0) for p in parcels if p.get('building'))
+    # Attribute facilities by the same cells used for district clustering; a
+    # large reserved site can span several frontage parcels, but counts once.
+    size=city.s['policy']['districtCellMeters']
+    cells={(int(p['center'][0]//size),int(p['center'][1]//size)) for p in parcels}
+    local_facilities=facilities if facilities is not None else [f for f in city.s['facilities'] if (int(f['point'][0]//size),int(f['point'][1]//size)) in cells]
+    jobs+=sum(f.get('positions',0) for f in local_facilities)
+    job_ids=ids|{f['id'] for f in local_facilities}
     residents=sum(h['size'] for h in families)
-    outgoing=sum(1 for h in families if h.get('job') and h['job'] not in ids)
-    incoming=sum(1 for h in city.s['households'] if h['home'] not in ids and h.get('job') in ids)
+    outgoing=sum(1 for h in families if h.get('job') and h['job'] not in job_ids)
+    incoming=sum(1 for h in city.s['households'] if h['home'] not in ids and h.get('job') in job_ids)
     buildings=[p for p in parcels if p.get('building')]
     area=sum(p['area'] for p in parcels)
     floor_area=sum(p['building']['floorArea'] for p in buildings)
@@ -414,12 +404,23 @@ def aggregate_flows(city):
 
 def accessibility_by_group(city):
     """Group actual households; representative times use the same journey rules."""
-    employers=[p for p in city.s['parcels'] if p.get('building') and p['building'].get('positions',0)>0]
+    from .employment import workplaces
+    employers=workplaces(city)
     households=Counter((h['home'],h['car'],'低收入' if h['income']<6000 else '中收入' if h['income']<9000 else '高收入') for h in city.s['households'])
+    # Visit one origin's cohorts together so bounded path caches stay useful
+    # even when household insertion order interleaves many neighbourhoods.
+    groups=dict.fromkeys(key[2] for key in households)
+    origins=defaultdict(list)
+    for key,count in households.items():origins[key[0]].append((key,count))
     income={'低收入':4500,'中收入':7500,'高收入':11000};rows=[]
     for period,departure in [('am',480),('off',840),('pm',1080)]:
-        totals=defaultdict(lambda:dict(households=0,jobs=0,vacancies=0,services=0))
-        for (home,car,group),count in households.items():
+        # Walking and driving costs use the same settled road graph all day.
+        # Only operating transit has departure-dependent waits/service hours.
+        if period!='am' and not city.line_segments:
+            rows.extend(dict(row,period=period) for row in rows[:] if row['period']=='am')
+            continue
+        totals={group:dict(households=0,jobs=0,vacancies=0,services=0) for group in groups}
+        for (home,car,group),count in (row for rows in origins.values() for row in rows):
             values=totals[group];values['households']+=count
             for p in employers:
                 journey=city.route(home,p['id'],car,income[group],period=period,departure=departure)

@@ -28,7 +28,7 @@ npm run setup:python
 npm start
 ```
 
-仓库根目录用于项目说明和设计文档；同名的 `city-planner/` 子目录包含应用代码。后续的 npm 命令均在该子目录执行。
+仓库根目录存放项目说明、设计文档、截图与实验资料；同名的 `city-planner/` 子目录包含应用代码。后续的 npm 命令均在该子目录执行。
 
 macOS 安装完成后也可以双击应用目录里的 `启动山海.command`。
 
@@ -74,7 +74,9 @@ Electron 启动时自动启动本地 Python 服务并选择空闲端口；关闭
 ```text
 .
 ├── README.md
-├── docs/                    # 需求、实现说明与验证记录
+├── docs/                    # 项目目标、规则、架构与实现状态
+├── examples/                # 应用内置城市案例存档
+├── experiments/             # 历史资料；新实验输出默认忽略
 └── city-planner/
     ├── backend/             # 地形、水文、HTTP 服务
     │   └── city/            # 城市演化、路网、开发、交通与存档
@@ -82,16 +84,19 @@ Electron 启动时自动启动本地 Python 服务并选择空闲端口；关闭
     ├── renderer/            # 地图与城市交互界面
     ├── scripts/             # 模拟实验与诊断工具
     ├── tests/               # Python / JavaScript 回归测试
+    │   └── fixtures/        # 测试与视觉检查输入数据
     └── README.md            # 详细使用手册与模型边界
 ```
 
 ## 文档与边界
 
-- [功能需求](docs/city-simulation-requirements.md)
-- [城市实现说明](docs/city-implementation.md)
-- [需求核对与实现状态](docs/requirements-audit.md)
-- [街区多样性](docs/city-block-variety.md)
-- [工业建筑轮廓](docs/city-industrial-footprints.md)
+完整项目说明从 [文档索引](docs/README.md) 开始：
+
+- [项目目标与功能规则](docs/city-simulation-requirements.md)
+- [系统架构与状态流](docs/city-implementation.md)
+- [土地、建筑与城市生长](docs/city-growth.md)
+- [道路、轨道与公共交通](docs/roads-and-transit.md)
+- [实现状态与边界](docs/implementation-status.md)
 
 地图使用虚构的本地米制坐标，不对应真实地理位置。水系与城市经济均为简化模型，适合实验和探索；地图范围上限不代表可承载同等规模的城市模拟。
 

@@ -8,7 +8,7 @@ import copy
 import hashlib
 import math
 import random
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, OrderedDict
 
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
@@ -16,7 +16,7 @@ from shapely.ops import nearest_points
 
 from .geometry import ROAD_TYPES, TRANSIT_TYPES, Terrain, RoadConflict, make_network, parcels_for, building_footprint, curve_points, group, stable_id, road_contacts
 from .routing import shortest_paths, reconstruct
-from .development import update_location_context, select_projects, opportunity_fields, desired_floors, development_targets, planned_supply
+from .development import update_location_context, select_projects, opportunity_fields, desired_floors
 from .urban import POLICY, grow_lanes, grow_public_spaces, building_style, update_entrances, update_firms, spatial_summary, clustered_districts, detailed_metrics, observe_changes, aggregate_flows, accessibility_by_group
 from .reporting import metric_definitions
 from .parameters import definitions as parameter_definitions, catalog as calibration_catalog
@@ -28,7 +28,11 @@ from . import naming
 from . import renewal
 from . import signals
 from . import simulation
+from . import housing
+from .employment import facility_workplaces, sync_facilities, facility_capacity
+from .business import BusinessMarket, workplace_supply
 from . import special_buildings, auto_facilities
+from . import road_clearance
 
 MODEL_VERSION = 'shanhai-city-10'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
@@ -62,11 +66,11 @@ class City:
                       settings=dict(migration=24, externalJobs=90, growth=1, fare=2,
                                     budget=False, taxRate=.06, maxProjects=12, autoGrow=True, autoRenew=True, accessBudget=30),
                       treasury=100000000., constructionCost=0., maintenance=0., revenue=0.,
-                      pendingHousing=0, movedIn=0, movedOut=0, relocated=0, stats={})
+                      pendingHousing=0, migrationQueue=[], migrationDemand={}, housingMarketVersion=1, movedIn=0, movedOut=0, relocated=0, stats={})
         self.s['gateway']=None
         self.s['sceneTimeSeconds']=9*3600.
         self.s['simulation']=simulation.initial_state()
-        self.s.update(firms=[], localPaths=[], growthAttempts=[], districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
+        self.s.update(firms=[], localPaths=[], growthAttempts=[], laneCadenceVersion=2, districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
         self.s.update(streetPlans=[],plannedBlocks=0,regionalServices=[],regionalFlows=[],growthCenters=[],blockLayouts=[],renewals=[])
         self.undo, self.redo = [], []
         self.network = make_network([], [], self.terrain)
@@ -122,14 +126,34 @@ class City:
         s.setdefault('simulation',simulation.initial_state(s['sceneTimeSeconds'],
             (data.get('runtime',{}).get('liveTraffic') or {}).get('seconds',0.)))
         simulation.validate(s['simulation'],s['month'])
+        number(s.get('pendingHousing',0),0,100000000,'等待迁入户数',True)
+        s.setdefault('migrationQueue',housing.profiles(s.get('pendingHousing',0)))
+        s.setdefault('migrationDemand',{})
+        s.setdefault('housingMarketVersion',1)
+        if not isinstance(s['migrationQueue'],list):raise ValueError('迁入队列格式无效')
+        for cohort in s['migrationQueue']:
+            if not isinstance(cohort,dict) or type(cohort.get('car')) is not bool:raise ValueError('迁入家庭交通条件无效')
+            number(cohort.get('income'),1,100000000,'迁入家庭收入')
+            number(cohort.get('count'),1,100000000,'迁入家庭数量',True)
+        if sum(r['count'] for r in s['migrationQueue'])!=s['pendingHousing']:raise ValueError('迁入队列与等待户数不一致')
         old_model=s.get('version')
         registry=s.setdefault('placeNames',{})
         if not isinstance(registry,dict) or any(not isinstance(k,str) or not isinstance(v,str) or not v.strip() or len(v)>60 for k,v in registry.items()):
             raise ValueError('存档地名记录无效')
-        for key in ('firms','localPaths','growthAttempts','districtCells','policy','annual','accessibilityGroups','migrationFlows','streetPlans','plannedBlocks','regionalServices','regionalFlows','growthCenters','blockLayouts','renewals'):
+        for key in ('firms','localPaths','growthAttempts','districtCells','policy','annual','accessibilityGroups','migrationFlows','streetPlans','plannedBlocks','regionalServices','regionalFlows','growthCenters','blockLayouts','renewals','streetside'):
             s.setdefault(key,copy.deepcopy(city.s[key]))
         for key in ('autoGrow','autoRenew','accessBudget'):
             s['settings'].setdefault(key,city.s['settings'][key])
+        # Adopt the quieter default for saves predating the shared lane cadence.
+        # Explicit non-default caps remain calibrated by the user.
+        if 'laneGrowthIntervalMonths' not in s['policy'] and s['policy'].get('autoLanesPerMonth')==3:
+            s['policy']['autoLanesPerMonth']=POLICY['autoLanesPerMonth']
+        # Upgrade the previous 1-per-3-month default once. Subsequent user
+        # calibration (including an intentional three-month wait) must persist.
+        if s.get('laneCadenceVersion',1)<2:
+            if (s['policy'].get('autoLanesPerMonth'),s['policy'].get('laneGrowthIntervalMonths'))==(1,3):
+                s['policy']['laneGrowthIntervalMonths']=POLICY['laneGrowthIntervalMonths']
+        s['laneCadenceVersion']=2
         s['policy']={**POLICY,**s['policy']}
         for key,default in POLICY.items():
             if isinstance(default,(int,float)):
@@ -155,6 +179,8 @@ class City:
         for road in s['roads']:
             if road['kind'] not in ROAD_TYPES:
                 raise ValueError('存档道路类型无效')
+            if 'growthMonth' in road:
+                number(road['growthMonth'],0,s['month'],'支路建设月份',True)
             for point in road['points']:
                 city.point(point)
         # Reject NaN, negative capacities and dangling residents before committing.
@@ -184,6 +210,7 @@ class City:
             number(service['trainsPerDay'],1,48,'每日货列',True)
             number(service['tonnesPerTrain'],10,5000,'货列吨数')
         homes=Counter();workers=Counter()
+        facility_jobs={f['id']:f for f in s['facilities']}
         for h in s['households']:
             number(h['income'],1,100000000,'家庭月收入')
             homes[h['home']]+=1
@@ -193,7 +220,9 @@ class City:
             if h.get('job'):
                 q=pm.get(h['job']);job=q.get('building') if q else None
                 workers[h['job']]+=1
-                if not job or job['use']=='residential' or workers[h['job']]>job.get('positions',0):
+                facility=facility_jobs.get(h['job'])
+                valid_facility=facility and facility.get('connected') and workers[h['job']]<=min(facility.get('positions',0),facility_capacity(facility))
+                if not valid_facility and (not job or job['use']=='residential' or workers[h['job']]>job.get('positions',0)):
                     raise ValueError('存档岗位引用或占用无效')
         for p in s['parcels']:
             if p.get('building') and not Polygon(p['points']).buffer(.01).covers(Polygon(p['building']['footprint'])):
@@ -210,6 +239,8 @@ class City:
         city.rng.setstate(tuples(data['random']))
         city.rebuild(regenerate=False)
         city.restore_runtime(data.get('runtime',{}))
+        if any(f.get('jobCapacity') for f in s['facilities']) and 'facilityJobs' not in s.get('stats',{}):
+            city.summarize()
         return city
 
     def rebuild(self, regenerate=False):
@@ -251,10 +282,12 @@ class City:
         update_entrances(self)
         self.attach_parcels()
         self.build_graphs()
+        special_buildings.reserve(self)
         self._parcel_roads={r['id']:(r['kind'],r['level'],tuple(map(tuple,r['points']))) for r in self.s['roads']}
 
     def attach_parcels(self):
         edges_by_road = defaultdict(list)
+        shapes={e['id']:LineString(e['points']) for e in self.network['edges']}
         for e in self.network['edges']:
             edges_by_road[e['road']].append(e)
         for p in self.s['parcels']:
@@ -262,12 +295,13 @@ class City:
             if not choices:
                 p['connected'], p['access'] = False, None
                 continue
-            e = min(choices, key=lambda e: LineString(e['points']).distance(Point(p['frontage'])))
-            line = LineString(e['points'])
-            if line.distance(Point(p['frontage'])) > 3:
+            frontage=Point(p['frontage'])
+            e = min(choices, key=lambda e: shapes[e['id']].distance(frontage))
+            line = shapes[e['id']]
+            if line.distance(frontage) > 3:
                 p['connected'], p['access'] = False, None
                 continue
-            d = line.project(Point(p['frontage']))
+            d = line.project(frontage)
             p['connected'] = True
             p['access'] = dict(a=e['a'], b=e['b'], da=max(0,d), db=max(0,e['length']-d), edge=e['id'],
                                road=e['road'], kind=e['kind'], oneway=e['oneway'])
@@ -314,45 +348,49 @@ class City:
             if path['kind']=='neighbourhood':
                 for a,b in [(path['parcel'],path['target']),(path['target'],path['parcel'])]:
                     self.add(walk,a,b,path['minutes']*80/self.s['policy']['walkingMetersPerMinute'],'walk',path['id'],length=path['length'])
+        facility_obstacles=special_buildings.access_obstacles(self) if any(special_buildings.special(f) for f in self.s['facilities']) else None
         for facility in self.s['facilities']:
             facility.pop('accessPath',None)
             # Parcel-based facilities use their actual reserved entrance. A
             # nearest-road shortcut can otherwise pass through another site.
             parcel=self.parcelmap.get(facility.get('parcel'))
-            if parcel:
+            if parcel and not special_buildings.special(facility):
                 facility['connected']=bool(parcel.get('connected'))
                 if facility['connected']:
                     for a,b in [(facility['id'],parcel['id']),(parcel['id'],facility['id'])]:
                         self.add(walk,a,b,0,'walk',length=0)
                         self.add(drive,a,b,0,'car',length=0)
                 continue
-            candidates=[e for e in self.network['edges'] if e['level']==0 and ROAD_TYPES[e['kind']]['walk']]
             facility['connected']=False
-            if not candidates:
-                continue
-            access_point=facility.get('accessPoint',facility['point'])
-            e=min(candidates,key=lambda e:(LineString(e['points']).distance(Point(access_point)),e['id']))
-            shape=LineString(e['points'])
-            d=shape.project(Point(access_point))
-            q=list(shape.interpolate(d).coords[0])
-            connector=LineString([q,access_point])
-            if connector.length>200 or (connector.length>1 and not self.terrain.buildable(connector.buffer(.1),1)):
-                continue
+            if special_buildings.special(facility):
+                access=special_buildings.road_access(self,facility,self.network['edges'],facility_obstacles)
+                if access is None:continue
+                e,d,connector=access
+            else:
+                candidates=[e for e in self.network['edges'] if e['level']==0 and ROAD_TYPES[e['kind']]['walk']]
+                if not candidates:continue
+                access_point=facility.get('accessPoint',facility['point'])
+                e=min(candidates,key=lambda e:(LineString(e['points']).distance(Point(access_point)),e['id']))
+                shape=LineString(e['points']);d=shape.project(Point(access_point))
+                connector=LineString([shape.interpolate(d),Point(access_point)])
+                if connector.length>200 or (connector.length>1 and not self.terrain.buildable(connector.buffer(.1),1)):continue
             facility['connected']=True
-            if special_buildings.special(facility):facility['accessPath']=[q,access_point]
             for node,distance in [(e['a'],d),(e['b'],e['length']-d)]:
                 for a,b in [(facility['id'],node),(node,facility['id'])]:
                     self.add(walk,a,b,(distance+connector.length)/self.s['policy']['walkingMetersPerMinute'],'walk',length=distance+connector.length)
             # Drive to the road-side access, with parking included by route().
             if e['kind']!='path':
                 speed=ROAD_TYPES[e['kind']]['speed']
+                access_minutes=connector.length/1000/15*60
                 delay=e.get('signalDelayForward',0)
-                self.add(drive,facility['id'],e['b'],(e['length']-d)/1000/speed*60+.5+delay,'car',e['id'],length=e['length']-d,signalDelay=delay)
-                self.add(drive,e['a'],facility['id'],d/1000/speed*60+.5,'car',e['id'],length=d)
+                self.add(drive,facility['id'],e['b'],(e['length']-d)/1000/speed*60+.5+access_minutes+delay,'car',e['id'],length=e['length']-d+connector.length,signalDelay=delay)
+                self.add(drive,e['a'],facility['id'],d/1000/speed*60+.5+access_minutes,'car',e['id'],length=d+connector.length)
                 if not e['oneway']:
                     delay=e.get('signalDelayReverse',0)
-                    self.add(drive,facility['id'],e['a'],d/1000/speed*60+.5+delay,'car',e['id'],length=d,signalDelay=delay)
-                    self.add(drive,e['b'],facility['id'],(e['length']-d)/1000/speed*60+.5,'car',e['id'],length=e['length']-d)
+                    self.add(drive,facility['id'],e['a'],d/1000/speed*60+.5+access_minutes+delay,'car',e['id'],length=d+connector.length,signalDelay=delay)
+                    self.add(drive,e['b'],facility['id'],(e['length']-d)/1000/speed*60+.5+access_minutes,'car',e['id'],length=e['length']-d+connector.length)
+        from . import streetside
+        streetside.update(self)
         ground_nodes={nid:point for nid,point in self.network['nodes'].items() if nid.startswith('road:0:')}
         if self.s['gateway'] is None and ground_nodes:
             self.s['gateway']=list(next(iter(ground_nodes.values())))
@@ -430,8 +468,11 @@ class City:
                     self.add(public,onboard,sid,self.s['policy']['alightingMinutes'],'alight',line['id'],mode=line['mode'])
         rebuild_regional(self,rails,drive)
         self.graphs = dict(walk=walk, car=drive, public=public)
+        sync_facilities(self)
         self.route_cache = {}
         self.route_solutions = {}
+        self.surface_journeys = OrderedDict()
+        self.surface_journey_edges = 0
 
     def path_points(self, path):
         points=[]
@@ -454,7 +495,56 @@ class City:
             self.route_cache[key]=shortest_paths(self.graphs[mode],source)
         return self.route_cache[key]
 
+    def surface_journey(self, source, target, mode):
+        """A road/walk journey is independent of income and departure time.
+
+        Share its path and metrics across households, with limits on both
+        entries (including unreachable pairs) and retained path edges.
+        build_graphs invalidates this cache whenever network costs change.
+        """
+        key=(source,target,mode)
+        if key in self.surface_journeys:
+            self.surface_journeys.move_to_end(key)
+            return self.surface_journeys[key]
+        distances,prev=self.distances(source,mode)
+        minutes=distances.get(target,math.inf)
+        policy=self.s['policy'];result=None
+        allowed=mode!='walk' or minutes<=policy['walkMaximumMinutes']
+        if mode=='car':minutes+=policy['parkingMinutes']
+        if allowed and minutes<=policy['journeyMaximumMinutes']:
+            path=reconstruct(prev,source,target)
+            distance=sum(e.get('length',0) for e in path)
+            fee=0 if mode=='walk' else distance/1000*policy['carCostPerKm']+policy['carParkingFee']
+            result=dict(mode=mode,mainMode=mode,minutes=round(minutes,2),path=path,fee=fee,
+                        distance=distance,transfers=0,wait=0,
+                        signalWait=round(sum(e.get('signalDelay',0) for e in path),3))
+            # Mode choice uses unrounded minutes, just as the transit router.
+            value=(minutes,result)
+        else:value=None
+        edges=len(result['path']) if result else 0
+        if edges<=65536:
+            while self.surface_journeys and (len(self.surface_journeys)>=4096 or self.surface_journey_edges+edges>65536):
+                _,old=self.surface_journeys.popitem(last=False)
+                if old:self.surface_journey_edges-=len(old[1]['path'])
+            self.surface_journeys[key]=value
+            self.surface_journey_edges+=edges
+        return value
+
     def route(self, source, target, car=True, income=6000, allocate=False, period='am', departure=480, required_mode=None):
+        if not self.line_segments:
+            if required_mode:return None
+            options=[]
+            for mode in (('walk','car') if car else ('walk',)):
+                value=self.surface_journey(source,target,mode)
+                if value:
+                    minutes,journey=value
+                    options.append((minutes+journey['fee']/max(.15,income/10000),mode,journey))
+            if not options:return None
+            result=min(options,key=lambda row:(row[0],row[1]))[2]
+            if allocate:
+                for edge in result['path']:
+                    if edge['kind']=='car' and edge.get('ref'):self.road_load[(period,edge['ref'])]+=1
+            return result
         key=(source,target,bool(car),income,period,departure,required_mode)
         cached=self.route_solutions.get(key)
         if cached is not None:
@@ -472,6 +562,10 @@ class City:
             if required_mode and mode!='public':
                 continue
             if mode=='car' and not car:
+                continue
+            # Without an operating transit segment the public graph contains
+            # only walking links, which cannot form a public-transport journey.
+            if mode=='public' and not self.line_segments:
                 continue
             distances,prev=self.distances(source,mode)
             if target not in distances:
@@ -582,7 +676,7 @@ class City:
             return self.view()
         before=(copy.deepcopy(self.s),self.rng.getstate(),self.runtime())
         try:
-            if op in ('delete','zone','road_edit','road_update'):
+            if op in ('delete','zone'):
                 if any(project['status'] not in renewal.TERMINAL and any(p['id'] in project['preservedIds'] and cmd.get('id') in (p['id'],p.get('openSpace')) for p in self.s['parcels']) for project in self.s['renewals']):
                     raise ValueError('此用地是更新项目保留的公共空间或保护地，请等待项目结束')
                 affected=self.parcelmap.get(cmd.get('id'))
@@ -595,19 +689,21 @@ class City:
             elif op=='renewal_cancel':
                 renewal.cancel(self,cmd.get('id'))
             elif op=='road':
-                self.add_road(cmd)
+                clearance=self.add_road(cmd,demolish=True)
                 self.rebuild(regenerate=True)
+                road_clearance.resettle(self,clearance)
             elif op=='road_edit':
                 road=next((r for r in self.s['roads'] if r['id']==cmd.get('id')),None)
                 if not road:
                     raise ValueError('道路不存在')
                 self.s['roads'].remove(road)
-                self.add_road(dict(cmd,kind=road['kind'],level=road['level'],oneway=road['oneway'],name=road['name']))
+                clearance=self.add_road(dict(cmd,kind=road['kind'],level=road['level'],oneway=road['oneway'],name=road['name']),demolish=True)
                 new=self.s['roads'][-1]
                 new['id']=road['id']
                 for key in ('generated','parent','growthKey'):
                     if key in road: new[key]=road[key]
                 self.rebuild(regenerate=True)
+                road_clearance.resettle(self,clearance)
             elif op=='stop':
                 mode=cmd.get('mode','bus')
                 if mode not in TRANSIT_TYPES:
@@ -750,10 +846,9 @@ class City:
                 if not road or kind not in ROAD_KINDS or group(road)!='road':
                     raise ValueError('只能升级道路网络中的设施')
                 shape=LineString(road['points'])
-                special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,road['level'],road['id'])
                 self.terrain.valid_link(shape,kind,road['level'])
-                if road['level']==0 and any(shape.buffer(ROAD_TYPES[kind]['width']/2+2).intersection(Polygon(p['building']['footprint'])).area>1 for p in self.s['parcels'] if p.get('building')):
-                    raise ValueError('升级后的道路侵入建筑，请先处理冲突')
+                clearance=road_clearance.clear(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,road['level'])
+                special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,road['level'],road['id'])
                 if road['level']==0 and any(shape.buffer(ROAD_TYPES[kind]['width']/2+2).intersection(Polygon(p['points'])).area>1 for p in self.s['parcels'] if p.get('openSpace') or p['use']=='protected'):
                     raise ValueError('升级后的道路侵入公共空间或保护用地，请先处理冲突')
                 profile=self.terrain.profile(shape,kind,road['level'])
@@ -765,6 +860,7 @@ class City:
                 road['kind']=kind; road['oneway']=bool(cmd.get('oneway',False))
                 road.update(profile=profile,constructionCost=round(cost))
                 self.rebuild(regenerate=True)
+                road_clearance.resettle(self,clearance)
             elif op=='gateway':
                 point=self.point(cmd['point'])
                 nodes={k:v for k,v in self.network['nodes'].items() if k.startswith('road:0:')}
@@ -803,7 +899,7 @@ class City:
         accounts=self.s.setdefault('capitalAccounts',{})
         accounts[category]=accounts.get(category,0)+amount
 
-    def add_road(self, cmd):
+    def add_road(self, cmd, *, demolish=False):
         kind=cmd.get('kind','street')
         if kind not in ROAD_TYPES:
             raise ValueError('未知道路类型')
@@ -855,7 +951,7 @@ class City:
             clearance = ROAD_TYPES[kind]['width']/2+2
             obstacles = []
             for parcel in self.s['parcels']:
-                if parcel.get('building'):
+                if parcel.get('building') and not demolish:
                     obstacles.append(Polygon(parcel['building']['footprint']).buffer(clearance))
                 if parcel.get('openSpace') or parcel['use']=='protected' or renewal.locked(self,parcel):
                     obstacles.append(Polygon(parcel['points']).buffer(clearance))
@@ -868,6 +964,7 @@ class City:
             if road['level']==level and group(road)==group({'kind':kind}):
                 if shape.intersection(LineString(road['points'])).length>2:
                     raise RoadConflict('路线与已有设施重叠',shape.intersection(LineString(road['points'])).representative_point().coords[0])
+        clearance=road_clearance.clear(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level) if demolish else None
         special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level)
         if level==0:
             occupied=shape.buffer(ROAD_TYPES[kind]['width']/2+2)
@@ -903,6 +1000,7 @@ class City:
                                    oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name') or ROAD_TYPES[kind]['name']),
                                    length=shape.length))
         naming.name_object(self,'roads',self.s['roads'][-1])
+        return clearance
 
     def preview_road(self,cmd):
         state=self.s
@@ -910,11 +1008,11 @@ class City:
             self.s=copy.deepcopy(state)
             if cmd.get('id'):
                 self.s['roads']=[r for r in self.s['roads'] if r['id']!=cmd['id']]
-            self.add_road(cmd)
+            clearance=self.add_road(cmd,demolish=True)
             from .lane_connections import connect_lane_entrances
             connect_lane_entrances(self)
             road=self.s['roads'][-1]
-            return dict(valid=True,road=road,connections=sum(next(road_contacts(road,r),None) is not None for r in self.s['roads'] if r['id']!=road['id']))
+            return dict(valid=True,road=road,clearance=road_clearance.summary(clearance),connections=sum(next(road_contacts(road,r),None) is not None for r in self.s['roads'] if r['id']!=road['id']))
         except ValueError as error:
             return dict(valid=False,reason=str(error),point=getattr(error,'point',None))
         finally:
@@ -922,22 +1020,25 @@ class City:
 
     def query(self,params):
         kind=params.get('kind','area')
+        facilities=None
         if kind=='area':
             a,b=[self.point(p) for p in params['bounds']]
             parcels=[p for p in self.s['parcels'] if min(a[0],b[0])<=p['center'][0]<=max(a[0],b[0]) and min(a[1],b[1])<=p['center'][1]<=max(a[1],b[1])]
+            facilities=[f for f in self.s['facilities'] if min(a[0],b[0])<=f['point'][0]<=max(a[0],b[0]) and min(a[1],b[1])<=f['point'][1]<=max(a[1],b[1])]
         elif kind=='isochrone':
             source=params.get('source');mode=params.get('mode','public')
             if source not in self.parcelmap and source not in {s['id'] for s in self.s['stops']} or mode not in self.graphs: raise ValueError('请选择有效起点与交通方式')
             budget=number(params.get('minutes',30),1,120,'可达时间')
             distances=self.distances(source,mode)[0]
             parcels=[p for p in self.s['parcels'] if distances.get(p['id'],math.inf)<=budget]
+            facilities=[f for f in self.s['facilities'] if distances.get(f['id'],math.inf)<=budget]
         elif kind=='district':
             district=next((d for d in self.s['districts'] if d['id']==params.get('id')),None)
             if not district: raise ValueError('城区不存在')
             parcels=[self.parcelmap[pid] for pid in district['parcels']]
         else:
             raise ValueError('未知查询类型')
-        return dict(kind=kind,month=self.s['month'],model=MODEL_VERSION,selection=params,stats=spatial_summary(self,parcels),rule='地块中心落入范围；按同一月末状态汇总')
+        return dict(kind=kind,month=self.s['month'],model=MODEL_VERSION,selection=params,stats=spatial_summary(self,parcels,facilities),rule='地块与设施中心落入范围；按同一月末状态汇总')
 
     def add_line(self, cmd):
         mode=cmd.get('mode','bus')
@@ -991,7 +1092,11 @@ class City:
         self.rebuild(regenerate=True)
         self.event('规划','示范街区已建立，开始推进月份以观察真实开发')
 
-    def step(self, months=1, *, advance_clock=True):
+    def monthly_progress(self, fraction, label):
+        callback=getattr(self,'_monthly_progress',None)
+        if callback:callback(fraction,label)
+
+    def step(self, months=1, *, advance_clock=True, return_view=True):
         months=number(months,1,24,'推进月份',True)
         before=(copy.deepcopy(self.s),self.rng.getstate(),self.runtime())
         try:
@@ -1000,30 +1105,39 @@ class City:
                 self.s['month']+=1
                 self.s['movedIn']=self.s['movedOut']=self.s['relocated']=0
                 self.s['migrationFlows']=[]
+                self.monthly_progress(0,'街区与道路')
                 if grow_lanes(self):
                     self.rebuild(regenerate=True)
                 if grow_public_spaces(self):
                     self.rebuild()
                 renewal.advance(self)
+                self.monthly_progress(.14,'建筑与路网')
                 self.complete_projects()
                 update_entrances(self)
                 self.build_graphs()
                 update_firms(self)
+                self.monthly_progress(.24,'就业与迁居')
+                self.match_jobs()
                 self.populate()
                 self.match_jobs()
+                self.monthly_progress(.36,'交通分配')
                 self.assign_traffic()
+                self.monthly_progress(.56,'住房与土地')
                 self.update_market()
+                self.monthly_progress(.72,'建设与更新')
                 renewal.automatic(self)
                 self.redevelop()
                 if auto_facilities.grow(self):self.rebuild()
                 if special_buildings.grow_parking(self):self.rebuild()
                 self.develop()
+                self.monthly_progress(.88,'公共空间与财政')
                 if grow_block_commons(self):self.rebuild()
                 update_entrances(self)
                 clustered_districts(self)
                 if special_buildings.grow_cbd(self):update_entrances(self)
                 self.finance()
                 self.s['revision']+=1
+                self.monthly_progress(.94,'统计与可达性')
                 self.summarize()
                 observe_changes(self)
                 self.s['history'].append(dict(copy.deepcopy(self.s['stats']),model=MODEL_VERSION))
@@ -1042,7 +1156,8 @@ class City:
             self.rebuild()
             self.restore_runtime(runtime)
             raise
-        return self.view()
+        self.monthly_progress(1,'结算已准备')
+        return self.view() if return_view else None
 
     def complete_projects(self):
         for p in self.s['parcels']:
@@ -1058,11 +1173,11 @@ class City:
     def available_homes(self):
         occupied=Counter(h['home'] for h in self.s['households'])
         return [p for p in self.s['parcels'] if p['connected'] and p.get('building')
-                and p['building']['use']=='residential' and p['building']['status']=='active'
+                and p['building']['use']=='residential' and p['building']['status'] in ('active','vacant')
                 and not renewal.displacing(self,p) and occupied[p['id']]<p['building']['capacity']]
 
     def populate(self):
-        occupied=Counter(h['home'] for h in self.s['households'])
+        matcher=housing.HomeJobMatcher(self)
         surviving=[]
         for h in self.s['households']:
             p=self.parcelmap[h['home']]
@@ -1071,42 +1186,50 @@ class City:
             h['unemployedMonths']=h.get('unemployedMonths',0)+1 if not h.get('job') else 0
             h['stress']=h.get('stress',0)+1 if burden>self.s['policy']['housingBurdenThreshold'] or not p['connected'] or h.get('commuteFailed',False) or h['unemployedMonths']>=self.s['policy']['unemploymentStressMonths'] else max(0,h.get('stress',0)-1)
             if h['stress']>=self.s['policy']['relocationStressMonths']:
-                homes=[q for q in self.available_homes() if q['id']!=p['id'] and q['rent']*self.s['policy']['householdSpace']<h['income']*.4]
-                if homes:
-                    new=min(homes,key=lambda q:q['rent']*self.s['policy']['householdSpace']-q.get('accessJobs',0)*2)
-                    h['home']=new['id']; h['stress']=0
+                choice=matcher.choose(h['income'],h['car'],exclude=p['id'],job=h.get('job'))
+                if choice:
+                    new,job=choice
+                    matcher.take(new,job,previous=p['id'],already_employed=bool(h.get('job')))
+                    h.update(home=new['id'],job=job,stress=0,unemployedMonths=0,commuteFailed=False)
                     self.s['relocated']+=h['size']
                     self.s['migrationFlows'].append(dict(source=p['center'],target=new['center'],kind='relocation',people=h['size']))
-                    occupied[p['id']]-=1; occupied[new['id']]+=1
                 elif h['stress']>=self.s['policy']['exitStressMonths']:
                     self.s['movedOut']+=h['size']
                     self.s['migrationFlows'].append(dict(source=p['center'],target=self.s['gateway'] or [0,0],kind='out',people=h['size']))
-                    occupied[p['id']]-=1
+                    if p['id'] in matcher.free:matcher.free[p['id']]+=1
+                    if h.get('job') in matcher.jobs:matcher.jobs[h['job']]+=1
                     continue
             surviving.append(h)
         self.s['households']=surviving
-        arrivals=int(self.s['settings']['migration']*self.s['settings']['growth'])
-        demand=self.s['pendingHousing']+arrivals
-        jobs=sum(p['building'].get('positions',0) for p in self.s['parcels'] if p.get('building') and p['building']['status']=='active')
-        incoming=min(demand,max(3,jobs-len(surviving)+8)) if self.s['settings']['growth']>0 else 0
+        queue=housing.ensure_queue(self)
+        arrivals=housing.migration_rate(self,sum(matcher.jobs.values()))
+        counts=Counter()
+        for r in queue:counts[r['income'],r['car']]+=r['count']
+        for _ in range(arrivals):
+            income=self.rng.choice(housing.INCOMES)
+            car=self.rng.random()<min(.9,income/14000)
+            counts[income,car]+=1
         admitted=0
-        for _ in range(incoming):
-            homes=[p for p in self.available_homes() if occupied[p['id']]<p['building']['capacity']]
-            if not homes:
-                break
-            income=self.rng.choice([3500,5000,7000,10000,16000])
-            affordable=[p for p in homes if p['rent']*self.s['policy']['householdSpace']<income*.45]
-            if not affordable:
-                continue
-            home=max(affordable,key=lambda p:(p.get('accessJobs',0)*.8 + p.get('amenity',0)*20-p['rent']*3 + self.rng.random()*5))
-            size=self.rng.choice([1,2,2,3,3,4])
-            h=dict(id=self.uid('h'),home=home['id'],size=size,income=income,car=self.rng.random()<min(.9,income/14000),
-                   job=None,stress=0,burden=home['rent']*self.s['policy']['householdSpace']/income,commute=None,commuteFailed=False)
-            self.s['households'].append(h)
-            occupied[home['id']]+=1
-            admitted+=1; self.s['movedIn']+=size
-            self.s['migrationFlows'].append(dict(source=self.s['gateway'] or [0,0],target=home['center'],kind='in',people=size))
-        self.s['pendingHousing']=max(0,demand-admitted)
+        # Round-robin profiles keep one income/transport group from consuming
+        # the entire month's job supply. No family enters without a real pair.
+        while self.s['settings']['growth']>0:
+            progress=False
+            for (income,car),count in sorted(counts.items()):
+                if count<=0:continue
+                choice=matcher.choose(income,car)
+                if not choice:continue
+                home,job=choice;matcher.take(home,job)
+                size=self.rng.choice([1,2,2,3,3,4])
+                h=dict(id=self.uid('h'),home=home['id'],size=size,income=income,car=car,
+                       job=job,stress=0,unemployedMonths=0,burden=home['rent']*self.s['policy']['householdSpace']/income,commute=None,commuteFailed=False)
+                self.s['households'].append(h)
+                counts[income,car]-=1;admitted+=1;progress=True;self.s['movedIn']+=size
+                self.s['migrationFlows'].append(dict(source=self.s['gateway'] or [0,0],target=home['center'],kind='in',people=size))
+            if not progress:break
+        self.s['migrationQueue']=[dict(income=income,car=car,count=count) for (income,car),count in sorted(counts.items()) if count]
+        self.s['pendingHousing']=sum(counts.values())
+        self.s['migrationDemand']=dict(base=self.s['settings']['migration'],potential=arrivals,admitted=admitted,
+                                      remaining=self.s['pendingHousing'],vacantJobs=sum(matcher.jobs.values()),month=self.s['month'])
 
     def match_jobs(self):
         employed=Counter()
@@ -1115,20 +1238,17 @@ class City:
             if p.get('building') and p['building']['use']!='residential':
                 p['building']['positions']=0
                 p['building']['employees']=0
-        jobs={p['id']:p for p in employers}
-        population=sum(h['size'] for h in self.s['households'])
-        sector_need={'office':self.s['settings']['externalJobs']*self.s['policy']['jobOfficeExternal']+population*self.s['policy']['jobOfficePopulation'],
-                     'commercial':12+population*self.s['policy']['jobCommercialPopulation'],'industrial':self.s['settings']['externalJobs']*self.s['policy']['jobIndustrialExternal']+population*self.s['policy']['jobIndustrialPopulation'],
-                     'warehouse':self.s['settings']['externalJobs']*self.s['policy']['jobWarehouseExternal']+population*self.s['policy']['jobWarehousePopulation']}
-        capacities=Counter()
-        for p in employers:
-            capacities[p['building']['use']]+=p['building']['capacity']
+        positions=BusinessMarket(self,kind='jobs',supply=workplace_supply(self,planned=False)).positions()
         for p in employers:
             b=p['building']
-            b['positions']=min(b['capacity'],max(1,round(sector_need[b['use']]*b['capacity']/max(1,capacities[b['use']]))))
+            b['positions']=positions.get(p['id'],0)
+        sync_facilities(self)
+        employers += facility_workplaces(self)
+        jobs={p['id']:p for p in employers}
         for h in self.s['households']:
             job=h.get('job')
-            if job in jobs and employed[job]<jobs[job]['building']['positions']:
+            trip=self.route(h['home'],job,h['car'],h['income']) if job in jobs else None
+            if job in jobs and employed[job]<jobs[job]['building']['positions'] and trip and trip['minutes']<self.s['policy']['workMaximumMinutes']:
                 employed[job]+=1
             else:
                 h['job']=None
@@ -1178,11 +1298,13 @@ class City:
                                 if edge.get('ref'):
                                     for period in ('am','pm'):
                                         self.road_load[(period,edge['ref'])]+=120/line['headway']
-            for h in households:
+            for household_index,h in enumerate(households):
+                if household_index%64==0:
+                    self.monthly_progress(.36+.20*(iteration+household_index/max(1,len(households)))/self.s['policy']['trafficIterations'],'交通分配')
                 h['commute']=None; h['commuteFailed']=False
                 h['transportCost']=0
                 targets=[]
-                if h.get('job') in self.parcelmap:
+                if h.get('job') in self.parcelmap or h.get('job') in facilities:
                     targets.extend([(h['home'],h['job'],'work','am',480),(h['job'],h['home'],'work','pm',1080)])
                 # A representative household shopping trip; destination uses actual open shops.
                 if shops and int(hashlib.sha256(h['id'].encode()).hexdigest()[:4],16)%3==0:
@@ -1266,14 +1388,16 @@ class City:
 
     def update_market(self):
         update_location_context(self)
+        housing_market=housing.HousingMarket(self)
+        business_market=BusinessMarket(self)
         occupied=Counter(h['home'] for h in self.s['households'])
-        population=sum(h['size'] for h in self.s['households'])
-        employers=[p for p in self.s['parcels'] if p.get('building') and p['building']['status']=='active' and p['building']['use']!='residential' and p['building'].get('businessActive',True)]
+        employers=[p for p in self.s['parcels'] if p.get('connected') and p.get('building') and p['building']['status']=='active' and p['building']['use']!='residential' and p['building'].get('businessActive',True)]
         facilities=self.s['facilities']
         homes=Counter(h['home'] for h in self.s['households'])
         scarcity=sum(bool(q.get('building')) for q in self.s['parcels'])/max(1,len(self.s['parcels']))
-        fields=opportunity_fields(self,employers,homes,facilities)
-        for p in self.s['parcels']:
+        fields=opportunity_fields(self,employers+facility_workplaces(self),homes,facilities)
+        for parcel_index,p in enumerate(self.s['parcels']):
+            if parcel_index%64==0:self.monthly_progress(.64+.08*parcel_index/max(1,len(self.s['parcels'])),'住房与土地')
             field=fields[p['id']]
             jobs=field['jobs30'];public_jobs=field['publicJobs']
             p['accessBudgets']={str(minutes):field['jobs'+str(minutes)] for minutes in (30,45,60)}
@@ -1289,7 +1413,7 @@ class City:
             accessibility=min(1,math.log1p(jobs)/7)
             terrain=p['terrain']
             drivers=dict(base=65,accessibility=accessibility*280,cluster=p['cluster']*180,
-                         demand=min(population,10000)*.012,services=amenity*25,
+                         demand=min(business_market.accessible_population(p),10000)*.012,services=amenity*25,
                          landscape=terrain['scenic']*70,terrainCost=-(terrain['costFactor']-1)*85,
                          lowland=-terrain['lowland']*70,pollution=-p['pollution']*70,noise=-noise*20,scarcity=scarcity*45)
             target=sum(drivers.values())
@@ -1304,7 +1428,8 @@ class City:
                 b['occupied']=occupied[p['id']] if b['use']=='residential' else b.get('employees',0)
                 vacancy=1-b['occupied']/max(1,b['capacity'])
                 base=USES[b['use']]['rent']
-                pressure=(self.s['pendingHousing']/30 if b['use']=='residential' else (1-vacancy))
+                pressure=(housing_market.gap(p)/max(1,b['capacity']) if b['use']=='residential'
+                          else 1-vacancy+business_market.gap(p,b['use'])/max(1,b['capacity']))
                 base*=.85+.0015*b.get('condition',100)
                 rent_target=base*(.65+accessibility*.5+p['cluster']*.2+min(1,pressure)*.35-vacancy*.2+terrain['scenic']*.12-terrain['lowland']*.12)
                 p['rent']=round(max(2,p['rent']+(rent_target-p['rent'])*self.s['policy']['rentSmoothing']),2)
@@ -1346,20 +1471,23 @@ class City:
         # Infill and vertical growth compete BEFORE greenfield proposals. Their
         # reserved capacity enters expected supply, so new projects cannot take
         # all demand first or double-book the same future residents/jobs.
-        targets=development_targets(self);supply=planned_supply(self)
+        housing_market=housing.HousingMarket(self)
+        business_market=BusinessMarket(self)
         if self.s['settings']['growth']>0:
             for p in sorted(self.s['parcels'],key=lambda p:-p.get('businessCore',0)):
                 b=p.get('building')
                 if renewal.locked(self,p) or not b or b['status']!='active' or b['age']<=36 or b.get('extensionReady') or b['use'] not in ('office','residential','commercial'):continue
-                use=b['use'];gap=max(0,targets[use]-supply[use])
+                use=b['use'];gap=housing_market.gap(p) if use=='residential' else business_market.gap(p,use)
                 space=self.s['policy']['householdSpace'] if use=='residential' else USES[use]['space']
                 floor_capacity=b['footprintArea']/space
                 extra=min(2,desired_floors(self,p,use)-b['floors'],int(gap*.6/max(1,floor_capacity)))
                 if extra<1 or b.get('occupied',0)/max(1,b['capacity'])<=.7:continue
                 b['extensionFloors']=extra;b['extensionReady']=self.s['month']+6
                 b['extensionCost']=round(b['footprintArea']*extra*USES[use]['cost']*p['terrain']['costFactor'])
-                b['cost']+=b['extensionCost'];supply[use]+=floor_capacity*extra
-        select_projects(self,USES,building_style)
+                b['cost']+=b['extensionCost']
+                if use=='residential':housing_market.reserve(p,int(floor_capacity*extra),p['rent'])
+                else:business_market.reserve(p,use,int(floor_capacity*extra))
+        select_projects(self,USES,building_style,housing_market,business_market)
 
     def identify_districts(self):
         clustered_districts(self)
@@ -1383,6 +1511,8 @@ class City:
         ready=[p for p in buildings if p['building']['status']!='construction']
         units=sum(p['building']['capacity'] for p in ready if p['building']['use']=='residential')
         positions=sum(p['building'].get('positions',0) for p in ready if p['building']['use']!='residential')
+        facility_positions=sum(f.get('positions',0) for f in self.s['facilities'])
+        positions+=facility_positions
         employed=sum(bool(h.get('job')) for h in self.s['households'])
         trips=getattr(self,'trips',[])
         completed=[t for t in trips if t['completed']]
@@ -1392,7 +1522,7 @@ class City:
         rents=[p['rent'] for p in ready if p['building']['use']=='residential']
         avg=lambda v:sum(v)/len(v) if v else None
         self.s['stats']=dict(month=self.s['month'],population=pop,households=len(self.s['households']),
-            jobs=positions,employed=employed,unemployment=(1-employed/len(self.s['households']))*100 if self.s['households'] else None,
+            jobs=positions,facilityJobs=facility_positions,employed=employed,unemployment=(1-employed/len(self.s['households']))*100 if self.s['households'] else None,
             housing=units,vacancy=(1-len(self.s['households'])/units)*100 if units else None,
             buildings=len(buildings),construction=sum(p['building']['status']=='construction' for p in buildings),
             roadKm=sum(r['length'] for r in self.s['roads'] if group(r)=='road')/1000,
@@ -1435,7 +1565,7 @@ class City:
             b=p.get('building')
             if b and 'footprintArea' not in b:
                 b['footprintArea']=round(Polygon(b['footprint']).area,1)
-        state={k:v for k,v in self.s.items() if k not in ('households','commands','placeNames')}
+        state={k:v for k,v in self.s.items() if k not in ('households','commands','placeNames','namingGeography')}
         state['parcels']=parcels
         migration=Counter()
         for flow in self.s['migrationFlows']:
@@ -1451,6 +1581,9 @@ class City:
 
     def inspect(self, object_id):
         p=self.parcelmap.get(object_id)
+        if p and not p.get('building'):
+            owner=next((f for f in self.s['facilities'] if f['id']==p.get('openSpace')),None)
+            if owner:return dict(type='facilities',object=owner)
         if p:
             residents=[h for h in self.s['households'] if h['home']==object_id]
             return dict(type='parcel',object=p,residents=residents[:40],population=sum(h['size'] for h in residents))

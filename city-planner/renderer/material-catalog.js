@@ -3,20 +3,21 @@
   'use strict';
   const range=(a,n)=>Array.from({length:n},(_,i)=>a+i);
   const catalog={
-    asphalt:{atlas:'ground',cells:range(0,4),meters:5,rgb:[79,83,86],grain:16},
-    paving:{atlas:'ground',cells:[4,5,6,7,12,13,14,15],meters:4.8,rgb:[185,181,169],grain:12},
-    roof:{atlas:'roof',cells:range(0,8),meters:6,rgb:[188,188,180],grain:15},
+    asphalt:{atlas:'ground',cells:range(0,4),meters:5,rgb:[91,98,105],grain:11},
+    paving:{atlas:'ground',cells:[4,5,6,7,12,13,14,15],meters:4.8,rgb:[241,228,207],grain:9},
+    pavingWarm:{atlas:'ground',cells:[12,13,4,7],meters:4.8,rgb:[232,183,150],grain:7},
+    roof:{atlas:'roof',cells:range(0,8),meters:6,rgb:[221,224,218],grain:11},
     roofTiles:{atlas:'roof',cells:range(8,4),meters:3,rgb:[137,111,91],grain:12},
     metal:{atlas:'roof',cells:range(12,4),meters:4,rgb:[146,159,161],grain:9},
-    facade:{atlas:'facade',cells:range(0,12),meters:2.4,rgb:[177,173,158],grain:12},
+    facade:{atlas:'facade',cells:range(0,12),meters:2.4,rgb:[202,201,189],grain:10},
     glass:{atlas:'facade',cells:range(12,4),meters:4,rgb:[63,91,107],grain:4},
-    grass:{atlas:'landscape',cells:range(8,4),meters:3.5,rgb:[95,114,65],grain:22},
+    grass:{atlas:'landscape',cells:range(8,4),meters:3.5,rgb:[105,139,46],grain:17},
     gravel:{atlas:'landscape',cells:range(4,4),meters:3,rgb:[159,156,143],grain:24},
-    water:{atlas:'landscape',cells:range(0,4),meters:12,rgb:[58,110,134],grain:8},
+    water:{atlas:'landscape',cells:range(0,4),meters:12,rgb:[57,130,163],grain:8},
     soil:{atlas:'landscape',cells:range(12,4),meters:3,rgb:[132,110,80],grain:22},
-    curb:{atlas:'facade',cells:[0,2,3,8],meters:3,rgb:[200,198,184],grain:12},
-    marking:{variants:4,meters:1.8,rgb:[242,239,220],grain:9},
-    markingYellow:{variants:4,meters:1.8,rgb:[222,185,81],grain:10},
+    curb:{atlas:'facade',cells:[0,2,3,8],meters:3,rgb:[245,239,221],grain:8},
+    marking:{variants:4,meters:1.8,rgb:[250,249,239],grain:5},
+    markingYellow:{variants:4,meters:1.8,rgb:[244,194,62],grain:6},
     carPaint:{variants:12,meters:3,rgb:[210,215,208],grain:7}
   };
   const paintColors=[[227,231,225],[155,43,38],[46,101,146],[210,167,56],[58,67,72],[170,184,191],

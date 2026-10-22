@@ -1,0 +1,36 @@
+# Initial generation
+
+Use case: photorealistic-natural.
+Asset type: a single transparent 2 by 2 automobile sprite atlas for a high-fidelity top-down city simulation.
+Create exactly FOUR isolated production-car silhouettes, one centered in each equal square cell, with true transparent alpha. 1024 by 1024 square atlas. All four cars point straight UP, exactly vertical orthographic view from directly over their center, no perspective or side-view distortion. No drawn grid or separators.
+
+Row 1, left: unbadged BMW Z4 G29 roadster in glossy deep red, soft top fully retracted, empty black two-seat cockpit. Row 1, right: the same unbadged BMW Z4 G29 roadster in metallic deep blue, soft top fully retracted, empty warm tan two-seat cockpit.
+Z4 shape reference: the real G29 viewed vertically from above has a long sculpted hood occupying roughly the front third of the full car, a broad dark swept windshield, exactly two sculpted bucket seats positioned well behind the car midpoint, slim center console, two rollover hoops immediately behind the seats, a compact deck with folded top cover, and a short rear overhang. Rounded tapering nose, sculpted shoulders, small angular headlights at the front corners, narrow rear lamps, realistic small mirrors. The cockpit must look like an actual open two-seat roadster, never a four-seat sedan. No driver or passenger.
+
+Row 2, left: unbadged Dodge Challenger modern wide-body two-door muscle coupe in burnt orange with satin charcoal hood inset and a single hood air intake. Row 2, right: same unbadged Dodge Challenger in deep plum purple with body-colored roof and charcoal hood intake.
+Challenger shape reference: the real car viewed vertically from above has a long broad almost rectangular body, squared-off blunt front end, long hood with raised central intake, two wide shoulders, straight side edges, wide dark trapezoidal front windshield, a broad solid roof, smaller sloping rear window, substantial separate trunk deck, and a low rear lip spoiler. Make the Challenger visibly longer and broader than the Z4, not an aerodynamic European coupe. No stripes, racing numbers or decals.
+
+Scale and padding: use ONE consistent physical pixels-per-meter scale across all four cells. Z4 length about 4.32 metres and Challenger length about 5.03 metres. Z4 silhouette should occupy about 75% of its cell height, Challenger about 87%. Both models must keep fully transparent margins all around, including mirrors; no part touches a cell boundary. Vehicle length includes bumpers, vehicle width includes mirrors. Centers exactly at 25% and 75% of canvas width and height.
+
+Style: photorealistic overhead product photography, premium miniature-city appearance, crisp silhouette, sculpted metal panels with gentle neutral reflections, softly reflective glass, realistic dark rubber, small panel seams. Restrained soft neutral studio illumination, no blown-out white highlights and no dramatic dark cast shading.
+ABSOLUTELY NO brand logos, emblems, roundels, badges, model names, text, letters, numbers, watermarks, registration lettering, license plates with text, or symbols anywhere, including on hood, trunk, seats and steering wheel. Smooth unmarked body paint where emblems would be. No ground surface, no scenery, no cast ground shadow, no drop shadow, no halo, no checkerboard, no white background. Keep genuine transparent alpha.
+
+# Cell padding and emblem cleanup
+
+Precise edit of this transparent 2x2 car atlas. Preserve the four photorealistic car models, colors, empty two-seat interiors, nose-up orientation, body shapes and transparent alpha.
+1) REMOVE the tiny emblems centered on the very front hood/nose of BOTH top-row roadsters. They must become uninterrupted matching red or blue paint with natural highlights. Remove ANY remaining badge, insignia, logo, circular emblem, word, letter, number, registration text or watermark on any of the FOUR cars, including steering wheels. Completely unbadged automobiles, no identifying marks.
+2) Correct the cell layout and padding. Canvas stays square with exactly FOUR equal quadrants. Resize every full car to 82% of its current size, maintaining true proportions and relative sizes between models. Center the red Z4 precisely at (25% image width,25% image height), the blue Z4 precisely at (75%,25%), the orange Challenger precisely at (25%,75%), and the purple Challenger precisely at (75%,75%). ALL pixels belonging to each vehicle, including its mirrors, must be inside its own quadrant with at least 6% of the CELL height as fully transparent margin at both front and rear. In particular move the orange and purple cars DOWN within the bottom row so their noses are completely below the image center line. The top row roadsters must not touch the midpoint line either. Equal invisible grid, no drawn grid or borders.
+Keep four complete vehicles only. No ground shadow or drop shadow, no glow, no ground surface, no checkerboard, no text. Do not add any body markings during this edit.
+
+# Final nose emblem cleanup
+
+Make one extremely small cleanup to this existing transparent four-car atlas. Keep the image dimensions, all four vehicles, exact positions, scale, padding, body paint, lighting, interiors and transparency unchanged.
+There are still tiny dark badge/roundel marks on the very top center of the red roadster's nose and the blue roadster's nose. Remove BOTH marks completely, including any black outline or circular depression. Replace each with smooth uninterrupted red or blue painted metal matching the surrounding nose. Retouch the central 10% width of each roadster's frontmost nose so there is absolutely no symbol, speck, circle, hole, badge shape or marking there. Also remove any logo-like mark on either steering wheel; leave a plain black steering hub.
+Do not move, resize, rotate or redesign any vehicle. Do not add labels, letters, numbers, emblems, ground shadows, checkerboard or background. Preserve true transparent alpha.
+
+# Final precise retouch (selected output)
+
+精确修图，只修上面两辆敞篷车的车头鼻端，其余像素内容与四格排版尽量保持。
+目前红车和蓝车的最顶端正中位置，各残留了一个非常小的蓝白色菱形/圆形车标。这两个车标必须真正消失，不能只变暗、缩小、模糊或换成黑点。
+请重新修复这两处鼻端的整块漆面：红车在发动机盖最前端正中的一块宽约 25 像素、高约 15 像素区域（位于整幅图宽约 28.5%、高约 8% 的位置），变成连续、干净、无任何小点或凹槽的红色汽车金属漆；蓝车同样位置（图宽约 71.5%、高约 8%）变成连续、干净、无任何小点或凹槽的蓝色汽车金属漆。自然光照和柔和反射延续周边，不能出现补丁边缘或色块。整个车头鼻端中央只能看到连续色漆，不能有菱形、圆形、银边、黑点、白点、蓝白图案、标志、字母或数字。
+请直接重做这两小块鼻端蒙皮的照片质感，消除原车标形状。不要修 Challenger，它们已经正确。不要改变四车轮廓、比例、位置、颜色、透明留白、内饰、车灯和其它车身细节。真实透明 alpha，没有地面投影，没有任何新增文字、logo 或徽章。

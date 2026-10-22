@@ -1,0 +1,6 @@
+Use case: lighting-weather.
+Asset type: transparent top-down car sprite atlas in an outdoor miniature city game.
+Input image: existing 4 by 4 atlas, edit target.
+Change only the lighting and remove badges/logos: relight all 16 vehicles under uniform diffuse outdoor sky, as realistic vertical aerial photography. Remove narrow white softbox strips, extremely bright chrome outlines, excessive contrast on paint, and baked studio reflections. Keep broad gentle curved body shading and realistic painted material, no matte flat cartoon colors. Glass is dark grey-blue with subtle smooth broad sky reflection. Silver and white stay silver and white; all body colors remain consistent. Keep panel seams, roof racks, tyres, mirrors, lights and van amber beacon.
+Preserve exactly the same 16 vehicle models, shapes, positions, orientations with fronts up, 4x4 equal cell arrangement, proportions and transparency. The bottom row remains the same vans and estate car. Remove every small badge/emblem/logo/lettering/number/plate text, including rear badges. Badge surfaces should simply be continuous painted or metal surfaces. No new text.
+No ground and no ground shadows, no edge glow or outlines, no checkerboard, no grids, no labels, no perspective. Output true transparent RGBA. No other changes.

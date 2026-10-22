@@ -90,6 +90,38 @@ class AutomaticFacilitiesTests(unittest.TestCase):
         c = self.city(); c.s['households'] = []
         self.assertFalse(auto.grow(c))
 
+    def test_polluters_reject_business_centers_even_with_industrial_neighbours(self):
+        c = self.city(); ctx = auto.Context(c)
+        site = next(f for p in ctx.empty if (f := auto.propose_site(ctx, 'sewage_plant', p)))
+        shape = Polygon(site['points']); road = ctx.roads[site['accessRoad']]
+        self.assertGreater(auto.suitability(ctx, 'sewage_plant', site['point'], road, shape), 0)
+        # A local/suburban CBD must also be protected, regardless of map center.
+        c.s['districts'] = [dict(kind='CBD', polygons=[list(shape.buffer(80).exterior.coords)])]
+        for kind in auto.POLLUTING:
+            self.assertEqual(auto.suitability(auto.Context(c), kind, site['point'], road, shape), 0, kind)
+
+    def test_office_floor_area_and_planned_housing_exclude_polluting_sites(self):
+        c = self.city(); ctx = auto.Context(c)
+        site = next(f for p in ctx.empty if (f := auto.propose_site(ctx, 'sewage_plant', p)))
+        shape = Polygon(site['points']); road = ctx.roads[site['accessRoad']]
+        neighbours = ctx.nearby(site['point'])
+        office = neighbours[0]['building']; original = copy.deepcopy(office)
+        office.update(use='office', floorArea=10**7)
+        self.assertEqual(auto.suitability(auto.Context(c), 'sewage_plant', site['point'], road, shape), 0)
+        office.update(original)
+        planned = next(p for p in ctx.empty if Polygon(p['points']).distance(shape) < 250)
+        planned['use'] = 'residential'
+        self.assertEqual(auto.suitability(auto.Context(c), 'sewage_plant', site['point'], road, shape), 0)
+
+    def test_infill_hole_is_not_an_industrial_edge(self):
+        c = self.city(); ctx = auto.Context(c)
+        site = next(f for p in ctx.empty if (f := auto.propose_site(ctx, 'sewage_plant', p)))
+        x, y = site['point']; shape = Polygon(site['points'])
+        surrounding = [dict(center=[x+220*math.cos(i*math.pi/4+.1), y+220*math.sin(i*math.pi/4+.1)],
+                            building=dict(use='industrial', floorArea=1000)) for i in range(8)]
+        with patch.object(ctx, 'nearby', return_value=surrounding):
+            self.assertEqual(auto.suitability(ctx, 'sewage_plant', site['point'], ctx.roads[site['accessRoad']], shape), 0)
+
     def test_occupied_protected_terrain_and_pollution_exclusions(self):
         c = self.city(); ctx = auto.Context(c)
         p, f = next((p,f) for p in ctx.empty if (f:=auto.propose_site(ctx,'hospital',p)))

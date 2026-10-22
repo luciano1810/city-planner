@@ -1,0 +1,33 @@
+Asset: vehicles-daylight-v2.png
+Method: Built-in image_gen image edit, transparent_background: true.
+Original input: renderer/assets/vehicles-daylight.png
+First edit output: exec-6a57c696-7499-4d9a-93d4-a82ec7ae61f8.png
+Final edit output: exec-d134015b-09dd-4fdc-9ca7-97a3aa966475.png
+
+First edit prompt
+Use case: precise-object-edit / lighting-weather.
+Asset type: photoreal transparent overhead vehicle sprites for a city simulation.
+Edit ONLY the lighting/material response of the supplied atlas. Preserve every car's identity, exact footprint silhouette, position, orientation, original paint colour, body proportions, mirrors, wheel positions, windows, cabin layout, and cell placement. Do not add, remove, duplicate, rotate, or swap cars.
+
+Problem: these cars currently resemble flat paper cutouts with black outlines. Make them read as real sculpted automobile bodies in a high vertical outdoor photograph. Restore rounded wheel-arch shoulders, a subtly raised cabin and crowned hood/trunk surfaces through INTERNAL SHADING ONLY. Use wide, restrained, softly fading FACE reflections of open sky on the hood, roof and broad shoulder surfaces. Reflection patches should cover a broad surface area (roughly 20–35% of a painted panel's width) and blend continuously into the paint. The side surfaces should have deeper versions of the paint colour rather than black strips. Show gentle local ambient occlusion only in true panel recesses, wheel wells, grilles and cabin interiors. Keep sufficient tonal separation between raised paint, rounded shoulders, glass and real dark hardware.
+
+Remove the heavy pure-black drawn-looking exterior contour and thick black metallic seams. Do not replace these with white contours. Car paint must roll naturally into the silhouette with a clean thin antialiased edge. Preserve actual black tyres, grilles and open cabin recesses, but make black window seals thin and realistic, not thick black ink rings. Windshield glass should have broad soft reflected sky, darker transparent depth and subdued detail.
+
+Lighting: balanced outdoor overhead sky illumination with broad moderate surface reflections, real photographic volume and restrained clearcoat. No lateral hard key light baked into the sprite; the game adds its directional sun. Avoid both flat matte graphic paint and glossy showroom chrome. ABSOLUTELY NO thin white strip highlights, softbox ribbons, pinstripe rim light, narrow luminous shoulder lines, needle-like hot spots, harsh black outlines, overexposure or neon oversaturation. White cars stay white; dark paint stays dark with readable curved surfaces. Do not globally lighten or darken every pixel.
+
+Output invariants: keep the same square canvas and the same regular atlas grid and transparent cell spacing. All noses point straight up; true vertical overhead view. Outside each physical car is REAL transparent alpha including all spaces between cars. No ground plane, no baked cast shadow or contact shadow, no floor, no backdrop, no checkerboard pixels, no halo or detached colour fragments.
+NO logos, brand badges, emblems, letters, numbers, license-plate characters, watermarks or symbols anywhere. Do not invent any new badge. Hood/nose centres must be uninterrupted matching paint with no dots, marks or small discs.
+This is a material/volume refinement of these exact existing vehicles, NOT a redesign and NOT a generic vector illustration.
+
+Layout lock: exactly the existing 4×4 grid of 16 different everyday cars, SUVs and vans. Preserve the individual original paint colours and each roof/window layout. Keep the amber utility-van roof lamp as a physical lamp, without text.
+
+Refinement prompt (referenced the first edit output)
+Use case: precise-object-edit.
+This is a targeted MATERIAL correction of the attached car atlas, preserving its 4×4, all 16 cars/SUVs/vans. Keep every vehicle, cell position, footprint silhouette, nose-up direction, original paint colour, interior, mirrors and model geometry unchanged.
+
+Remove ALL recognisable cloud shapes, cloud mottling, cloudy patches, and painted-looking sky pictures from the paint and glass. The previous edit interpreted reflected sky too literally. Replace those textures with CLEAN, SMOOTH, WIDE GRADIENTS in the existing paint hue. No visible clouds, trees, environment images, marbling or noisy highlight texture. Retain the improved rounded wheel arches, shoulder volume and crowned hood/roof surfaces.
+
+Moderate the broad reflection intensity: bright painted faces stay mostly within their original paint hue, only slightly lighter and less saturated, without pale white hot patches. Painted faces must not contain pure white except the actual white vehicles. These are soft low-contrast broad reflections and physical curvature, never thin white stripes. The curved shoulders should remain visibly rounded; do not revert to flat matte colour. Keep dark side paint as dark paint, not black drawn outlines. Glass retains broad smooth blue-grey tonal depth, with no recognisable cloud pattern or high-contrast black ink frame.
+
+Keep the exact layout and car colours. Retain REAL transparent alpha outside the physical vehicles, with no ground plane, no baked ground/contact shadow, no opaque backdrop, no border, no halo or detached flecks. Keep true vertical overhead view and all fronts pointing up.
+Absolutely NO logo, badge, letters, plate text, numbers, symbols or watermark anywhere. Z4 nose centres, if present, must stay smooth uninterrupted red/blue paint without any tiny dot or emblem.

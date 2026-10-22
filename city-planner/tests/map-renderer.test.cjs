@@ -3,16 +3,15 @@ const assert=require('node:assert/strict');
 const scene=require('../renderer/scene-renderer.js');
 const map=require('../renderer/map-renderer.js');
 
-test('overview switches automatically with hysteresis and explicit map choice persists',()=>{
+test('detail starts at 7200% zoom and explicit map choice persists',()=>{
   scene.configure({quality:'high'});
-  assert.equal(scene.resolveQuality(.8),'high');
-  assert.equal(scene.resolveQuality(.4),'map');
-  for(const scale of [.43,.55,.46,.57])assert.equal(scene.resolveQuality(scale),'map');
-  assert.equal(scene.resolveQuality(.6),'high');
-  assert.equal(scene.resolveQuality(.5),'high');
-  scene.configure({quality:'map'});assert.equal(scene.resolveQuality(8),'map');
+  for(const zoom of [1,4,60,71.99])assert.equal(scene.resolveQuality(zoom),'map');
+  assert.equal(scene.resolveQuality(72),'high');
+  assert.equal(scene.resolveQuality(512),'high');
+  assert.equal(scene.resolveQuality(71.99),'map');
+  scene.configure({quality:'map'});assert.equal(scene.resolveQuality(512),'map');
   scene.configure({quality:'balanced'});assert.equal(scene.settings.quality,'high');
-  assert.equal(scene.resolveQuality(.8),'high');
+  assert.equal(scene.resolveQuality(72),'high');
 });
 
 test('map roads remain readable at overview scale and suppress small paths and underground links',()=>{
@@ -46,6 +45,27 @@ test('road label positions use arc length, stay upright and respect non-square p
   assert.equal(map.roadCandidates([[0,0],[30,0]],1,1,100).length,0);
   assert.equal(map.roadCandidates([[0,0],[60,0],[60,60]],1,1,98).length,0);
   assert(map.roadCandidates([[0,0],[10000,0]],1,1,80,[100,-50,500,50]).length>0);
+});
+
+test('indexed sampling preserves duplicate points, endpoints and curved road arc lengths',()=>{
+  const points=[[0,0],[0,0],[30,0],[30,0],[30,40],[30,40]];
+  assert.deepEqual(map.sampleLine(points,0),{point:[0,0],angle:0});
+  assert.deepEqual(map.sampleLine(points,30),{point:[30,0],angle:0});
+  assert.deepEqual(map.sampleLine(points,50),{point:[30,20],angle:Math.PI/2});
+  assert.deepEqual(map.sampleLine(points,70),{point:[30,40],angle:Math.PI/2});
+  assert.equal(map.sampleLine(points,71),null);assert.equal(map.sampleLine([[1,1],[1,1]],0),null);
+  const road=[[0,0],[10000,0]],first=map.roadCandidates(road,1,1,80,[100,-50,500,50]);
+  map.roadCandidates(road,2,1,80,[200,-50,1000,50]);
+  assert.deepEqual(map.roadCandidates(road,1,1,80,[100,-50,500,50]),first);
+});
+
+test('label measurements are reused while placement still follows viewport and font changes',()=>{
+  let measured=0;const ctx=labelContext();ctx.measureText=text=>{measured++;return {width:text.length*12};};
+  const labels=[{id:'p',text:'park',kind:'poi',point:[150,150],size:13,priority:50}],options={scale:1,bounds:[0,0,300,300]};
+  const first=map.paintLabels(ctx,labels,options),count=measured;assert(count>0);
+  assert.deepEqual(map.paintLabels(ctx,labels,options),first);assert.equal(measured,count);
+  assert.equal(map.paintLabels(ctx,labels,{scale:1,bounds:[400,400,700,700]}).length,0);assert.equal(measured,count);
+  map.paintLabels(ctx,[{...labels[0],size:15}],options);assert(measured>count);
 });
 
 function labelContext(){return new Proxy({measureText(text){return {width:text.length*12};}},{get(o,k){return k in o?o[k]:()=>{};}});}

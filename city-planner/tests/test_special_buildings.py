@@ -63,13 +63,14 @@ class SpecialBuildingTests(unittest.TestCase):
         for cmd in [dict(type='special_building', kind='airport', point=[1400,1200]),
                     dict(type='special_building', kind='airport', point=[100,100]),
                     dict(type='special_building', kind='airport', point=[2800,2800], rotation=float('nan')),
-                    dict(type='road', kind='street', points=[[700,1200],[2100,1200]]),
                     dict(type='road', kind='street', level=1, points=[[700,1200],[2100,1200]])]:
             with self.assertRaises(ValueError):
                 c.command(cmd)
             self.assertEqual(c.snapshot(), before)
-        c.command(dict(type='delete', id=f['id']))
+        with self.assertRaises(ValueError):c.add_road(dict(kind='street',points=[[700,1200],[2100,1200]]))
         road(c, [[700,1200],[2100,1200]])
+        self.assertNotIn(f['id'],[f['id'] for f in c.s['facilities']])
+        self.assertEqual(c.s['lastRoadClearance']['facilities'],1)
 
     def test_port_requires_land_and_water_with_correct_orientation(self):
         c = City(coast_world())

@@ -49,7 +49,7 @@
         box(x,d*.182,4*s,1.1*s,5*s,5*s,'carPaint','carPaint','#3a7d9a');
         for(const dx of [-7,7])box(x+dx*s,d*.16,1.3*s,2.5*s,5.5*s,2*s,'metal','metal');
       }
-      surface(0,d*.485,w*.4,5*s,'asphalt');label('航站楼',0,d*.43,7*s,'#273f45');
+      surface(0,d*.485,w*.4,5*s,'asphalt');
     }else if(f.kind==='port'){
       surface(0,-d*.25,w,d*.5,'paving');surface(0,-8*s,w,16*s,'asphalt');
       for(let x=-w*.48;x<w*.48;x+=12*s)line([[x,-2*s],[x+5*s,-2*s]],1.2*s,'#e1b748');
@@ -71,7 +71,6 @@
       box(0,d*.41,5.4*s,32*s,13*s,10*s,'facade','roof','#e4e3d5');
       for(let i=-1;i<=1;i++)for(let j=0;j<3;j++)box(i*12*s,d*.18+j*15*s,5.4*s,10*s,12*s,5*s,'metal','metal',['#a85c45','#b5a258','#50818c'][j]);
       for(const x of [-w*.45,0,w*.45])lamp(x,-d*.4);
-      label('集装箱码头',0,-d*.07,6*s,'#e8debd');
     }else if(f.kind==='train_station'){
       surface(0,d*.275,w,d,'paving');
       for(let x=-w/2;x<w/2;x+=1.25*s)box(x,0,.05,.25*s,2.7*s,.16,'metal','metal','#766e5b');
@@ -83,7 +82,7 @@
       }
       box(0,35*s,0,w*.68,31*s,13*s,'glass','metal');box(0,35*s,13*s,w*.72,34*s,2*s,'metal','metal');
       for(let x=-w*.3;x<w*.35;x+=14*s)box(x,51*s,0,1*s,1*s,13*s,'facade','facade');
-      surface(0,57*s,w*.82,9*s,'paving');label('火车站',0,57*s,6*s,'#344d52');
+      surface(0,57*s,w*.82,9*s,'paving');
       lamp(-w*.43,57*s);lamp(w*.43,57*s);
     }else if(f.kind==='parking_lot'||f.kind==='parking_garage'){
       surface(0,0,w,d,'asphalt');
@@ -116,10 +115,15 @@
   function ground(ctx,f,scale){
     if(!names[f.kind])return false;
     const plan=layout(f);ctx.save();
-    if(f.accessPath?.length){ctx.beginPath();f.accessPath.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.strokeStyle=mat(ctx,'asphalt',f.id);ctx.lineWidth=f.kind==='airport'?8:5;ctx.stroke();}
     for(const m of plan.meshes.filter(m=>m.ground)){path(ctx,m.points.map(([x,y])=>world(f,x,y)));ctx.fillStyle=m.color||mat(ctx,m.material,f.id);ctx.fill();}
     for(const b of plan.surfaces){path(ctx,corners(f,b));ctx.fillStyle=b.color||mat(ctx,b.material,f.id);ctx.fill();}
     details(ctx,f,scale,false,0);ctx.restore();return true;
+  }
+  // Draw after road surfaces so sidewalks cannot erase a facility driveway.
+  function access(ctx,f){
+    if(!names[f.kind]||!f.connected||!f.accessPath?.length)return;
+    ctx.save();ctx.beginPath();f.accessPath.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));
+    ctx.strokeStyle=mat(ctx,'asphalt',f.id);ctx.lineWidth=f.accessWidth||5;ctx.lineCap='butt';ctx.stroke();ctx.restore();
   }
   function details(ctx,f,scale,roof=false,tilt=.42){
     const plan=layout(f);
@@ -127,11 +131,20 @@
     if(scale>.14)for(const t of plan.labels){if(Boolean(t.z>1)!==roof)continue;const p=world(f,t.x,t.y,t.z||0,tilt);ctx.save();ctx.translate(...p);ctx.rotate(f.rotation*Math.PI/180+(t.angle||0));ctx.font=`600 ${t.size}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=t.color;ctx.fillText(t.text,0,0);ctx.restore();}
   }
   function paint2D(ctx,f,scale){
+    if(root.CityScene?.rasterObject&&names[f.kind]){
+      const p=layout(f),height=Math.max(1,...p.boxes.map(b=>b.z+b.h),...p.hulls.map(b=>b.z+b.h),...p.meshes.flatMap(m=>m.points.map(v=>v[2]))),xs=f.points.map(v=>v[0]),ys=f.points.map(v=>v[1]);
+      const box=[Math.min(...xs)-4,Math.min(...ys)-height*.42-4,Math.max(...xs)+4,Math.max(...ys)+4];
+      root.CityScene.rasterObject(ctx,f,'facility',box,scale,g=>paintUncached(g,f,scale));return;
+    }
+    paintUncached(ctx,f,scale);
+  }
+  function paintUncached(ctx,f,scale){
     if(!names[f.kind])return;
     ctx.save();const tilt=.42,plan=layout(f),faces=[];
     const face=(pts,material,color,shade=0)=>faces.push({pts,material,color,shade,depth:pts.reduce((v,p)=>v+p[1]*tilt+p[2],0)/pts.length});
     const vertex=(x,y,z)=>{const p=world(f,x,y);return [p[0],p[1],z];};
     for(const b of plan.boxes){
+      if(b.vehicle&&root.CityScene?.vehicle)continue;
       if(b.detail&&scale<.8&&Math.min(b.w,b.d)<.3)continue;
       const base=corners(f,b).map(p=>[...p,b.z]),top=base.map(p=>[p[0],p[1],b.z+b.h]);
       for(let i=0;i<4;i++)face([base[i],base[(i+1)%4],top[(i+1)%4],top[i]],b.material,b.color,i===1?.22:.10);
@@ -153,7 +166,14 @@
       if(fce.shade){ctx.globalAlpha=fce.shade;ctx.fillStyle='#172e3a';ctx.fill();ctx.globalAlpha=1;}
     }
     for(const t of plan.trees){const p=world(f,t.x,t.y,t.height,tilt),sprite=root.CityScene?.treeSprite(t.variant,false);if(sprite)ctx.drawImage(sprite,p[0]-t.radius,p[1]-t.radius,t.radius*2,t.radius*2);}
-    for(const v of plan.vehicles){const b={x:v.x,y:v.y,w:1.8,d:4.2};path(ctx,corners(f,b,v.z+1.3,tilt));ctx.fillStyle=['#d8dfda','#627e8b','#9e6256'][v.id%3];ctx.fill();}
+    for(const v of plan.vehicles){
+      if(root.CityScene?.vehicle){
+        const point=world(f,v.x,v.y);point[1]-=v.z*tilt;
+        root.CityScene.vehicle(ctx,{point,heading:(f.rotation||0)*Math.PI/180-Math.PI/2,id:hash(f.id+':parked:'+v.id),speed:0,parked:true},scale);
+      }else{
+        const b={x:v.x,y:v.y,w:1.8,d:4.2};path(ctx,corners(f,b,v.z+1.3,tilt));ctx.fillStyle=['#d8dfda','#627e8b','#9e6256'][v.id%3];ctx.fill();
+      }
+    }
     details(ctx,f,scale,true,tilt);ctx.restore();
   }
   function build3D(batch,f,api){
@@ -188,7 +208,7 @@
   function night(ctx,f,scale,seconds){
     const light=root.CityScene?.lightingAt(seconds);if(!light||light.night<.05||!names[f.kind])return;
     ctx.save();ctx.globalCompositeOperation='screen';
-    const tilt=root.CityScene?.settings.quality==='balanced'?.42:(root.CityScene3D?.tilt||.42),angle=f.rotation*Math.PI/180;
+    const tilt=root.CityScene?.settings.renderer==='webgl'?(root.CityScene3D?.tilt||.42):.42,angle=f.rotation*Math.PI/180;
     for(const win of layout(f).windows){
       if(win.normal[0]*Math.sin(angle)+win.normal[1]*Math.cos(angle)<.1)continue;
       const ps=win.points||(win.side%2?[[win.x,win.y-win.w/2,win.z],[win.x,win.y+win.w/2,win.z],[win.x,win.y+win.w/2,win.z+win.h],[win.x,win.y-win.w/2,win.z+win.h]]:[[win.x-win.w/2,win.y,win.z],[win.x+win.w/2,win.y,win.z],[win.x+win.w/2,win.y,win.z+win.h],[win.x-win.w/2,win.y,win.z+win.h]]);
@@ -198,6 +218,6 @@
     ctx.restore();
   }
   function preview(ctx,f,scale,valid=true){ctx.save();path(ctx,f.points);ctx.fillStyle=valid?'#49a2a52a':'#ce655334';ctx.fill();ctx.strokeStyle=valid?'#398e91':'#c45743';ctx.lineWidth=2/scale;ctx.setLineDash([7/scale,4/scale]);ctx.stroke();ctx.setLineDash([]);if(f.kind==='port'){const a=world(f,0,0),b=world(f,0,f.depth*.45);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.font=`${12/scale}px sans-serif`;ctx.fillStyle='#2f637b';ctx.fillText('海侧',b[0]+4/scale,b[1]);}ctx.restore();}
-  const api={names,layout,world,ground,paint2D,build3D,details,night,preview};
+  const api={names,layout,world,ground,access,paint2D,build3D,details,night,preview};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CitySpecialBuildings=api;
 })(typeof window==='undefined'?{}:window);

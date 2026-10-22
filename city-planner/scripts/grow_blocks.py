@@ -27,7 +27,7 @@ if __name__=='__main__':
     for month in range(48):
         city.step();history.append(dict(month=city.s['month'],population=city.s['stats']['population'],buildings=city.s['stats']['buildings']))
         if (month+1)%12==0:print(json.dumps(history[-1]),flush=True)
-    root=Path(__file__).resolve().parents[2]/'docs'/'experiments'/('blocks-v8-regular' if args.regular else 'blocks-v8-final')
+    root=Path(__file__).resolve().parents[2]/'experiments'/('blocks-v8-regular' if args.regular else 'blocks-v8-final')
     with gzip.open(root.with_suffix('.json.gz'),'wt') as f:json.dump(city.snapshot(),f,ensure_ascii=False,separators=(',',':'))
     summary=[]
     for layout in city.s['blockLayouts']:

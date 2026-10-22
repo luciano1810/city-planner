@@ -20,7 +20,7 @@ const python=process.env.MAP_PYTHON||(fs.existsSync(path.join(app,'.venv/bin/pyt
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+ready.port,{waitUntil:'networkidle'});
-  const snapshot=JSON.parse(fs.readFileSync(process.env.MAP_FIXTURE||repo+'/docs/experiments/lighting-materials-city.json'));
+  const snapshot=JSON.parse(fs.readFileSync(process.env.MAP_FIXTURE||path.join(app,'tests/fixtures/lighting-materials-city.json')));
   Object.assign(snapshot.state.settings,{growth:0,autoGrow:false,autoRenew:false});
   const loaded=page.waitForResponse(r=>r.url().endsWith('/api/city/import'));
   await page.locator('#city-import-file').setInputFiles({name:'view-test.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(snapshot))});
@@ -36,8 +36,12 @@ const python=process.env.MAP_PYTHON||(fs.existsSync(path.join(app,'.venv/bin/pyt
   const evidence=[];
   await page.evaluate(()=>{const original=CityMapRenderer.paintLabels;CityMapRenderer.paintLabels=function(...args){const result=original(...args);window.mapLabelEvidence=result;return result;};});
   for(const [name,value] of (process.env.MAP_FIXTURE? [['city',.4],['city-close',.75]]:[['neighborhood',1.8],['overview',.95],['detail',2.5]])){
-    await page.evaluate(value=>{const t=MapWorkspace.terrain,c=document.getElementById('map');MapWorkspace.focus(window.styleCenter||[2260,2395],value/(Math.min(c.clientWidth/t.width,c.clientHeight/t.height)*t.width/t.grid.widthMeters));},value);
-  await page.screenshot({path:repo+'/docs/images/'+capturePrefix+'-'+name+'.png'});
+    await page.evaluate(value=>{
+      const t=MapWorkspace.terrain,c=document.getElementById('map');
+      const worldScale=Math.max(c.clientWidth/t.width,c.clientHeight/t.height)*Math.min(t.width/t.grid.widthMeters,t.height/t.grid.heightMeters);
+      MapWorkspace.focus(window.styleCenter||[2260,2395],value/worldScale);
+    },value);
+  await page.screenshot({path:repo+'/images/'+capturePrefix+'-'+name+'.png'});
     const labels=await page.evaluate(()=>window.mapLabelEvidence);
     for(let i=0;i<labels.length;i++)for(let j=i+1;j<labels.length;j++){const a=labels[i].box,b=labels[j].box;assert(!(a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]),'Label collision');}
     evidence.push({name,labels});
@@ -52,8 +56,8 @@ const python=process.env.MAP_PYTHON||(fs.existsSync(path.join(app,'.venv/bin/pyt
   await page.evaluate(()=>MapWorkspace.draw());
   const afterResize=await center();assert(Math.hypot(afterResize[0]-beforeResize[0],afterResize[1]-beforeResize[1])<1,'Resize must retain the map centre');
   assert((await page.evaluate(()=>window.mapLabelEvidence)).length>0,'Resized map must retain content');
-  await page.screenshot({path:repo+'/docs/images/'+capturePrefix+'-'+(process.env.MAP_FIXTURE?'city-':'')+'compact.png'});
-  fs.writeFileSync(repo+'/docs/experiments/'+capturePrefix+'-'+(process.env.MAP_FIXTURE?'city-':'')+'evidence.json',JSON.stringify({errors,resizePreservesCenter:true,poiSelection:true,evidence},null,2));
+  await page.screenshot({path:repo+'/images/'+capturePrefix+'-'+(process.env.MAP_FIXTURE?'city-':'')+'compact.png'});
+  fs.writeFileSync(repo+'/experiments/'+capturePrefix+'-'+(process.env.MAP_FIXTURE?'city-':'')+'evidence.json',JSON.stringify({errors,resizePreservesCenter:true,poiSelection:true,evidence},null,2));
   assert.deepEqual(errors,[]);console.log(JSON.stringify(evidence.map(x=>({name:x.name,labels:x.labels.length,roads:x.labels.filter(l=>l.kind==='road').length,pois:x.labels.filter(l=>l.kind==='poi').length}))));
  }finally{await browser?.close();backend.kill();}
 })().catch(e=>{console.error(e);process.exit(1)});

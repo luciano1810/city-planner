@@ -47,6 +47,9 @@ POLLUTING = {k for k, v in CATALOG.items() if v.get('polluting')}
 SENSITIVE = {'school', 'clinic', 'hospital', 'university'}
 REASONS = dict(service='优先住宅服务空白，避开污染设施', emergency='面向居住与工业片区，接入普通路或主干道', campus='城市边缘完整校园用地，避开密集楼群和污染设施', leisure='居住与商业片区周边，优先交通便利的大块空地', civic='城市中心活动区，全城最多一处', culture='商业与居住活动区，优先公共交通附近', commercial='成熟商业与办公片区', hotel='商务活动区或机场、车站等交通节点附近', convention='成熟商务片区的大块空地', fuel='普通路或主干道沿线，远离学校和医院', charging='建成区道路沿线，避开污染设施', industry='工业仓储集聚区，优先货运节点', utility='工业边缘，远离住宅、学校与医院', infrastructure='建成区或工业区周边', water='较低密度城市边缘，避开工业与污染设施')
 PUBLIC = {'service', 'emergency', 'campus', 'leisure', 'civic', 'culture'}
+CORE_BUFFER = 350
+REASONS['utility'] = '工业片区边缘，避开各商业中心、密集街区及现有或规划住宅、学校、医院'
+REASONS['industry'] = '工业仓储占主导的片区；污染厂区避开中心与密集街区，优先货运节点'
 
 
 class Context:
@@ -73,6 +76,8 @@ class Context:
         self.zoned = [p for p in self.empty if p['use'] != 'auto']
         self.zoned_tree = STRtree([Polygon(p['points']) for p in self.zoned])
         self.sensitive = [Polygon(p['points']) for p in city.s['parcels'] if p.get('building') and p['building']['use'] == 'residential']
+        # Reserve the same protection for planned housing, before residents arrive.
+        self.sensitive += [Polygon(p['points']) for p in city.s['parcels'] if p['use'] == 'residential' and not p.get('building')]
         self.sensitive += [Polygon(f['points']) if f.get('points') else Point(f['point']).buffer(18)
                            for f in city.s['facilities'] if f['kind'] in SENSITIVE]
         self.sensitive_tree = STRtree(self.sensitive)
@@ -81,6 +86,28 @@ class Context:
         self.transport = [Point(f['point']) for f in city.s['facilities'] if f['kind'] in ('airport', 'port', 'train_station')]
         self.transport += [Point(s['point']) for s in city.s['stops'] if s.get('connected')]
         self.transport_tree = STRtree(self.transport)
+        self.core_tree = STRtree([Polygon(points) for district in city.s['districts']
+                                  if district['kind'] in ('CBD', '办公集聚区', '商业区')
+                                  for points in district.get('polygons', [])])
+
+    def peripheral(self, point, shape):
+        """Exclude every local center, including centers not yet labelled CBD."""
+        if len(self.core_tree.query(shape, predicate='dwithin', distance=CORE_BUFFER)):
+            return False
+        for center in self.city.s.get('growthCenters', []):
+            if shape.distance(Point(center['point'])) >= CORE_BUFFER:
+                continue
+            uses = Counter(p['building']['use'] for p in self.nearby(center['point'], 450))
+            if uses['residential'] + uses['office'] + uses['commercial'] > uses['industrial'] + uses['warehouse']:
+                return False
+        inner = self.nearby(point, 350)
+        if sum(p['building']['use'] in ('office', 'commercial') for p in inner) >= 3:
+            return False
+        # A hole surrounded by developed blocks is not an urban edge. Work in
+        # local angular sectors, rather than distance from the map's midpoint.
+        sectors = {int((math.atan2(p['center'][1]-point[1], p['center'][0]-point[0])+math.pi)/(math.pi/4)) % 8
+                   for p in self.nearby(point, 450)}
+        return len(sectors) < 6
 
     def nearby(self, point, radius=600):
         return [self.built[int(i)] for i in self.tree.query(Point(point), predicate='dwithin', distance=radius)]
@@ -109,10 +136,17 @@ def suitability(ctx, kind, point, road, shape):
             return 0
         return 1 + industry*.3 + (2 if road['kind'] == 'avenue' else 0)
     if profile in ('industry', 'utility'):
-        if road['kind'] == 'lane' or industry < 2 or industry < urban*.45:
+        areas = Counter()
+        for p in nearby:
+            areas[p['building']['use']] += p['building']['floorArea']
+        industrial_area = areas['industrial'] + areas['warehouse']
+        urban_area = areas['residential'] + areas['office'] + areas['commercial']
+        if road['kind'] == 'lane' or industry < 2 or industry < urban or industrial_area < urban_area:
+            return 0
+        if (cfg.get('polluting') or profile == 'utility') and not ctx.peripheral(point, shape):
             return 0
         lowland = ctx.city.terrain.features(shape).get('lowland', 0) if kind == 'sewage_plant' else 0
-        return 2 + industry*.5 + transport*2 + lowland*3
+        return (2 + industry*.5 + transport*2 + lowland*3)/(1+urban*.5)
     if profile == 'water':
         return 0 if industry > 2 or urban > 16 else 2 + ctx.city.terrain.sample(point).get('lowland', 0)
     if profile == 'infrastructure':

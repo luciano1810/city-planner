@@ -180,7 +180,6 @@
     }
     const entry=f.accessPoint||f.point,origin=f.origin||f.point,angle=-f.rotation*Math.PI/180,ex=(entry[0]-origin[0])*Math.cos(angle)-(entry[1]-origin[1])*Math.sin(angle),ey=(entry[0]-origin[0])*Math.sin(angle)+(entry[1]-origin[1])*Math.cos(angle);
     for(const dx of [-2,2])if(inSite([ex+dx,ey+1]))o.lights.push([ex+dx,ey+1]);
-    label(f.name||f.kind,ex,ey,.08,Math.max(2,Math.min(4,f.width/20)),'#344e51');
   }
   const api={populate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityBlockArchitecture=api;
 })(typeof window==='undefined'?{}:window);

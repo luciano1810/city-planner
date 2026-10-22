@@ -319,19 +319,16 @@ def advance(city):
             source=[city.parcelmap[pid] for pid in phase['sourceIds']]
             if not all(p.get('connected') for p in source):project['reason']='等待道路接入恢复';continue
             if mode!='renovate' and project['options']['waitForDemand']:
-                from .development import development_targets, planned_supply
-                targets=development_targets(city);supply=planned_supply(city)
-                own=Counter()
-                for future in project['phases']:
-                    if future['status'] in ('planned','waiting'):
-                        for p in future['sites']:
-                            b=p.get('targetBuilding')
-                            if b:own[b['use']]+=b['capacity']
+                from .business import BusinessMarket
+                local_business=BusinessMarket(city,exclude_project=project['id'],exclude_parcels=phase['sourceIds'])
                 needed=Counter()
                 for p in phase['sites']:
                     b=p.get('targetBuilding')
                     if b:needed[b['use']]+=b['capacity']
-                if any(targets[u]-supply[u]+own[u]<units*.2 for u,units in needed.items()):project['reason']='等待目标用途需求（本期容量的 20%）';continue
+                from .housing import HousingMarket
+                local_housing=HousingMarket(city,exclude_project=project['id'])
+                retained=sum(h['home'] in phase['sourceIds'] for h in city.s['households'])
+                if any((local_housing.demand_for(source)+retained if u=='residential' else local_business.demand_for(source,u))<units*.2 for u,units in needed.items()):project['reason']='等待目标用途的本地可达需求（本期容量的 20%）';continue
             assignments=_relocations(city,project,phase) if mode!='renovate' else []
             if assignments is None:project['reason']='等待足够且可负担的城内住房，尚未搬迁或拆除';continue
             if city.s['settings']['budget'] and city.s['treasury']<phase['cost']:project['reason']='等待本期市政预算';continue
@@ -424,14 +421,14 @@ def automatic(city):
     Compare incremental rental return to retaining current buildings. The
     numbers are game estimates, not property valuations or financial forecasts.
     """
-    from .development import development_targets, planned_supply
+    from .business import BusinessMarket
     settings=city.s['settings'];policy=city.s['policy'];now=city.s['month']
     if not settings.get('autoRenew',True) or settings['growth']<=0 or now%int(policy['renewalReviewMonths']):return
     if sum(p['status'] not in TERMINAL for p in city.s['renewals'])>=int(policy['renewalActiveLimit']):return
     if len(city.s['renewals'])>=1000:return
     budget=max(0,city.s['treasury'])*min(1,policy['renewalBudgetShare'])
-    targets=development_targets(city);supply=planned_supply(city)
-    gaps={u:max(0,targets[u]-supply[u]) for u in USES}
+    from .housing import HousingMarket
+    housing_market=HousingMarket(city)
     def eligible(p):
         b=p.get('building')
         if not b or b['status']=='construction' or b.get('extensionReady') or not p.get('connected') or p['use']=='protected' or p.get('openSpace') or locked(city,p):return False
@@ -470,7 +467,9 @@ def automatic(city):
                     local=next((q for q in sources if q['id'] in p.get('assembledFrom',[])),sources[0])
                     rent=USES[b['use']]['rent']*(1+local.get('centrality',0)*.35+local.get('cluster',0)*.35)
                     revenue+=rent*b['floorArea']*12*.75*.85
-            if any(cap>max(0,gaps[u]+replaced[u])*1.25 for u,cap in capacities.items()):return
+            retained_households=sum(h['home'] in plan['sourceIds'] for h in city.s['households'])
+            replacement_market=BusinessMarket(city,exclude_parcels=plan['sourceIds'])
+            if any(cap>max(0,housing_market.demand_for(sources)+retained_households if u=='residential' else replacement_market.demand_for(sources,u))*1.25 for u,cap in capacities.items()):return
             # Same-use replacements must improve condition or add useful space.
             if len(capacities)==1 and all(p.get('building',{}).get('use') in capacities for p in sources):
                 if sum(capacities.values())<=sum(replaced.values())*1.15 and all(p['building'].get('condition',100)>60 for p in sources if p.get('building')):return
@@ -482,11 +481,12 @@ def automatic(city):
         b=p['building'];condition=b.get('condition',100);occupancy=b.get('occupied',0)/max(1,b['capacity'])
         if condition<=policy['renewalConditionThreshold'] and occupancy>=.5:
             consider(dict(id=p['id'],mode='renovate'),'自动选择翻新：保留现有建筑及使用者',True)
-        alternatives=sorted(USES,key=lambda u:(-gaps[u],u))[:3]
+        replacement_market=BusinessMarket(city,exclude_parcels=[p['id']])
+        alternatives=sorted(USES,key=lambda u:(-(housing_market.gap(p) if u=='residential' else replacement_market.gap(p,u)),u))[:3]
         if b['use'] not in alternatives:alternatives.append(b['use'])
         for use in alternatives:
             if use in ('industrial','warehouse') and p.get('freightTime') is None:continue
-            available=gaps[use]+(b['capacity'] if b['use']==use else 0)
+            available=(housing_market.gap(p)+sum(h['home']==p['id'] for h in city.s['households'])) if use=='residential' else replacement_market.gap(p,use)
             if available<policy['minimumProjectUnits']:continue
             space=policy['householdSpace'] if use=='residential' else USES[use]['space']
             floors=min({'residential':12,'commercial':6,'office':20,'industrial':3,'warehouse':2}[use],int(available*space/max(1,b['footprintArea'])))
@@ -502,8 +502,9 @@ def automatic(city):
         built=[q for q in scope if q.get('building')]
         vacant=sum(q['area'] for q in built if q['building'].get('vacantMonths',0)>=policy['redevelopVacancyMonths'])
         if len(built)<3 or vacant/max(1,sum(q['area'] for q in built))<policy['renewalBlockVacancyShare']:continue
-        for use in sorted(USES,key=lambda u:(-gaps[u],u))[:2]:
-            if gaps[use]<policy['minimumProjectUnits'] or use in ('industrial','warehouse') and p.get('freightTime') is None:continue
+        scope_market=BusinessMarket(city,exclude_parcels=[q['id'] for q in scope])
+        for use in sorted(USES,key=lambda u:(-(housing_market.demand_for(scope) if u=='residential' else scope_market.demand_for(scope,u)),u))[:2]:
+            if (housing_market.demand_for(scope) if use=='residential' else scope_market.demand_for(scope,use))<policy['minimumProjectUnits'] or use in ('industrial','warehouse') and p.get('freightTime') is None:continue
             consider(dict(id=p['id'],mode='rebuild',target=use,primaryShare=85,phases=2,coverage=.55,
                           residentialFloors=3,commercialFloors=2,officeFloors=4),f'自动选择片区拆除重建为{TARGETS[use][0]}：街区持续空置面积占比 {vacant/max(1,sum(q["area"] for q in built))*100:.0f}%')
     if choices:

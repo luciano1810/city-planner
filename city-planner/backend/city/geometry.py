@@ -542,12 +542,22 @@ def frontage_lots(road):
         d+=width+.6;index+=1
 
 
+def branch_anchors(road):
+    """Shared access reservations and growth anchors, including short lanes."""
+    length=LineString(road['points']).length
+    if road['kind']=='lane':
+        return [(f'short-{d}',d) for d in range(80,int(length-35),156)]
+    return [(index,35+index*52) for index in range(3,max(4,int((length-35)/52)),6)
+            if 35+index*52<=length-50]
+
+
 def parcels_for(roads, old, terrain, reserves=(), affected=None):
     """Recompute only affected road frontages; retain occupied and remote geometry."""
     shapes={r['id']:LineString(r['points']) for r in roads}
     land_roads=[r for r in roads if r['level']==0 and r['kind'] in FRONTAGE_ROADS]
     road_areas=[shapes[r['id']].buffer(ROAD_TYPES[r['kind']]['width']/2+2) for r in roads if r['level']==0]
     reserved=[LineString(p['points']).buffer(6) for p in reserves]
+    planned_blocks=unary_union([Polygon(p['block']) for p in reserves if p.get('block')])
     blockers=road_areas+reserved
     blocker_tree=STRtree(blockers)
     oldmap={p['id']:p for p in old}
@@ -561,6 +571,7 @@ def parcels_for(roads, old, terrain, reserves=(), affected=None):
     for r in land_roads:
         if affected is not None and r['id'] not in affected:continue
         shape=shapes[r['id']];half=ROAD_TYPES[r['kind']]['width']/2
+        anchors=branch_anchors(r)
         for index,d,width in frontage_lots(r):
             point=shape.interpolate(d)
             a,b=shape.interpolate(max(0,d-1)),shape.interpolate(min(shape.length,d+1))
@@ -578,11 +589,15 @@ def parcels_for(roads, old, terrain, reserves=(), affected=None):
                 candidate=Polygon(existing['points']) if existing else Polygon(corners)
                 near=[blockers[int(j)] for j in blocker_tree.query(candidate)]
                 # Reserve future perpendicular access on otherwise open roads.
-                if not reserves and r['kind']!='lane':
-                    for dist in range(191,int(shape.length-50),312):
-                        if abs(d-dist)<width/2+5:
-                            anchor=shape.interpolate(dist)
-                            near.append(LineString([(anchor.x,anchor.y),(anchor.x+nx*100,anchor.y+ny*100)]).buffer(6))
+                for _,dist in anchors:
+                    clearance=12 if r['kind']=='lane' else 6
+                    if abs(d-dist)<width/2+clearance:
+                        anchor=shape.interpolate(dist)
+                        # A distant block plan must not remove this open
+                        # frontage's future branch corridor. Only the side
+                        # inside a planned block uses its internal reservations.
+                        if not r.get('generated') and planned_blocks.covers(Point(anchor.x+nx*30,anchor.y+ny*30)):continue
+                        near.append(LineString([(anchor.x,anchor.y),(anchor.x+nx*100,anchor.y+ny*100)]).buffer(clearance))
                 if near and candidate.intersection(unary_union(near)).area>1e-7:candidate=candidate.difference(unary_union(near))
                 nearby=[occupied[int(j)] for j in tree.query(candidate)]+[q for q in occupied[indexed:] if q.intersects(candidate)]
                 if nearby:

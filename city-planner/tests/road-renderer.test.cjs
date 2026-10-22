@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {sample,turnsFor,buildPlan,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection}=require('../renderer/road-renderer.js');
+const {sample,turnsFor,buildPlan,roadSurfaceDetails,arrowPolygons,signalState,signalDimensions,signalFaces,signalProjection}=require('../renderer/road-renderer.js');
 
 const roadTypes={street:{width:14,walk:true},avenue:{width:24,walk:true},highway:{width:30,walk:false},path:{width:4,walk:true}};
 function crossing(kinds=['avenue','street']){
@@ -44,6 +44,41 @@ test('one-way approaches do not draw inbound arrows or lights on their departure
   assert.deepEqual(turnsFor(north,network.junctions[0].approaches),['left','straight']);
 });
 
+test('slightly bent through roads retain markings and furniture at T and four-way junctions',()=>{
+  for(const branches of [1,2])for(const rotation of [0,Math.PI/4]){
+    const bend=.077,angles=[Math.PI,bend,-Math.PI/2,...(branches===2?[Math.PI/2]:[])];
+    const roads=angles.map((angle,i)=>({id:`arm-${i}`,kind:'street',level:0,oneway:false,
+      points:[[0,0],[165*Math.cos(angle+rotation),165*Math.sin(angle+rotation)]]}));
+    const approaches=roads.map(r=>({road:r.id,kind:r.kind,width:14,level:0,distance:0,direction:1,
+      tangent:r.points[1].map(v=>v/165),incoming:true,outgoing:true}));
+    const network={junctions:[{id:'bent-crossing',point:[0,0],approaches,control:'signals',crossings:true}]};
+    const plan=buildPlan(roads,network,roadTypes);
+    assert.equal(plan.crosswalks.length,roads.length);
+    assert.equal(plan.stopLines.length,roads.length);
+    assert.equal(plan.signals.length,roads.length);
+    for(const road of roads){
+      const lines=plan.centerlines.filter(l=>l.road===road.id);
+      assert(lines.length>0,'a slight bend must not erase an entire road centreline');
+      assert(Math.hypot(...lines[0].points[0])<20,'markings resume just beyond the junction');
+      assert(plan.arrows.some(a=>a.road===road.id&&a.turns.length>1&&Math.hypot(...a.point)<40),
+        'each incoming approach retains its nearby turn arrow');
+    }
+  }
+});
+
+test('genuine acute forks still reserve the overlapping pavement before markings',()=>{
+  const angle=Math.PI/6;
+  const roads=[0,angle,Math.PI].map((a,i)=>({id:`fork-${i}`,kind:'street',level:0,oneway:false,
+    points:[[0,0],[200*Math.cos(a),200*Math.sin(a)]]}));
+  const approaches=roads.map(r=>({road:r.id,kind:r.kind,width:14,level:0,distance:0,direction:1,
+    tangent:r.points[1].map(v=>v/200),incoming:true,outgoing:true}));
+  const plan=buildPlan(roads,{junctions:[{id:'fork',point:[0,0],approaches,crossings:true}]},roadTypes);
+  for(const road of roads.slice(0,2)){
+    const line=plan.centerlines.find(l=>l.road===road.id);
+    assert(Math.hypot(...line.points[0])>30,'acute branches still need a longer clearance');
+  }
+});
+
 test('separate bridge crossings and ordinary frontage cuts create no junction furniture',()=>{
   const {roads}=crossing();roads[1].level=1;
   const plan=buildPlan(roads,{junctions:[],nodes:{frontage:[20,0]}},roadTypes);
@@ -63,6 +98,33 @@ test('arc-length sampling follows polyline bends and tolerates repeated terminal
   const points=[[0,0],[30,0],[30,40],[30,40]];
   assert.deepEqual(sample(points,50),{point:[30,20],tangent:[0,1]});
   assert.deepEqual(sample(points,100),{point:[30,40],tangent:[0,1]});
+});
+
+test('road wear stays anchored in metres across cache pieces and preserves the carriageway',()=>{
+  const road={road:'surface-variation',source:[[0,0],[1024,0]],width:14,laneWidth:7},run={start:0,end:1024},before=JSON.stringify(road);
+  const normalize=items=>items.map(({points,color,width,closed})=>JSON.stringify({points,color,width,closed})).sort();
+  for(const side of [-1,1]){
+    const whole=roadSurfaceDetails(road,run,0,1024,side),pieces=Array.from({length:32},(_,i)=>roadSurfaceDetails(road,run,i*32,(i+1)*32,side));
+    for(const kind of ['wear','patches','seals']){
+      assert.deepEqual(normalize(pieces.flatMap(p=>p[kind])),normalize(whole[kind]),'32 m cache boundaries must not duplicate or crop fixed world details');
+      for(const shape of whole[kind])for(const [x,y] of shape.points){
+        assert(x>=1.4&&x<=1024-1.4,'keep the junction/end clearance');
+        assert(y*side>0&&y*side<7,'surface detail remains inside its own road edge');
+        if(kind==='patches')assert(y*side<6.5,'repair patches keep clear of the white edge marking');
+      }
+    }
+    assert(whole.wear.length>10&&whole.patches.length>0&&whole.seals.length>0);
+    const shifted=roadSurfaceDetails(road,{start:5,end:1019},96,128,side);
+    for(const kind of ['wear','patches','seals'])assert.deepEqual(normalize(shifted[kind]),normalize(pieces[3][kind]),'a different junction run split must not move nearby marks');
+    let comparisons=0;
+    for(let i=1;i<pieces.length;i++)if(pieces[i-1].wear.length&&pieces[i].wear.length){
+      const relative=(part,start)=>normalize(part.wear.map(shape=>({...shape,points:shape.points.map(([x,y])=>[x-start,y])})));
+      assert.notDeepEqual(relative(pieces[i-1],(i-1)*32),relative(pieces[i],i*32),'neighbouring pieces must not repeat a translated pattern');comparisons++;
+    }
+    assert(comparisons>4);
+    assert.notDeepEqual(normalize(whole.wear),normalize(roadSurfaceDetails({...road,road:'another-road'},run,0,1024,side).wear),'each road gets its own pattern');
+  }
+  assert.equal(JSON.stringify(road),before,'decorative variation does not mutate road geometry');
 });
 
 test('each zebra has two independent pedestrian heads, clear of vehicle heads at rotated crossroads',()=>{
@@ -123,6 +185,64 @@ test('rounded junction corners follow the two road edges without reaching bridge
   }
   network.junctions[0].approaches.forEach(a=>a.level=1);
   assert.equal(junctionCorners(network).length,0);
+});
+
+test('curved junction bands meet actual road edges and keep the local approach tangents',()=>{
+  const api=require('../renderer/road-renderer.js'),{roads,network}=crossing(),before=JSON.stringify(roads);
+  roads[0].points=[[-200,8],[-30,3],[-8,.3],[0,0],[8,.3],[30,4],[200,50]];
+  roads[1].points=[[-9,-200],[-.3,-8],[0,0],[.3,8],[30,200]];
+  for(const road of roads){
+    const distance=api.nearestDistance(road.points,[0,0]);
+    for(const arm of network.junctions[0].approaches.filter(a=>a.road===road.id)){
+      arm.distance=distance;arm.tangent=sample(road.points,distance+arm.direction*.001).tangent.map(v=>v*arm.direction);
+    }
+  }
+  const geometry=JSON.stringify(roads),corners=api.junctionCorners(network,roads),old=api.junctionCorners(network);
+  assert.equal(corners.length,4);
+  assert(corners.some((c,i)=>Math.hypot(c.from[0]-old[i].from[0],c.from[1]-old[i].from[1])>.05),'fixture must expose the old tangent extrapolation error');
+  const cross=(a,b)=>a[0]*b[1]-a[1]*b[0],dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+  for(const c of corners){
+    for(const [index,roadId,edge,tangent,control,side,kind] of [[0,c.road,c.from,c.u,c.controls[0],1,c.kind],[1,c.nextRoad,c.to,c.v,c.controls[1],-1,c.nextKind]]){
+      const road=roads.find(r=>r.id===roadId),anchor=c.anchors[index],source=sample(road.points,anchor.distance),direction=dot(source.tangent,tangent)>0?1:-1;
+      const out=source.tangent.map(n=>n*direction),normal=[-out[1]*side,out[0]*side],half=roadTypes[kind].width/2;
+      assert(Math.abs(dot(edge.map((n,k)=>n-source.point[k]),normal)-half)<1e-9,'asphalt endpoint lies on the real source stroke edge');
+      assert(Math.abs(cross(control.map((n,k)=>n-edge[k]),out))<1e-9,'curve control retains the source segment tangent');
+      assert(dot(control.map((n,k)=>n-edge[k]),out)<0);
+      for(const band of ['sidewalk','promenade','innerWalk','curb','gutter','surface']){
+        const boundary=api.cornerBoundary(c,band),at=boundary[index===0?1:boundary.length-2],extended=index===0?boundary[0]:boundary.at(-1),offset=half+api.roadCrossSection(kind)[band];
+        const expected=source.point.map((n,k)=>n+normal[k]*offset);
+        assert(Math.hypot(at[0]-expected[0],at[1]-expected[1])<1e-9,band+' must share the road cross section');
+        const extendedExpected=expected.map((n,k)=>n+out[k]*c.extensions[index]);
+        assert(Math.hypot(extended[0]-extendedExpected[0],extended[1]-extendedExpected[1])<1e-9,'overlap follows the actual segment, without pixel padding');
+      }
+    }
+  }
+  assert.equal(JSON.stringify(roads),geometry,'the corner correction remains display-only');assert.notEqual(geometry,before);
+});
+
+test('different sidewalk widths blend with tangent continuity and non-reversing inner edges',()=>{
+  const api=require('../renderer/road-renderer.js'),{network,roads}=crossing(),corners=api.junctionCorners(network,roads);
+  for(const c of corners)for(const band of ['sidewalk','promenade','innerWalk','curb','gutter','surface']){
+    const points=api.cornerBoundary(c,band,2048).slice(1,-1),first=points[1].map((n,k)=>n-points[0][k]),last=points.at(-1).map((n,k)=>n-points.at(-2)[k]);
+    const alignment=(v,t)=>Math.abs(v[0]*t[1]-v[1]*t[0])/Math.hypot(...v);
+    assert(alignment(first,c.u)<.004,band+' starts tangent to the first road');assert(alignment(last,c.v)<.004,band+' finishes tangent to the second road');
+    for(let i=1;i<points.length;i++){
+      const movement=points[i].map((n,k)=>n-points[i-1][k]),forward=[-c.u[0]+c.v[0],-c.u[1]+c.v[1]];
+      assert(movement[0]*forward[0]+movement[1]*forward[1]>0,'an offset boundary must not curl back into itself');
+    }
+  }
+});
+
+test('straight surface passes use the same cross section as corner bands',()=>{
+  const scene=require('../renderer/scene-renderer.js'),api=require('../renderer/road-renderer.js'),previous=scene.settings;
+  scene.configure({quality:'map'});
+  try{
+    for(const kind of ['street','avenue']){
+      const widths=[],ctx=new Proxy({stroke(){widths.push(this.lineWidth);}},{get:(target,key)=>target[key]||(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+      scene.roadSurfaces(ctx,[{id:'section-'+kind,kind,level:0,points:[[0,0],[100,0]]}],roadTypes,38,0,{shadows:false});
+      assert.deepEqual(widths,['sidewalk','promenade','innerWalk','curb','gutter','surface'].map(band=>roadTypes[kind].width+api.roadCrossSection(kind)[band]*2));
+    }
+  }finally{scene.configure(previous);}
 });
 
 test('floating point residue at a terminal junction cannot create a planted island inside it',()=>{
@@ -224,6 +344,79 @@ test('upper-layer pass paints bridge surface and traffic after the ground compos
  assert(events.indexOf('vehicle:0')<events.indexOf('surface:1'));
 });
 
+test('bridge landing bands taper smoothly and match endpoint tangents in either drawing direction',()=>{
+ const api=require('../renderer/road-renderer.js'),scene=require('../renderer/scene-renderer.js');
+ for(const reverse of [false,true])for(const angle of [0,.8,2.1]){
+  const rotate=([x,y])=>[x*Math.cos(angle)-y*Math.sin(angle),x*Math.sin(angle)+y*Math.cos(angle)];
+  const points=[[0,0],[32,4]].map(rotate);if(reverse)points.reverse();
+  const ground={id:'g',level:0,kind:'street',points},bridge={id:'b',level:1,kind:'street',points:[[-100,0],[0,0]].map(rotate)};
+  const length=Math.hypot(32,4),original=JSON.stringify(ground),network={nodes:{far:rotate([-100,0]),join:rotate([0,0]),end:rotate([32,4])},junctions:[],edges:[
+   {road:'b',a:'far',b:'join',startDistance:0,endDistance:100},
+   {road:'g',a:reverse?'end':'join',b:reverse?'join':'end',startDistance:0,endDistance:length}]};
+  const layout=api.connections([ground,bridge],network,roadTypes),surface=api.surfaceRoad(ground,layout),profile=surface.surfaceProfile;
+  assert(profile?.length>30);const start=reverse?profile.at(-1):profile[0],end=reverse?profile[0]:profile.at(-1);
+  assert.equal(start.landingMix,0);assert.equal(end.mix,1);
+  const expected=rotate([reverse?-1:1,0]);assert(Math.hypot(start.tangent[0]-expected[0],start.tangent[1]-expected[1])<1e-9);
+  assert.deepEqual(end.point,ground.points[reverse?0:1]);assert.equal(JSON.stringify(ground),original);
+  const section=api.roadCrossSection('street');
+  for(const band of ['sidewalk','promenade','innerWalk','curb','gutter','surface']){
+   const polygon=scene.roadBandBoundary(surface,14,section,band),index=reverse?profile.length-1:0,p=polygon[index];
+   const width=7+section[band];
+   assert(Math.abs(Math.hypot(p[0]-start.point[0],p[1]-start.point[1])-width)<1e-9,band+' retains full ground width');
+   assert(polygon.flat().every(Number.isFinite));
+  }
+  for(const sample of profile){
+   const raw=api.sample(ground.points,sample.distance),projected=api.projectPoint(raw.point,ground,layout);
+   assert(Math.hypot(projected[0]-sample.point[0],projected[1]-sample.point[1])<1e-8,'markings follow the same spine');
+  }
+  const near=reverse?profile.at(-2):profile[1];assert(near.landingMix<.004,'the tangent transition begins smoothly');
+  const upper=api.surfaceRoad(bridge,layout),up=upper.surfaceProfile;assert(up?.length>30);
+  assert.equal(up.at(-1).mix,1);assert.equal(up[0].mix,0);
+  for(const band of ['sidewalk','promenade','innerWalk','curb','surface']){
+   const shape=scene.roadBandBoundary(upper,14,section,band),endIndex=up.length-1;
+   assert(Math.abs(Math.hypot(shape[endIndex][0]-up[endIndex].point[0],shape[endIndex][1]-up[endIndex].point[1])-(7+section[band]))<1e-9);
+   assert(Math.abs(up[0].bands[band]-(band==='surface'?0:section.curb))<1e-9);
+  }
+ }
+});
+
+test('angled bridge landing seams cover both butt caps without a rounded bulb',()=>{
+ const {landingSeam}=require('../renderer/road-renderer.js');
+ for(const rotation of [0,.6,1.7,Math.PI]){
+  const approaches=[rotation,rotation+Math.PI+.13].map(angle=>({width:14,kind:'street',tangent:[Math.cos(angle),Math.sin(angle)]}));
+  const join={point:[10,20],approaches},surface=landingSeam(join),curb=landingSeam(join,'curb');
+  const area=points=>Math.abs(points.reduce((v,p,i)=>{const q=points[(i+1)%points.length];return v+p[0]*q[1]-p[1]*q[0];},0)/2);
+  assert(area(surface)>10,'the small wedge has pavement');assert(area(curb)>area(surface));
+  for(const a of approaches)for(const sign of [-1,1])assert(surface.some(p=>Math.hypot(p[0]-(10-a.tangent[1]*7*sign),p[1]-(20+a.tangent[0]*7*sign))<1e-10));
+  assert(surface.every(p=>Math.abs(Math.hypot(p[0]-10,p[1]-20)-7)<1e-10));
+ }
+ assert.deepEqual(landingSeam({point:[0,0],approaches:[]}),[]);
+});
+
+test('a bridge landing preserves the nearby intersection of a short receiving road',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),passes=[];
+ const root={CityScene:{roadSurfaces(ctx,roads,types,scale,level){passes.push({level,ids:roads.map(r=>r.id)});}}};
+ vm.runInNewContext(fs.readFileSync(require.resolve('../renderer/road-renderer.js'),'utf8'),{window:root});
+ const ctx=new Proxy({}, {get:(target,key)=>target[key]||(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+ for(const length of [12,32]){
+  passes.length=0;
+  const roads=[{id:'bridge',points:[[0,-100],[0,0]],kind:'street',level:1},
+   {id:'landing',points:[[0,0],[0,length]],kind:'street',level:0},
+   {id:'crossing',points:[[-80,length],[80,length]],kind:'street',level:0},
+   {id:'overpass',points:[[-80,5],[80,5]],kind:'street',level:1},
+   {id:'distant',points:[[-80,200],[80,200]],kind:'street',level:0}];
+  const network={nodes:{top:[0,-100],join:[0,0],end:[0,length]},junctions:[],edges:[
+   {road:'bridge',a:'top',b:'join',startDistance:0,endDistance:100},
+   {road:'landing',a:'join',b:'end',startDistance:0,endDistance:length}]};
+  // Cover both a crossing inside the patch and its sidewalk at the boundary.
+  root.RoadRenderer.paint(ctx,{roads,network,roadTypes},{scale:.1,levels:[1],vehicles:false});
+  const patch=passes.find(p=>p.level===0);
+  assert(patch.ids.includes('crossing'),'the ground intersection must be painted with the landing, so its curb cannot close the crossing');
+  assert(!patch.ids.includes('overpass'),'an unrelated elevated crossing must not be flattened into the landing');
+  assert(!patch.ids.includes('distant'),'distant ground roads do not belong to the local repaint');
+ }
+});
+
 function bridgeFixture({curve=false,width='street',length=300,unconnected=false,bothEnds=false,reverse=false}={}){
   const bridge={id:'b',kind:width,level:1,points:curve?[[0,0],[50,15],[100,100],[100,200]]:[[0,0],[length,0]]};
   if(reverse)bridge.points.reverse();
@@ -241,12 +434,15 @@ function bridgeFixture({curve=false,width='street',length=300,unconnected=false,
 
 test('degree-two bridge joins are open at either endpoint and survive reversed drawing order',()=>{
   for(const reverse of [false,true])for(const width of ['street','avenue','highway']){
-    const {api,bridge,layout,total}=bridgeFixture({reverse,width});
+    const {api,roads,bridge,layout,total}=bridgeFixture({reverse,width});
     assert.equal(layout.joins.length,1);assert.equal(layout.joins[0].approaches.length,2);
     assert.equal(api.roadHeight(bridge,reverse?total:0,layout),0);
     assert.equal(api.roadHeight(bridge,reverse?0:total,layout),6);
     const points=api.surfaceRoad(bridge,layout).points;
     const endpoint=reverse?points.at(-1):points[0];assert.deepEqual(endpoint,[0,0]);
+    const ground=api.surfaceRoad(roads.find(r=>r.id==='g'),layout);
+    assert(ground.openEnd,'the receiving ground sidewalk must not end in a round cap at the bridge');
+    assert(!ground.openStart,'the unconnected ground endpoint keeps its round cap');
   }
 });
 
@@ -271,10 +467,11 @@ test('short and double-ended bridges never jump in height or dip below the groun
 });
 
 test('unsnapped overlapping endpoints keep their full height and do not open a junction',()=>{
-  const {api,bridge,layout}=bridgeFixture({unconnected:true});
+  const {api,roads,bridge,layout}=bridgeFixture({unconnected:true});
   assert.equal(layout.joins.length,0);assert.equal(layout.ramps.size,0);
   assert.equal(api.roadHeight(bridge,0,layout),6);
   assert(!api.upperVehicle({road:'g',level:0,point:[0,0]},layout));
+  assert(!api.surfaceRoad(roads.find(r=>r.id==='g'),layout).openEnd);
 });
 
 test('deferred traffic includes receiving roads but never unrelated roads near a ramp',()=>{

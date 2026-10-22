@@ -92,7 +92,14 @@ class AutonomousCityTests(unittest.TestCase):
         city=self.city
         lanes=[r for r in city.s['roads'] if r.get('generated')]
         self.assertGreater(len(lanes),0)
-        self.assertTrue(all(r['kind']=='lane' and r['parent']==city.s['roads'][0]['id'] for r in lanes))
+        roadmap={r['id']:r for r in city.s['roads']}
+        for lane in lanes:
+            self.assertEqual(lane['kind'],'lane')
+            seen={lane['id']};parent=lane['parent']
+            while roadmap[parent].get('generated'):
+                self.assertNotIn(parent,seen);seen.add(parent)
+                parent=roadmap[parent]['parent']
+            self.assertEqual(parent,city.s['roads'][0]['id'])
         self.assertTrue({'park','plaza'}<={f['kind'] for f in city.s['facilities']})
         self.assertTrue(all(f['connected'] for f in city.s['facilities']))
         self.assertGreater(len(city.s['localPaths']),0)

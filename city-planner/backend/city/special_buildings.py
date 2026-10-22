@@ -4,7 +4,7 @@ import random
 
 from shapely.affinity import rotate, translate
 from shapely.geometry import LineString, Point, Polygon, box
-from shapely.ops import unary_union
+from shapely.ops import unary_union, nearest_points
 from shapely.strtree import STRtree
 
 from .parameters import ROAD_TYPES, USES
@@ -38,6 +38,43 @@ def points(shape):
 
 def special(f):
     return f.get('kind') in CATALOG
+
+
+def access_obstacles(city):
+    items = [(p['id'], Polygon(p['building']['footprint'])) for p in city.s['parcels'] if p.get('building')]
+    items += [(f['id'], Polygon(f['points'])) for f in city.s['facilities'] if f.get('points')]
+    return items, STRtree([shape for _, shape in items])
+
+
+def road_access(city, facility, edges, obstacles):
+    """One physical driveway supplies both routing and the rendered entrance."""
+    site = Polygon(facility['points'])
+    parcel = city.parcelmap.get(facility.get('parcel'))
+    preferred = facility.get('accessRoad') or (parcel['road'] if parcel else None)
+    width = 8 if facility['kind'] in ('airport', 'port', 'logistics_hub') else 5
+    candidates = []
+    for edge in edges:
+        if edge['level'] != 0 or edge['kind'] not in ('street', 'avenue', 'lane'):
+            continue
+        line = LineString(edge['points'])
+        entry = Point(facility['accessPoint']) if facility.get('accessPoint') else nearest_points(site.boundary, line)[0]
+        along = line.project(entry); anchor = line.interpolate(along)
+        connector = LineString([anchor, entry])
+        candidates.append((edge['road'] != preferred, connector.length, edge['id'], edge, along, anchor, entry, connector))
+    items, tree = obstacles
+    for _, length, _, edge, along, anchor, entry, connector in sorted(candidates, key=lambda row: row[:3]):
+        if length > 200:
+            continue
+        corridor = connector.buffer(width/2, cap_style=2)
+        if length > 1 and not city.terrain.buildable(corridor, .18):
+            continue
+        if any(items[int(i)][0] != facility['id'] and corridor.intersection(items[int(i)][1]).area > .1
+               for i in tree.query(corridor, predicate='intersects')):
+            continue
+        facility.update(accessPoint=list(entry.coords[0]), accessRoad=edge['road'], accessWidth=width,
+                        accessPath=[list(anchor.coords[0]), list(entry.coords[0])])
+        return edge, along, connector
+    return None
 
 
 def check_roads(city, occupied, kind, level, road_id=None):
@@ -155,11 +192,19 @@ def preview(city, cmd):
 
 def reserve(city):
     """Keep newly created frontage parcels off independently placed facilities."""
-    sites = [(f['id'], Polygon(f['points'])) for f in city.s['facilities'] if special(f)]
+    sites = [(f['id'], Polygon(f['points']).union(LineString(f['accessPath']).buffer(f.get('accessWidth',5)/2,cap_style=2))
+              if f.get('connected') and f.get('accessPath') else Polygon(f['points']))
+             for f in city.s['facilities'] if special(f)]
     if not sites:
         return
+    forecourts = {f['id']: unary_union([Polygon(s['points'],s.get('holes',[])) for s in f.get('forecourt',[])]) for f in city.s['facilities'] if special(f)}
+    sites = [(fid, shape.union(forecourts[fid])) for fid, shape in sites]
     tree = STRtree([shape for _, shape in sites])
+    facilities = {f['id']: f for f in city.s['facilities'] if special(f)}
     for p in city.s['parcels']:
+        owner = facilities.get(p.get('openSpace'))
+        if owner and not p.get('building'):
+            p['developmentReason'] = p['reason'] = '已建成设施：'+owner['name']
         if p.get('building') or p.get('openSpace'):
             continue
         shape = Polygon(p['points'])
@@ -167,6 +212,7 @@ def reserve(city):
             fid, site = sites[int(index)]
             if shape.intersection(site).area > .1:
                 p['openSpace'] = fid
+                p['developmentReason'] = p['reason'] = '已建成设施：'+facilities[fid]['name']
                 break
 
 
@@ -195,6 +241,11 @@ def place(city, cmd):
 
 def remove(city, identifier):
     f = next((f for f in city.s['facilities'] if f['id'] == identifier and special(f)), None)
+    if f:
+        for p in city.s['parcels']:
+            if p.get('openSpace') == identifier:
+                p.pop('developmentReason',None)
+                p['reason'] = '设施已拆除，等待开发评估'
     if f and f.get('stop'):
         if f.get('ownsStop'):
             city.s['stops'] = [s for s in city.s['stops'] if s['id'] != f['stop']]

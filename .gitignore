@@ -15,6 +15,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+*.egg-info/
 
 # Local configuration (keep example files)
 .env
@@ -32,5 +35,19 @@ coverage/
 .coverage.*
 htmlcov/
 
-# Generated previews and exports
+# Tool caches and temporary files
+.cache/
+.vite/
+.eslintcache
+*.tsbuildinfo
+*.swp
+*.swo
+*~
+/tmp/
+/temp/
+
+# Generated screenshots, experiments, previews and exports
+/images/
+/experiments/*
+!/experiments/README.md
 /city-planner/output/

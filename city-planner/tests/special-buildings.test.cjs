@@ -2,6 +2,19 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const special=require('../renderer/special-buildings.js');
 const geometry=require('../renderer/city-geometry.js');
+test('facility names are not painted on the ground, including saved polygonal sites',()=>{
+ const cases=require('./fixtures/block-architecture-cases.json');
+ for(const f of cases){
+  const plan=special.layout({...f,name:'不应铺在地面的设施名'});
+  assert(!plan.labels.some(t=>t.text==='不应铺在地面的设施名'));
+ }
+});
+test('driveway rendering follows the connected network path and hides disconnected entries',()=>{
+ const calls=[],ctx={save(){},restore(){},beginPath(){},moveTo(...p){calls.push(p)},lineTo(...p){calls.push(p)},stroke(){calls.push('stroke')}};
+ const f={id:'f',kind:'charging_station',connected:true,accessWidth:5,accessPath:[[100,0],[100,25]]};
+ special.access(ctx,f);assert.deepEqual(calls,[[100,0],[100,25],'stroke']);assert.equal(ctx.lineWidth,5);
+ calls.length=0;special.access(ctx,{...f,connected:false});assert.deepEqual(calls,[]);
+});
 
 test('manual buildings and both parking forms produce finite shared metric layouts',()=>{
   for(const [kind,w,d] of [['airport',1000,360],['port',320,240],['train_station',180,80],['parking_lot',32,24],['parking_garage',32,24]]){
@@ -34,7 +47,7 @@ test('all twenty automatic facilities have distinct finite enclosed architecture
     const f={id:kind,kind,variant,width:120,depth:100,height:30,rotation:73,point:[1500,1700]};
     const l=special.layout(f);
     assert(l.boxes.length+l.hulls.length>=3,kind);
-    assert(l.surfaces.length&&l.labels.some(t=>t.text===civic.names[kind]),kind);
+    assert(l.surfaces.length&&!l.labels.some(t=>t.text===civic.names[kind]),kind);
     assert(l.boxes.every(b=>[b.x,b.y,b.z,b.w,b.d,b.h].every(Number.isFinite)&&b.w>0&&b.d>0&&b.h>=0),kind);
     for(const b of l.boxes){assert(Math.abs(b.x)+b.w/2<=f.width/2+.1,kind);assert(Math.abs(b.y)+b.d/2<=f.depth/2+.1,kind);}
     for(const h of l.hulls){assert(h.points.every(([x,y])=>Math.abs(x)<=f.width/2+.1&&Math.abs(y)<=f.depth/2+.1),kind);}
@@ -46,7 +59,7 @@ test('all twenty automatic facilities have distinct finite enclosed architecture
 
 test('refined facilities retain their saved footprint and use finite meshes and real window bays',()=>{
   const fs=require('node:fs');
-  const city=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../../docs/experiments/auto-facilities-city.json')));
+  const city=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'fixtures/auto-facilities-city.json')));
   const facilities=city.state.facilities.filter(f=>f.automaticCategory);
   for(const f of facilities){
     const before=structuredClone(f),l=special.layout(f);
@@ -80,7 +93,7 @@ test('each civic type has three structural variants and hospitals retain red med
 });
 
 test('adaptive Block meshes preserve concave sites, courtyards and slanted window planes',()=>{
-  const cases=require('../../docs/experiments/block-architecture-cases.json');
+  const cases=require('./fixtures/block-architecture-cases.json');
   for(const f of cases){
     const l=special.layout(f);assert.equal(l.detailVersion,3);assert(l.meshes.length>0);
     assert.deepEqual(l,special.layout(structuredClone(f)));

@@ -22,7 +22,13 @@ class CityService:
     def __init__(self, directory=None):
         self.lock = threading.RLock()
         self.worlds, self.cities = {}, {}
+        self.preparation = None
         self.directory = Path(directory or os.environ.get('SHANHAI_DATA_DIR', Path.home() / '.shanhai' / 'saves'))
+
+    def close(self):
+        if self.preparation is not None:
+            self.preparation.cancel()
+            self.preparation=None
 
     def register(self, terrain):
         with self.lock:
@@ -56,7 +62,10 @@ class CityService:
         fd, temporary = tempfile.mkstemp(prefix='.saving-', dir=self.directory)
         try:
             with os.fdopen(fd, 'wb') as handle:
-                handle.write(gzip.compress(payload))
+                # Autosaves sit on the simulation response path. A fast,
+                # lossless gzip level avoids blocking the next tick on size
+                # optimization; manual saves retain the compact encoding.
+                handle.write(gzip.compress(payload,compresslevel=1 if kind=='automatic' else 9))
                 handle.flush()
                 os.fsync(handle.fileno())
             if mode == 'new':
@@ -82,6 +91,8 @@ class CityService:
         if not isinstance(payload, dict):
             raise ValueError('参数必须为对象')
         with self.lock:
+            if action in ('scenario','create','load','import','command','step'):
+                self.close()
             if action == 'scenario':
                 from .scenario import valley_world,build_valley,build_small_blocks
                 small=payload.get('variant')=='blocks'
@@ -89,7 +100,7 @@ class CityService:
                     from .visual_case import build_visual_case
                     city = build_visual_case()
                 elif payload.get('mature'):
-                    root=Path(__file__).resolve().parents[3]/'docs'/'experiments'
+                    root=Path(__file__).resolve().parents[3]/'examples'
                     path=root/('blocks-v8-final.json.gz' if small else 'valley-v5-final.json.gz')
                     if not small and not path.exists():path=root/'valley-v4-final.json.gz'
                     if not small and not path.exists():path=root/'valley-final.json.gz'
@@ -147,8 +158,14 @@ class CityService:
                 return dict(sceneTimeSeconds=city.s['sceneTimeSeconds'],simulation=copy.deepcopy(clock))
             if action == 'simulate':
                 from .simulation import advance
-                result=advance(city,payload.get('seconds',0),payload.get('speed'),
-                               payload.get('mode','observed'),payload.get('reset',False),payload.get('daylightSeconds'))
+                if type(payload.get('incremental',False)) is not bool:raise ValueError('无效的月内计算设置')
+                if payload.get('incremental'):
+                    from .monthly import advance_incremental
+                    result=advance_incremental(self,city,payload)
+                else:
+                    self.close()
+                    result=advance(city,payload.get('seconds',0),payload.get('speed'),
+                                   payload.get('mode','observed'),payload.get('reset',False),payload.get('daylightSeconds'))
                 if result['monthsAdvanced']:
                     try:self.autosave(city)
                     except OSError as exc:result['saveWarning']='自动保存失败，请检查磁盘空间：'+str(exc)
@@ -171,7 +188,12 @@ class CityService:
                 result['sceneTimeSeconds']=city.s['sceneTimeSeconds']
                 return result
             if action == 'command':
-                if payload.get('command',{}).get('type') in ('delete','road_edit','road_update','renewal_start','renewal_cancel'):
+                command=payload.get('command',{})
+                checkpoint=command.get('type') in ('delete','road_edit','road_update','renewal_start','renewal_cancel')
+                if command.get('type')=='road' and (city.s['facilities'] or city.s['renewals'] or any(p.get('building') for p in city.s['parcels'])):
+                    impact=city.preview_road(command).get('clearance',{})
+                    checkpoint=bool(impact.get('buildings') or impact.get('facilities') or impact.get('cancelledProjects'))
+                if checkpoint:
                     self.autosave(city, '编辑前检查点')
                 return city.command(payload.get('command'))
             if action == 'step':

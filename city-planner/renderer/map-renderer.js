@@ -6,7 +6,7 @@
     road:'#fdfcf9',roadEdge:'#c5c8ca',arterial:'#d1d2d3',arterialEdge:'#a8acae',text:'#50565a'};
   const font='-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "Noto Sans CJK SC", sans-serif';
   const ranks={path:0,lane:1,street:2,avenue:3,highway:4,motorway:5,tram:6,train:7,metro:8};
-  const roadsCache=new WeakMap(),iconsCache=new Map();
+  const roadsCache=new WeakMap(),iconsCache=new Map(),lineMetrics=new WeakMap(),projectedLines=new WeakMap(),textMetrics=new WeakMap();
   const categories={
     park:['tree-fill','#63b743','#438e30'],plaza:['flag-fill','#a5a7a5','#747977'],
     school:['mortarboard-fill','#b58155','#926039'],university:['mortarboard-fill','#b58155','#926039'],
@@ -33,31 +33,40 @@
     return {width,rail,major,fill:major?palette.arterial:palette.road,edge:motorway?palette.arterialEdge:palette.roadEdge,
       visible:(road.level||0)>=0&&(road.kind!=='lane'||scale>=.055)&&(!foot||scale>=.16)};
   }
-  function sampleLine(points,distance){
+  function metrics(points){
+    let result=lineMetrics.get(points);if(result)return result;
+    const segments=[];let total=0;
     for(let i=1;i<points.length;i++){
       const a=points[i-1],b=points[i],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
-      if(!length)continue;
-      if(distance<=length)return {point:[a[0]+(b[0]-a[0])*distance/length,a[1]+(b[1]-a[1])*distance/length],angle:Math.atan2(b[1]-a[1],b[0]-a[0])};
-      distance-=length;
+      if(length){segments.push({a,b,start:total,end:total+length,length,angle:Math.atan2(b[1]-a[1],b[0]-a[0])});total+=length;}
     }
-    return null;
+    result={segments,total};lineMetrics.set(points,result);return result;
+  }
+  function sampleLine(points,distance){
+    const {segments,total}=metrics(points);if(!segments.length||distance>total)return null;
+    let lo=0,hi=segments.length-1;
+    while(lo<hi){const mid=(lo+hi)>>1;if(segments[mid].end<distance)lo=mid+1;else hi=mid;}
+    const {a,b,start,length,angle}=segments[lo],t=(distance-start)/length;
+    return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],angle};
   }
   function upright(angle){while(angle>Math.PI/2)angle-=Math.PI;while(angle< -Math.PI/2)angle+=Math.PI;return angle;}
   function roadCandidates(points,scale,sy,textWidth,bounds){
-    const screen=points.map(p=>[p[0]*scale,p[1]*sy]);
-    const total=screen.slice(1).reduce((n,p,i)=>n+Math.hypot(p[0]-screen[i][0],p[1]-screen[i][1]),0),span=textWidth+22;
+    let projection=projectedLines.get(points);
+    if(!projection||projection.scale!==scale||projection.sy!==sy){projection={scale,sy,screen:points.map(p=>[p[0]*scale,p[1]*sy])};projectedLines.set(points,projection);}
+    const screen=projection.screen,total=metrics(screen).total,span=textWidth+22;
     if(total<span)return [];
     const result=[],distances=[total*.5,total*.3,total*.7];
     // Long roads can cross the viewport while all three default anchors are offscreen.
     for(let d=span/2;d<total;d+=Math.max(180,span))distances.push(d);
     for(const d of distances){
       if(d<span/2||d>total-span/2)continue;
-      const a=sampleLine(screen,d-span/2),m=sampleLine(screen,d),b=sampleLine(screen,d+span/2);
-      if(!a||!m||!b)continue;
+      const m=sampleLine(screen,d);
+      if(!m||bounds&&(m.point[0]<bounds[0]||m.point[0]>bounds[2]||m.point[1]<bounds[1]||m.point[1]>bounds[3]))continue;
+      const a=sampleLine(screen,d-span/2),b=sampleLine(screen,d+span/2);
+      if(!a||!b)continue;
       const angle=upright(Math.atan2(b.point[1]-a.point[1],b.point[0]-a.point[0]));
       const deviation=Math.abs((m.point[0]-a.point[0])*Math.sin(angle)-(m.point[1]-a.point[1])*Math.cos(angle));
       if(deviation>3||Math.abs(Math.sin(a.angle-b.angle))>.35)continue;
-      if(bounds&&(m.point[0]<bounds[0]||m.point[0]>bounds[2]||m.point[1]<bounds[1]||m.point[1]>bounds[3]))continue;
       result.push({point:m.point,angle});
     }
     return result;
@@ -150,12 +159,19 @@
   }
   function paintLabels(ctx,labels,{scale,sy=scale,bounds,obstacles=[]}){
     const boxes=obstacles.slice(),placed=[],used=new Set();
+    let measured=textMetrics.get(ctx);if(!measured){measured=new Map();textMetrics.set(ctx,measured);}
     ctx.save();ctx.scale(1/scale,1/sy);ctx.textBaseline='middle';ctx.lineJoin='round';
     const screenBounds=bounds?.map((v,i)=>v*(i%2?sy:scale));
     for(const item of labels.slice().sort((a,b)=>b.priority-a.priority||String(a.id||a.text).localeCompare(String(b.id||b.text)))){
       ctx.font=`${item.weight||500} ${item.size}px ${font}`;
-      const lines=['poi','building'].includes(item.kind)?wrapText(item.text,text=>ctx.measureText(text).width):[item.text];
-      const width=Math.max(...lines.map(text=>ctx.measureText(text).width)),lineHeight=item.size+2,height=lineHeight*lines.length,x=item.point[0]*scale,y=item.point[1]*sy;
+      const wrap=['poi','building'].includes(item.kind),key=JSON.stringify([ctx.font,wrap,item.text]);
+      let text=measured.get(key);
+      if(!text){
+        const lines=wrap?wrapText(item.text,text=>ctx.measureText(text).width):[item.text];
+        text={lines,width:Math.max(...lines.map(text=>ctx.measureText(text).width))};
+        if(measured.size>=2048)measured.delete(measured.keys().next().value);measured.set(key,text);
+      }
+      const {lines,width}=text,lineHeight=item.size+2,height=lineHeight*lines.length,x=item.point[0]*scale,y=item.point[1]*sy;
       let candidates;
       if(item.kind==='road'){
         if(used.has(item.text))continue;

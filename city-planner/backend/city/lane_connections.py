@@ -5,11 +5,13 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.strtree import STRtree
 
 from .geometry import ROAD_TYPES
+from .lane_growth import forward_contacts, first_contact
 from . import renewal, special_buildings
 
 
 def connect_lane_entrances(city):
-    # Use the same 18 metre reach as endpoint snapping, including old saves.
+    # Manual entrances retain the drawing tolerance. Automatic dead ends may
+    # complete one short missing link, including lane-to-lane links in old saves.
     roads = [r for r in city.s['roads'] if r['level'] == 0 and
              r['kind'] in ('lane', 'street', 'avenue', 'highway', 'motorway')]
     if not any(r['kind'] == 'lane' for r in roads):
@@ -23,7 +25,8 @@ def connect_lane_entrances(city):
         for end in (0, -1):
             points = lane['points']
             p = Point(points[end])
-            nearby = [int(i) for i in index.query(p.buffer(18)) if roads[int(i)] is not lane]
+            reach=45 if lane.get('generated') else 18
+            nearby = [int(i) for i in index.query(p.buffer(reach)) if roads[int(i)] is not lane]
             # Never relocate an entrance that already belongs to a junction.
             if any(shapes[i].distance(p) < .05 for i in nearby):
                 continue
@@ -34,7 +37,13 @@ def connect_lane_entrances(city):
             direction = [points[end][k]-inner[k] for k in (0, 1)]
             length = math.hypot(*direction)
             candidates = []
+            if lane.get('generated'):
+                targets=[i for i in nearby if roads[i]['kind'] in ('street','avenue','lane')]
+                approach=list(reversed(points)) if end==0 else points
+                candidates=[(score,roads[targets[i]]['id'],target)
+                            for score,i,target in forward_contacts(approach,[shapes[i] for i in targets],reach)]
             for i in nearby:
+                if lane.get('generated'):break
                 if roads[i]['kind'] not in ('street', 'avenue'):
                     continue
                 shape = shapes[i]
@@ -51,6 +60,9 @@ def connect_lane_entrances(city):
                 candidates.append((gap, roads[i]['id'], list(q.coords[0])))
             for _, _, target in sorted(candidates):
                 extension = LineString([points[end], target])
+                hit=first_contact(extension,[shapes[i] for i in nearby])
+                if hit:
+                    target=list(hit[1].coords[0]);extension=LineString([points[end],target])
                 updated = [target]+points if end == 0 else points+[target]
                 shape = LineString(updated)
                 if not shape.is_simple:
@@ -72,6 +84,8 @@ def connect_lane_entrances(city):
                 controls = lane.get('controls', points)
                 lane.update(points=updated, controls=[target]+controls if end == 0 else controls+[target],
                             length=shape.length, profile=profile)
+                shapes[roads.index(lane)]=shape
+                index=STRtree(shapes)
                 changed = True
                 break
     return changed

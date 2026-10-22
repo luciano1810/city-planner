@@ -1,0 +1,13 @@
+Use case: style-transfer.
+Asset type: four low shrub sprites on a transparent 2 by 2 atlas for a detailed miniature city.
+Input image 1: edit target, old shrub atlas. Input image 2: approved new tree atlas; use its natural branch-connected foliage, green color range, and light quality as the companion style.
+Primary request: replace the yellow-green rounded topiary balls with four low, natural, irregular shrub patches. Keep low dense volume but varied foliage, broken asymmetrical silhouettes, and recognizable connected stems beneath a few leaves.
+Layout: strict 2 by 2 square atlas, one complete shrub in each quadrant. Keep every leaf safely inside the central 72 percent of its cell, with transparent gutters of at least 14 percent per side. Truly transparent background. No soil, ground, planting bed, pots, shadows outside the object, border, text or label.
+Camera: near-vertical orthographic 76 degrees above ground. Low height, viewed from above.
+Light: soft common light FROM UPPER LEFT on all four. Neutral mid-green lit leaves with deep forest-green occlusion. Keep warm yellow very subtle. Lower peak brightness than the old shrub atlas. Do not use a yellow rim.
+Top left: low boxwood patch, a lopsided rounded rectangle rather than a sphere. Small compact medium-green leaves, two subtly different height zones, one ragged edge.
+Top right: a loose three-stem pittosporum patch, asymmetrical broad crescent silhouette, 3 uneven open branch tips and a shallow central depression, dark glossy-green leaves.
+Bottom left: a spreading dwarf laurel patch with broader oval leaves, elongated irregular lobes and short visible stem forks; deep muted green.
+Bottom right: an untrimmed low shrub with numerous fine matte green leaves on splaying stems, uneven oval outline, natural height variation, slightly lighter fresh tips but no bright lime.
+Rendering: realistic miniature landscaping, broad coherent volumes with moderate leaf texture, no sparkle, no uniformly distributed dots. Shrubs need to remain readable and organic when displayed 15–40 pixels across. Pair well with the new natural tree sprite atlas and a warm paving scene.
+Avoid: cauliflower, broccoli, spherical topiary balls, a line of beads, repeated identical circular lobes, yellow lime glow, tiny disconnected leaf fragments, gray desaturation, soft blurry silhouette, flat aerial-photo discs, background, ground shadows, text, logo, watermark.

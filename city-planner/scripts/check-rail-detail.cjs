@@ -25,11 +25,11 @@ json.dump(c.snapshot(),open(sys.argv[1],'w'))`,temp+'/city.json'],{cwd:app,env})
  await page.locator('#city-import-file').setInputFiles(temp+'/city.json');
  await page.waitForFunction(()=>CityApp.active&&!CityApp.working&&CityScene.assetsReady&&window.RailRenderer);
  await page.evaluate(()=>{MapWorkspace.focus([2040,2010],22);CityScene.setTime(43200);MapWorkspace.draw()});
- await page.screenshot({path:app+'/../docs/images/rail-detail-overview.png'});
+ await page.screenshot({path:app+'/../images/rail-detail-overview.png'});
  await page.evaluate(()=>{MapWorkspace.focus([2050,1920],55);MapWorkspace.draw()});
- await page.locator('#map').screenshot({path:app+'/../docs/images/rail-detail-connection.png'});
+ await page.locator('#map').screenshot({path:app+'/../images/rail-detail-connection.png'});
  await page.evaluate(()=>{MapWorkspace.focus([2050,1800],55);MapWorkspace.draw()});
- await page.locator('#map').screenshot({path:app+'/../docs/images/rail-transition-straight.png'});
+ await page.locator('#map').screenshot({path:app+'/../images/rail-transition-straight.png'});
  assert(await page.evaluate(()=>typeof RailRenderer.paint==='function')); 
  assert.deepEqual(errors,[]);console.log(JSON.stringify({errors,screenshots:['rail-detail-overview.png','rail-detail-connection.png','rail-transition-straight.png']}));
  }finally{await browser?.close();server.kill();}})().catch(e=>{console.error(e);process.exitCode=1});

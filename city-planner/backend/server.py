@@ -42,11 +42,32 @@ class Handler(BaseHTTPRequestHandler):
                    '/map-icons.js': 'map-icons.js', '/map-renderer.js': 'map-renderer.js', '/city.js': 'city.js', '/city-geometry.js': 'city-geometry.js', '/rail-renderer.js': 'rail-renderer.js', '/road-renderer.js': 'road-renderer.js', '/scene-renderer.js': 'scene-renderer.js', '/city.css': 'city.css',
                    '/assets/tree-canopies.png': 'assets/tree-canopies.png',
                    '/assets/tree-species.png': 'assets/tree-species.png',
+                   '/assets/garden-canopies.png': 'assets/garden-canopies.png',
+                   '/assets/tree-volumes-v2.png': 'assets/tree-volumes-v2.png',
+                   '/assets/tree-volumes-v3.png': 'assets/tree-volumes-v3.png',
+                   '/assets/tree-volumes-v4.png': 'assets/tree-volumes-v4.png',
+                   '/assets/tree-species-volumes-v4.png': 'assets/tree-species-volumes-v4.png',
+                   '/assets/shrub-volumes-v3.png': 'assets/shrub-volumes-v3.png',
+                   '/assets/fountain-daylight.png': 'assets/fountain-daylight.png',
+                   '/assets/street-furniture.png': 'assets/street-furniture.png',
+                   '/street-furniture.js': 'street-furniture.js',
+                   '/assets/roof-equipment.png': 'assets/roof-equipment.png',
+                   '/assets/vehicles-sport.png': 'assets/vehicles-sport.png',
+                   '/assets/vehicles-daylight.png': 'assets/vehicles-daylight.png',
+                   '/assets/vehicles-real-daylight.png': 'assets/vehicles-real-daylight.png',
+                   '/assets/vehicles-sport-daylight.png': 'assets/vehicles-sport-daylight.png',
+                   '/assets/vehicles-daylight-v2.png': 'assets/vehicles-daylight-v2.png',
+                   '/assets/vehicles-real-daylight-v2.png': 'assets/vehicles-real-daylight-v2.png',
+                   '/assets/vehicles-sport-daylight-v2.png': 'assets/vehicles-sport-daylight-v2.png',
+                   '/assets/shrub-volumes-v2.png': 'assets/shrub-volumes-v2.png',
                    '/assets/vehicles.png': 'assets/vehicles.png',
+                   '/assets/vehicles-real.png': 'assets/vehicles-real.png',
+                   '/raster-cache.js': 'raster-cache.js',
                    '/assets/pedestrian-clothing.png': 'assets/pedestrian-clothing.png',
                    '/pedestrian-renderer.js': 'pedestrian-renderer.js',
                    '/scene-3d.js': 'scene-3d.js', '/vendor/three.min.js': 'vendor/three.min.js',
                    '/material-catalog.js': 'material-catalog.js',
+                   '/landscape-layout.js': 'landscape-layout.js',
                    '/surface-variation.js': 'surface-variation.js', '/simulation-driver.js': 'simulation-driver.js',
                    '/traffic-playback.js': 'traffic-playback.js',
                    '/special-buildings.js': 'special-buildings.js',
@@ -55,7 +76,8 @@ class Handler(BaseHTTPRequestHandler):
                    '/block-architecture.js': 'block-architecture.js', '/ordinary-roofs.js': 'ordinary-roofs.js',
                    '/assets/roof-atlas.png': 'assets/roof-atlas.png', '/assets/ground-atlas.png': 'assets/ground-atlas.png',
                    '/assets/facade-atlas.png': 'assets/facade-atlas.png', '/assets/landscape-atlas.png': 'assets/landscape-atlas.png',
-                   '/navigation.js': 'navigation.js', '/navigation.css': 'navigation.css'}
+                   '/navigation.js': 'navigation.js', '/navigation.css': 'navigation.css',
+                   '/workspace-ui.js': 'workspace-ui.js', '/workspace-ui.css': 'workspace-ui.css'}
         if not self.server.preview or route not in allowed:
             return self.reply(404, {'error': '未找到资源'})
         asset = ROOT / allowed[route]
@@ -122,7 +144,11 @@ def main():
                 except ProcessLookupError:
                     os._exit(0)
         threading.Thread(target=watch_parent, daemon=True).start()
-    server.serve_forever()
+    signal.signal(signal.SIGTERM,lambda *_:sys.exit(0))
+    try:server.serve_forever()
+    finally:
+        CITY_SERVICE.close()
+        server.server_close()
 
 
 if __name__ == '__main__':

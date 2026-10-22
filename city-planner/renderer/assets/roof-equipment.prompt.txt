@@ -1,0 +1,11 @@
+Use case: product-mockup
+Asset type: transparent top-down sprite atlas for roof equipment in a high quality city diorama, not a scene background.
+Primary request: Four different realistic rooftop mechanical equipment sprites in a strict 2 by 2 square atlas. Each sprite is centered in its quadrant with a generous 15% transparent margin and entirely isolated. True orthographic near-vertical bird's-eye view: almost all top surface, only a very thin front edge visible.
+Top left: a compact light grey rectangular rooftop HVAC chiller, two dark circular fans with detailed wire guards, subtle panel seams, screws, side ventilation grille, slightly aged metal.
+Top right: a short galvanized sheet metal L-shaped ventilation duct with raised round exhaust caps, standing seams and flange fasteners.
+Bottom left: a low roof access mechanical room, white painted rectangular casing, pale weathered grey flat cap roof, ventilation louver and small adjacent conduit.
+Bottom right: raised blue tinted glass skylight in a thick light grey metal frame, four glazed panels, subtle sky reflection, realistic gasket joints.
+Materials: quiet pale white grey metal, dark charcoal fan wells, soft teal glass, minor realistic weathering, fine manufactured details. Readable large shapes first, photoreal miniature finish.
+Lighting: soft nearly neutral diffuse daylight, very mild form shading. No ground or cast shadows; shadows are added by the game.
+Composition: 1024x1024 square, exactly four separate objects in 2x2 cells, objects aligned to image axes, no perspective converging lines, transparent background including between cells, preserve natural proportions.
+Avoid: no rooftop background, no base tile, no surrounding scene, no labels, text, logos, watermark, extra objects, hard cast shadows, grids, dividers or frames around the cells.

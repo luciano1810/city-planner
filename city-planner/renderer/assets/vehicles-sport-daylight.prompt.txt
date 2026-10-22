@@ -1,0 +1,33 @@
+Generated with the built-in image_gen tool (transparent_background: true).
+Input: renderer/assets/vehicles-sport.png
+Final output: renderer/assets/vehicles-sport-daylight.png
+Final generated source: /Users/syw/.codex/generated_images/01a16342-502f-7422-bad3-487ee1ccbcf3/exec-52c457fd-ee2d-4602-bf29-0e0c8607b948.png
+
+Pass 1 — outdoor diffuse material edit
+
+Use case: lighting-weather.
+Asset type: transparent 2×2 true-overhead car sprite atlas for a realistic city game.
+Edit target: the attached existing vehicles-sport.png, NOT a new design.
+
+Change ONLY the material response and lighting of the four existing cars. Convert the harsh glossy studio/render lighting into neutral outdoor overcast-sky diffuse illumination. The current long white softbox streaks on both flanks and the sculpted hood are the defect to remove. ERASE those narrow white streaks, bright pinstriped rim highlights, chrome-looking body edges, pure-black outlining, and neon oversaturation. Replace them with broad, gentle, low-contrast changes in the same paint colour that reveal the real body curvature. Red remains realistic deep red; blue remains realistic royal blue; orange remains orange; purple remains purple. Do not globally darken the sheet. Use realistic satin-clearcoat automotive paint under a large uniform sky: subtle wide reflected sky gradients only, no white strip reflections, no tiny hard glints, no hard directional key light, no shiny toy finish. Preserve panel seams and fine physical detail with restrained contrast. Glass should retain subtle soft sky reflection and genuine transparent/dark glass appearance rather than black graphic cutouts or white ribbons. Interiors keep their detailed leather and dashboard shading without over-bright specular glints.
+
+LOCK these invariants:
+- Exact same square 2×2 layout, car positions, generous transparent spacing, relative scale, body outlines, shape details, nose-up direction, true vertical overhead camera, and proportions.
+- Top left: same red BMW Z4 roadster shape, black seats. Top right: same blue BMW Z4 roadster shape, tan seats.
+- Bottom left: same orange Dodge Challenger shape with charcoal hood panel and hood scoop. Bottom right: same purple Dodge Challenger shape with charcoal hood panel and hood scoop.
+- Keep windshields, seats, mirrors, wheel positions, lights and body panel geometry. This is a relighting/material edit, not a redesign or repaint.
+- Cars are isolated on REAL transparent alpha background. Outside every car must be transparent, including between the cars. No ground plane, no baked ground shadow, no floor, no checkerboard pixels, no colored halo.
+- Absolutely NO brand logos, emblems, badges, lettering, numbers, license-plate characters or watermarks. In particular the centre of each Z4 nose must remain a completely uninterrupted patch of matching red or blue paint, with no dot, circle, blue-white mark, indentation or icon.
+- Do not add a border or outline to the silhouettes.
+
+The visual target is believable small cars seen outdoors from a high vertical camera, with subdued broad surface shading and clean silhouette, not glossy showroom cutouts.
+
+Pass 2 — exterior alpha cleanup only
+Input: /Users/syw/.codex/generated_images/01a16342-502f-7422-bad3-487ee1ccbcf3/exec-cb35ea9a-0067-422c-8444-273b38a39323.png
+
+Use case: background-extraction / precise-object-edit.
+Edit only the transparent alpha cutout of this existing 2×2 car sprite atlas. KEEP the new soft outdoor diffuse paint shading exactly as it is. KEEP all four real car shapes, positions, scale, nose-up orientation, red/blue/orange/purple colours, black/tan seats, charcoal hoods, details, no-logo plain painted Z4 noses, and 2×2 layout exactly unchanged.
+
+The only defect to fix: there are detached red/orange paint flecks and ragged coloured fringe OUTSIDE the physical bodies, most obviously a red protruding patch immediately above the orange Challenger nose and red-orange fragments along its outside sides. Remove these stray exterior pixels completely into REAL transparent alpha. Clean analogous stray exterior specks around the other cars. Preserve actual body edges, side mirrors, tyres and bumpers with a clean narrow antialiased boundary. Do not draw an outline; do not shrink the body or trim mirrors. Do not add shadow or any background. Every pixel outside the actual four cars must have transparent alpha, including between them.
+
+This is alpha cleanup ONLY. Do not reintroduce white strip highlights, sharp chrome-like reflections, logos, badges, nose dots, text, numbers, watermark, black outline, or showroom lighting.

@@ -2,7 +2,7 @@ const {chromium}=require('playwright'),fs=require('fs'),assert=require('assert/s
 const path=require('path'),os=require('os'),cp=require('child_process');
 const app=path.resolve(__dirname,'..'),python=process.env.PYTHON||'python3',temp=fs.mkdtempSync(path.join(os.tmpdir(),'bridge-qa-'));
 const env={...process.env,PYTHONPATH:[path.join(app,'backend'),process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),SHANHAI_DATA_DIR:path.join(temp,'saves')};
-fs.mkdirSync(path.join(app,'../docs/images'),{recursive:true});fs.mkdirSync(path.join(app,'../docs/experiments'),{recursive:true});
+fs.mkdirSync(path.join(app,'../images'),{recursive:true});fs.mkdirSync(path.join(app,'../experiments'),{recursive:true});
 const fixtureCode=`import json,sys
 from city.engine import City
 from tests.test_city import flat_world
@@ -66,20 +66,20 @@ cp.execFileSync(python,['-c',fixtureCode,temp],{cwd:app,env});
  assert(runtime.vehicles>0);
  assert(runtime.webgl);assert.equal(runtime.stats.failure,null);assert.deepEqual(errors,[]);
  await page.evaluate(()=>{const el=document.getElementById('signal-hud');if(el)el.style.display='none'});
- await page.evaluate(()=>MapWorkspace.focus([2110,2025],24));await page.locator('#map').screenshot({path:app+'/../docs/images/junction-fixed-'+scenario.name+'.png'});
+ await page.evaluate(()=>MapWorkspace.focus([2110,2025],24));await page.locator('#map').screenshot({path:app+'/../images/junction-fixed-'+scenario.name+'.png'});
 
  const layout=await page.evaluate(s=>{const p=RoadRenderer.connections(s.roads,s.network,s.meta.roadTypes);return {joins:p.joins.length,ramps:p.ramps.size};},result);
  assert.equal(layout.joins,scenario.prebuilt?0:scenario.contacts||1);
- await page.locator('.map-view-switch [data-view="map"]').click();await page.locator('#map').screenshot({path:app+'/../docs/images/junction-fixed-'+scenario.name+'-map.png'});
+ await page.locator('.map-view-switch [data-view="map"]').click();await page.locator('#map').screenshot({path:app+'/../images/junction-fixed-'+scenario.name+'-map.png'});
  if(scenario.name==='straight-t'){
    await page.locator('.map-view-switch [data-view="high"]').click();
    await page.evaluate(()=>{const el=document.getElementById('city-time-of-day');el.value=1260;el.dispatchEvent(new Event('input'));});
-   await page.locator('#map').screenshot({path:app+'/../docs/images/junction-fixed-night.png'});
+   await page.locator('#map').screenshot({path:app+'/../images/junction-fixed-night.png'});
  }
  evidence.push({layout,scenario:scenario.name,connections:result.roads.at(-1).connections,points:result.roads.at(-1).points,junctions:result.network.junctions,...runtime,errors});await page.close();
  console.log('passed: '+scenario.name);
- fs.writeFileSync(app+'/../docs/experiments/junction-fixed-playwright.json',JSON.stringify(evidence,null,2));
+ fs.writeFileSync(app+'/../experiments/junction-fixed-playwright.json',JSON.stringify(evidence,null,2));
  }
- fs.writeFileSync(app+'/../docs/experiments/junction-fixed-playwright.json',JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence.map(e=>({scenario:e.scenario,joins:e.layout.joins,crossings:e.crossings.length,webgl:e.webgl,errors:e.errors}))));
+ fs.writeFileSync(app+'/../experiments/junction-fixed-playwright.json',JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence.map(e=>({scenario:e.scenario,joins:e.layout.joins,crossings:e.crossings.length,webgl:e.webgl,errors:e.errors}))));
  }finally{if(browser)await browser.close();server.kill();fs.rmSync(temp,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});

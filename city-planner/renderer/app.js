@@ -37,7 +37,7 @@ function updateRanges() {
     const el = $(key), value = Number(el.value);
     $(key + '-value').innerHTML = `${value}<span>${units[key] || '%'}</span>`;
     const percent = (value - Number(el.min)) / (Number(el.max) - Number(el.min)) * 100;
-    el.style.background = `linear-gradient(to right,#63815a ${percent}%,#dce3d4 ${percent}%)`;
+    el.style.background = `linear-gradient(to right,var(--ui-blue,#63815a) ${percent}%,#d9e8fc ${percent}%)`;
   }
 }
 function persist() {
@@ -311,7 +311,7 @@ function buildVectorLayers() {
 }
 function paintMap(context, g) {
   const scale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
-  const quality=window.CityScene?.resolveQuality(scale)||'map',flat=quality==='map';
+  const quality=window.CityScene?.resolveQuality(zoom)||'map',flat=quality==='map';
   syncDisplayControls(quality);
   context.save();
   context.translate(g.left,g.top); context.scale(g.scale,g.scale);
@@ -385,7 +385,7 @@ function currentScale(g, pixels = 140) {
 }
 function geometry() {
   const width = map.clientWidth, height = map.clientHeight;
-  const scale = terrain ? Math.min(width / source.width, height / source.height) * zoom : 1;
+  const scale = terrain ? Math.max(width / source.width, height / source.height) * zoom : 1;
   return { width, height, scale, left: (width - source.width * scale) / 2 + panX, top: (height - source.height * scale) / 2 + panY };
 }
 function clampPan() {
@@ -403,7 +403,7 @@ function draw() {
   if(lastViewport?.terrain===terrain&&(lastViewport.width!==width||lastViewport.height!==height)){
     // Pan is stored in CSS pixels. Rebase it with the fitted map scale so the
     // same world coordinate stays centred on fullscreen/inspector/window resize.
-    const ratio=Math.min(width/source.width,height/source.height)/Math.min(lastViewport.width/source.width,lastViewport.height/source.height);
+    const ratio=Math.max(width/source.width,height/source.height)/Math.max(lastViewport.width/source.width,lastViewport.height/source.height);
     panX*=ratio;panY*=ratio;
   }
   lastViewport={terrain,width,height};
@@ -481,16 +481,16 @@ function syncDisplayControls(quality){
     if(b.classList.contains('active')!==chosen){b.classList.toggle('active',chosen);b.setAttribute('aria-pressed',String(chosen));}
   });
   const field=$('city-render-quality');if(field&&field.value!==quality)field.value=quality;
-  const note=automatic?'已自动切换 · 放大恢复精细视图':quality==='map'?'地图视图 · 点击精细视图查看细节':'精细视图 · 缩小自动切换地图';
+  const note=automatic?'已自动切换 · 放大至 7200% 进入精细视图':quality==='map'?'地图视图 · 点击精细视图查看细节':'精细视图 · 缩小自动切换地图';
   for(const id of ['map-view-auto','city-view-note'])if($(id)&&$(id).textContent!==note)$(id).textContent=note;
 }
 function setDisplayMode(quality,{focus=true}={}){
   window.CityScene?.configure({quality});
   try{localStorage.setItem('shanhai-scene-v1',JSON.stringify(window.CityScene.settings));}catch{}
   if(terrain&&quality==='high'&&focus){
-    const g=geometry(),scale=Math.min(terrain.width*g.scale/terrain.grid.widthMeters,terrain.height*g.scale/terrain.grid.heightMeters);
-    if(scale<.62){setZoom(zoom*.65/Math.max(.000001,scale));return;}
+    if(zoom<window.CityScene.detailZoom){setZoom(window.CityScene.detailZoom);return;}
   }
+  if(terrain)syncDisplayControls(window.CityScene.resolveQuality(zoom));
   draw();
 }
 document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>setDisplayMode(button.dataset.view)));
@@ -550,6 +550,16 @@ new ResizeObserver(draw).observe($('map-frame'));
 restore(); thumbnails();
 window.MapWorkspace = {
   get terrain() { return terrain; }, get busy() { return busy; },
+  paintOverview(context, g) {
+    if (!terrain || !vectorLayers) return;
+    context.save(); context.translate(g.left,g.top); context.scale(g.scale,g.scale);
+    context.fillStyle='#dce9cc'; context.fillRect(0,0,terrain.width,terrain.height);
+    for (const level of vectorLayers.levels) { context.fillStyle='#63875716'; context.fill(level.path,'evenodd'); }
+    context.fillStyle='#9ed9ed'; context.fill(vectorLayers.ocean,'evenodd');
+    context.save(); context.clip(vectorLayers.riverClip,'evenodd');
+    for (const river of vectorLayers.rivers) context.fill(river);
+    context.restore(); context.fill(vectorLayers.lakes,'evenodd'); context.restore();
+  },
   get canConfirm() { return Boolean(terrain) && !busy && !terrainDirty; },
   get geometry() { return geometry(); }, draw, toast, fit, setDisplayMode, installTerrain:installCityTerrain,
   cancelGeneration() {
@@ -580,7 +590,7 @@ window.MapWorkspace = {
     return p ? [p[0]*terrain.grid.widthMeters,p[1]*terrain.grid.heightMeters] : null;
   },
   focus(point, scale=4) {
-    lastViewport=null;zoom=scale; const g=geometry();
+    lastViewport=null;zoom=Math.max(1,Math.min(512,scale)); const g=geometry();
     panX=(.5-point[0]/terrain.grid.widthMeters)*source.width*g.scale;
     panY=(.5-point[1]/terrain.grid.heightMeters)*source.height*g.scale; draw();
   },

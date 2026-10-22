@@ -1,6 +1,6 @@
 """Saved, versioned model calibration. Currency is fictional simulation currency."""
 import math
-POLICY = dict(regionalPassengerHouseholds=12,regionalBoundaryMeters=650,freightHandlingMinutes=12,freightTonnesPerWorker=.8,externalRoadMinutes=45,truckTonnes=12,version='urban-10', autoLanesPerMonth=3, blockTargetArea=22000, laneMaximumLength=210,
+POLICY = dict(regionalPassengerHouseholds=12,regionalBoundaryMeters=650,freightHandlingMinutes=12,freightTonnesPerWorker=.8,externalRoadMinutes=45,truckTonnes=12,version='urban-10', autoLanesPerMonth=1, laneGrowthIntervalMonths=1, blockTargetArea=22000, laneMaximumLength=210,
               parkPerBuildings=28, plazaPerBuildings=45, householdSpace=75,
               walkingMetersPerMinute=80, trafficIterations=2, priceMonthlyLimit=.07,
               districtCellMeters=400, districtPersistenceMonths=3, districtJoinMeters=220,
@@ -21,6 +21,10 @@ POLICY.update(housingBaseDemand=40,pendingHousingMultiplier=2,commercialBaseDema
     centralitySources=24,centralityMinutes=7)
 POLICY.update(smallBlockMaximumArea=22000,blockInfillThreshold=.28,minimumProjectUnits=8,streetFillThreshold=.52,frontageInfillMeters=90,frontageInfillBonus=1.8,
     businessCoreRadius=230,neighbourhoodAffinityRadius=160,
+    junctionSeedRadius=250,junctionSeedBonus=6.,junctionSeedBuildings=20,
+    neighbourhoodInfillRadius=300,neighbourhoodInfillBonus=2.,
+    businessCoreMaximumRadius=650,businessCoreGrowthFactor=4.,
+    growthCenterActivityScale=80,economicCatchmentMinutes=15,
     officeProjectShare=.16,officeFootprintMaximum=520,residentialFootprintMaximum=780,
     cbdMinimumOffices=5,cbdOfficeNeighbourMeters=180,
     schoolResidents=4500,clinicResidents=6500,parkResidents=3800,plazaJobs=2000,
@@ -29,6 +33,10 @@ UNITS={
  'smallBlockMaximumArea':'m²','blockInfillThreshold':'已开发土地面积比例','minimumProjectUnits':'户或岗位',
  'streetFillThreshold':'已开发土地面积比例','frontageInfillMeters':'m','frontageInfillBonus':'无量纲系数',
  'businessCoreRadius':'m','neighbourhoodAffinityRadius':'m','officeProjectShare':'需求比例',
+ 'junctionSeedRadius':'m','junctionSeedBonus':'无量纲系数','junctionSeedBuildings':'栋',
+ 'neighbourhoodInfillRadius':'m','neighbourhoodInfillBonus':'无量纲系数',
+ 'businessCoreMaximumRadius':'m','businessCoreGrowthFactor':'无量纲系数',
+ 'growthCenterActivityScale':'活力单位','economicCatchmentMinutes':'min',
  'officeFootprintMaximum':'m²','residentialFootprintMaximum':'m²','cbdMinimumOffices':'栋',
  'cbdOfficeNeighbourMeters':'m','schoolResidents':'人/学校','clinicResidents':'人/诊所',
  'parkResidents':'人/公园','plazaJobs':'岗位/广场',
@@ -55,7 +63,11 @@ for key,value in POLICY.items():
 
 LABELS=dict(housingBaseDemand='基础住房需求',pendingHousingMultiplier='待安置住房需求倍率',commercialBaseDemand='基础商业岗位需求',commercialPopulationDemand='人均商业空间需求',officeExternalDemand='外部办公空间需求比例',officePopulationDemand='人均办公空间需求',industrialExternalDemand='外部工业空间需求比例',industrialPopulationDemand='人均工业空间需求',warehouseBaseDemand='基础仓储岗位需求',warehouseExternalDemand='外部仓储需求比例',warehousePopulationDemand='人均仓储空间需求',minimumDevelopmentDemand='最低开工需求比例',boardingMinutes='上车时间',alightingMinutes='下车时间',lowFrequencyHeadway='低频时刻表阈值',streetSeedMonths='初始配路期限',streetGrowthRadius='支路周边开发半径',streetGrowthMinimumBuildings='支路周边最低建筑数',walkMaximumMinutes='最长步行旅程',journeyMaximumMinutes='最长完整旅程',parkingMinutes='停车接驳时间',transferPenaltyMinutes='换乘额外阻抗',carCostPerKm='汽车公里费用',carParkingFee='停车费用',workMaximumMinutes='最长可接受通勤',workingDaysPerMonth='每月代表工作日',jobOfficeExternal='外部办公岗位比例',jobCommercialPopulation='人均商业岗位',jobOfficePopulation='人均办公岗位',jobIndustrialExternal='外部工业岗位比例',jobIndustrialPopulation='人均工业岗位',jobWarehouseExternal='外部仓储岗位比例',jobWarehousePopulation='人均仓储岗位',developmentPaybackYears='开发收益评估期限',priceSmoothing='地价平滑速度',rentSmoothing='租金平滑速度',unemploymentStressMonths='失业压力累计期限',redevelopVacancyMonths='空置重建等待期',minimumOfficeShare='中心最低办公面积比例',cbdAccessJobs='中心最低可达岗位',dominantUseShare='城区主导用途比例',officeClusterRadius='办公集聚衰减距离',officeClusterWorkers='办公集聚饱和就业数',siteInfillRadius='填补街区的偏好距离',centralitySources='中心性采样节点数',centralityMinutes='网络中心性衰减时间',autoLanesPerMonth='每月自动支路上限',blockTargetArea='目标街区面积',laneMaximumLength='开放支路最大长度',parkPerBuildings='公园配置建筑数',plazaPerBuildings='广场配置建筑数',householdSpace='每户使用住宅面积',walkingMetersPerMinute='步行速度',trafficIterations='交通分配轮次',priceMonthlyLimit='地价月度涨跌上限',districtCellMeters='城区识别网格',districtPersistenceMonths='城区标签稳定期',districtJoinMeters='相邻城区合并距离',cbdMinimumBuildings='中心最低建筑数',cbdMinimumJobs='中心最低岗位数',cbdMinimumEmployed='中心最低实际就业',carCO2KgPerKm='汽车单位里程排放',constructionBaseMonths='基础施工期限',relocationStressMonths='压力搬迁阈值',exitStressMonths='压力迁出阈值',housingBurdenThreshold='住房支出负担阈值',eventPersistenceMonths='事件持续期',eventCooldownMonths='同类事件冷却期',regionalPassengerHouseholds='区域出行家庭抽样周期',regionalBoundaryMeters='区域铁路门户边界距离',freightHandlingMinutes='铁路货物装卸时间',freightTonnesPerWorker='工业就业货运强度',externalRoadMinutes='区域道路外部运距时间',truckTonnes='货车载重')
 
-LABELS.update(streetFillThreshold='自动补路前沿街土地开发比例',frontageInfillMeters='沿街补空档距离',frontageInfillBonus='沿街补空档偏好',
+LABELS.update(laneGrowthIntervalMonths='自动支路建设间隔',streetFillThreshold='自动补路前沿街土地开发比例',frontageInfillMeters='沿街补空档距离',frontageInfillBonus='沿街补空档偏好',
+    junctionSeedRadius='开局路口发展衰减距离',junctionSeedBonus='开局路口选址加分',junctionSeedBuildings='路口开局加分退出建筑数',
+    neighbourhoodInfillRadius='邻里填空步行范围',neighbourhoodInfillBonus='邻里填空选址加分',
+    businessCoreMaximumRadius='商务核心最大衰减半径',businessCoreGrowthFactor='建成土地对核心范围影响系数',
+    growthCenterActivityScale='中心活力连续响应尺度',economicCatchmentMinutes='本地经济需求出行衰减时间',
     smallBlockMaximumArea='整体规划的小街区最大面积',blockInfillThreshold='街区内部补路开发比例',minimumProjectUnits='追加开发最低实际缺口',
     businessCoreRadius='商务核心衰减半径',neighbourhoodAffinityRadius='同类邻里集聚半径',
     officeProjectShare='单个办公项目需求份额上限',officeFootprintMaximum='办公标准层最大占地',
@@ -68,6 +80,12 @@ POLICY.update(renewalReviewMonths=6,renewalCooldownMonths=120,renewalMinimumAge=
     renewalConditionThreshold=70,renewalReturnYears=20,renewalBudgetShare=.2,
     renewalActiveLimit=2,renewalBlockVacancyShare=.6)
 POLICY.update(signalGreenSeconds=12,signalYellowSeconds=3,signalClearanceSeconds=3)
+POLICY.update(roadDemolitionCostShare=.1)
+UNITS.update(roadDemolitionCostShare='原建设费用比例')
+LABELS.update(roadDemolitionCostShare='手动道路拆迁费用比例')
+POLICY.update(migrationVacancyResponse=.25,migrationMonthlyMaximum=500,housingCommuteMinutes=30,housingLookaheadMonths=2)
+UNITS.update(migrationVacancyResponse='户/空缺岗位/月',migrationMonthlyMaximum='户/月',housingCommuteMinutes='min',housingLookaheadMonths='月')
+LABELS.update(migrationVacancyResponse='空缺岗位对迁入意愿的响应',migrationMonthlyMaximum='每月新增迁入意愿上限',housingCommuteMinutes='住房与就业匹配通勤范围',housingLookaheadMonths='住房就业需求展望期限')
 UNITS.update(signalGreenSeconds='秒',signalYellowSeconds='秒',signalClearanceSeconds='秒')
 LABELS.update(signalGreenSeconds='路口保护绿灯时长',signalYellowSeconds='路口黄灯时长',signalClearanceSeconds='路口全红清空时长')
 UNITS.update(renewalReviewMonths='月',renewalCooldownMonths='月',renewalMinimumAge='月',
@@ -80,7 +98,7 @@ LABELS.update(renewalReviewMonths='自动更新评估间隔',renewalCooldownMont
 def definitions(policy):
     # Retain legacy values in snapshots, but do not offer controls that no
     # longer influence the population/catchment-based facility model.
-    retired={'parkPerBuildings','plazaPerBuildings'}
+    retired={'parkPerBuildings','plazaPerBuildings','housingBaseDemand','pendingHousingMultiplier'}
     return {key:dict(label=LABELS.get(key,key),value=value,unit=UNITS[key],version=policy['version']) for key,value in policy.items() if key in UNITS and key not in retired}
 
 ROAD_TYPES = {

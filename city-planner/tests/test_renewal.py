@@ -247,7 +247,10 @@ class AutomaticRenewalTests(unittest.TestCase):
         for p in self.plots:
             p['building'].update(age=180,status='vacant',vacantMonths=48,occupied=0)
             p['centrality']=1
-        c.s['treasury']=10000000000;c.s['policy']['housingBaseDemand']=10000
+        c.s['treasury']=10000000000
+        workplace=next(p for p in c.s['parcels'] if not p.get('building') and not p.get('block'))
+        complete(c,workplace,'office',10000)
+        c.s['pendingHousing']=10000
         # Limited additional retail demand makes tall commercial replacements
         # less useful than a block plan dominated by needed housing.
         c.s['policy']['commercialBaseDemand']=300

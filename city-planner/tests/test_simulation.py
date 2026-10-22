@@ -161,6 +161,17 @@ class UnifiedSimulationTests(unittest.TestCase):
         result=self.call(seconds=1)
         self.assertEqual(result['traffic']['seconds'],31*DAY+5)
 
+    def test_save_before_streetside_fields_can_resume_its_simulation(self):
+        self.call(seconds=8, speed=2592000)
+        snapshot=self.city.snapshot()
+        snapshot['state'].pop('streetside')
+        restored=City.restore(snapshot)
+        self.assertEqual(restored.s['simulation'],self.city.s['simulation'])
+        self.assertIn('streetside',restored.s)
+        from city.simulation import advance
+        result=advance(restored,1)
+        self.assertEqual(result['simulation']['elapsedSeconds'],9)
+
     def test_edit_undo_and_redo_never_rewind_the_shared_clock(self):
         self.city.command(dict(type='settings',values=dict(growth=2)))
         self.call(seconds=8,speed=15)

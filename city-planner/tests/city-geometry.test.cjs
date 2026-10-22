@@ -2,6 +2,14 @@ const test=require('node:test');const assert=require('node:assert/strict');
 const {curvePoints,footprintAxis}=require('../renderer/city-geometry.js');
 const {buildingMassing,fitBuildingMasses,rectangleInside,polygonArea,containsPoint}=require('../renderer/city-geometry.js');
 const {roadDraftPlan,roadControlAt}=require('../renderer/city-geometry.js');
+test('inspection follows facility ownership after construction and releases it after demolition',()=>{
+ const {inspectionId,facilityForParcel}=require('../renderer/city-geometry.js');
+ const p={id:'p',openSpace:'f'},f={id:'f',kind:'charging_station'},state={parcels:[p],facilities:[f]};
+ assert.equal(inspectionId(state,'p'),'f');assert.equal(facilityForParcel(state,p),f);
+ assert.equal(inspectionId(state,'f'),'f');
+ state.facilities=[];assert.equal(inspectionId(state,'p'),'p');
+ state.facilities=[f];p.building={};assert.equal(inspectionId(state,'p'),'p');
+});
 test('moving the cursor cannot bend or invalidate the two clicked road endpoints',()=>{
  const controls=[[428,388],[693,264]],copy=structuredClone(controls);
  for(const hover of [[649,106],[0,0],[428,388]]){

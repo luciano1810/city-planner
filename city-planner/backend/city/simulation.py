@@ -42,7 +42,7 @@ def shift_month(city, previous_month):
     # Discrete monthly steps do not change the viewing illumination.
 
 
-def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_seconds=None):
+def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_seconds=None, *, settlement=None):
     from .signals import LiveTraffic
     if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 <= seconds <= MAX_STEP:
         raise ValueError('每次模拟推进须为 0–31 天')
@@ -61,6 +61,7 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
               copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_month else None
     initial_month = city.s['month']
     previous_live = city.live_traffic
+    prepared_view = None
     def road_signature():
         return [(r['id'],r['kind'],r['level'],r['oneway'],r['points']) for r in city.s['roads']]
     previous_roads = copy.deepcopy(road_signature()) if crosses_month and previous_live else None
@@ -77,8 +78,10 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
             remaining = max(0., remaining-chunk)
             if state['monthSeconds'] >= duration-1e-8:
                 state['monthSeconds'] = 0.
-                city.step(1, advance_clock=False)
+                if settlement is None:city.step(1, advance_clock=False)
+                else:prepared_view=settlement(city)
                 state = city.s['simulation']
+        if not seconds:city.s['sceneTimeSeconds']+=daylight_seconds
         target = state['elapsedSeconds']
         live = city.live_traffic
         if live is None and previous_live and previous_roads == road_signature():
@@ -109,7 +112,15 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
                       month=city.s['month'], monthsAdvanced=city.s['month']-initial_month,
                       traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
         if result['monthsAdvanced']:
-            result['city'] = city.view()
+            if prepared_view is None:result['city']=city.view()
+            else:
+                # The heavy map/statistics projection is already prepared in
+                # the worker. Rebase only fields changed by the live clock.
+                prepared_view.update(simulation=copy.deepcopy(state),sceneTimeSeconds=city.s['sceneTimeSeconds'],
+                    month=city.s['month'],name=city.s['name'],liveTraffic=result['traffic'],
+                    canUndo=bool(city.undo),canRedo=bool(city.redo))
+                if 'saveGroup' in city.s:prepared_view['saveGroup']=city.s['saveGroup']
+                result['city']=prepared_view
         return result
     except Exception:
         if before:

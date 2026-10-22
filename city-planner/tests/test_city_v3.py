@@ -3,7 +3,7 @@ import copy,json,unittest
 from collections import Counter,defaultdict
 from shapely.geometry import Polygon,LineString
 from tests.test_city import City,flat_world,road,block_city
-from city.planning import plan_streets
+from city.planning import plan_streets,grow_block_streets
 from city.regional import assign_freight
 from city.geometry import building_footprint
 from city.parameters import definitions
@@ -29,7 +29,14 @@ class ConnectedGrowthTests(unittest.TestCase):
             if not p.get('building') and not p.get('openSpace') and p['use']!='protected':complete(c,p,'residential')
         c.rebuild()
         before={p['id']:copy.deepcopy(p['building']['footprint']) for p in c.s['parcels'] if p.get('building')}
-        original_blocks=len(c.network['blocks']);c.step(4)
+        original_blocks=len(c.network['blocks'])
+        # Exercise subdivision explicitly: economic selection may now prefer
+        # a higher-value outward street over a reserved internal connector.
+        # The initial five months already cover the original market; a filled
+        # block alone must not manufacture a reason to add another street.
+        c.s['settings']['externalJobs']*=2
+        c.s['month']+=c.s['policy']['laneGrowthIntervalMonths']
+        self.assertTrue(grow_block_streets(c));c.rebuild(regenerate=True)
         self.assertGreater(len(c.network['blocks']),original_blocks)
         self.assertTrue(any(r.get('generated') for r in c.s['roads']))
         for p in c.s['parcels']:

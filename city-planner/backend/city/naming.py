@@ -3,6 +3,14 @@ import hashlib
 import random
 import re
 
+from . import place_regions
+
+NAME_VERSION = 3
+COMPACT_NAME_VERSION = 4
+COMPACT_CATEGORIES = {'districts', 'blockLayouts'}
+
+REGIONAL_CATEGORIES = {'roads', 'buildings', 'facilities', 'stops', 'blockLayouts', 'districts'}
+
 FIRST = tuple('清云松竹兰桂柳枫榆梧槐杏桃梅荷莲锦瑞嘉景文书明星月晨春秋晴碧翠青白银金安宁和远长新永承启望栖听映澄朗润泽')
 SECOND = tuple('川溪泉湾湖江河洲汀浦岸桥津渡岭峰岚谷林森园庭苑轩台亭榭庐里坊城华宁安和丰盛瑞锦光晖阳辰月星风云雨露雪霁琴书墨诗雅韵')
 ROAD_SUFFIXES = {
@@ -33,6 +41,46 @@ FACILITY_SUFFIXES = {
     'logistics_hub': ('物流中心',), 'airport': ('机场',), 'port': ('港', '港口'),
     'train_station': ('火车站',), 'parking_lot': ('停车场',), 'parking_garage': ('停车楼',),
 }
+# Distinctive names sit between the optional local reference and type suffix.
+# Avoid directional/geographical claims that have not been measured.
+LOCAL_WORDS = {
+    'residential': tuple('栖云 听雨 望舒 知春 映月 晴岚 云栖 竹语 棠悦 兰庭 和颂 书香 鹿鸣 澄心 静安 春晓'.split()),
+    'commercial': tuple('悦汇 万象 嘉集 星悦 乐购 熙街 丰茂 尚品 汇景 瑞坊 华彩 盛集 新悦 锦集 百盛 云集'.split()),
+    'office': tuple('启明 远景 致远 卓诚 智汇 博创 天成 凌云 经纬 汇智 朗成 启航 华章 嘉业 科融 观澜'.split()),
+    'industrial': tuple('宏业 精工 联创 恒达 博远 华兴 鼎新 智造 荣丰 同力 新源 嘉成'.split()),
+    'warehouse': tuple('通达 汇通 捷运 联运 恒通 安达 顺丰 远航 丰储 盛运 嘉运 瑞通'.split()),
+    'roads': tuple('文华 书院 长乐 景明 明德 安和 朝晖 春晖 锦绣 青松 翠竹 芳华 望舒 澄明 嘉禾 榆荫'.split()),
+    'places': tuple('和鸣 知新 明远 嘉禾 长宁 文澜 春和 景行 星河 芳林 晴和 锦溪 青禾 思源 望春 瑞景'.split()),
+}
+
+
+def distinct_stem(rng, category, obj, root, attempt):
+    words = LOCAL_WORDS.get(obj.get('use') if category == 'buildings' else category,
+                            LOCAL_WORDS['places'])
+    # Mix curated words with a much wider character pool. Do not walk a short
+    # list of almost identical region+suffix names before trying other stems.
+    word = rng.choice(words) if attempt < 24 and rng.random() < .5 else rng.choice(FIRST) + rng.choice(SECOND)
+    if root:
+        style = rng.randrange(4)
+        if style == 0:
+            word = root + word
+        elif style == 1:
+            word = rng.choice(root) + word
+    if attempt >= 32:
+        word += rng.choice(SECOND)
+    if attempt >= 128:
+        # An alphabetic expansion keeps even very large cities free of numeric
+        # duplicate labels. Its length grows with the collision count.
+        alphabet = tuple(dict.fromkeys(SECOND))
+        index = attempt - 128
+        while True:
+            word += alphabet[index % len(alphabet)]
+            index = index // len(alphabet) - 1
+            if index < 0:
+                break
+    return word
+
+
 GENERIC = set('公园 广场 学校 诊所 体育馆 大学校园 医院 市政厅 消防局 警察局 酒店 加油站 充电站 博物馆 剧院 电影院 会展中心 工业厂区 发电厂 变电站 自来水厂 污水处理厂 垃圾回收处理中心 物流中心 机场 港口 火车站 露天停车场 停车楼 新站 车站 区域货运 公共设施 建筑 地块 居住区 商业区 办公集聚区 工业仓储区 混合城区 CBD 待开发地块 普通路 街道 街区纵街 街区横街 主干道 快速路 高速公路 社区支路 自动社区支路 小路 步道 铁路 地铁 有轨电车 巴士线 地铁线 电车线 铁路线 有轨电车线 火车线'.split())
 GENERATED_PATTERN = re.compile(r'^(?:社区(?:街|支路)\s*\d+|弯曲[纵横]街\d+|河谷\d+号路|城市\s*\d+\s*号线|城市副中心\s*\d+|CBD\s*·\s*城市主中心)$')
 
@@ -45,7 +93,7 @@ def generic(obj):
 
 
 def objects(city):
-    for collection in ('roads', 'facilities', 'stops', 'lines', 'regionalServices', 'blockLayouts', 'districts'):
+    for collection in ('roads', 'facilities', 'stops', 'lines', 'regionalServices', 'blockLayouts', 'districts', 'namingRegions'):
         for obj in city.s.get(collection, []):
             yield collection, obj['id'], obj
     for parcel in city.s.get('parcels', []):
@@ -64,6 +112,8 @@ def suffixes(category, obj):
         return BUILDING_SUFFIXES.get(obj.get('use'), ('大楼',))
     if category == 'blockLayouts':
         return ('街坊', '街区', '坊', '里')
+    if category == 'namingRegions':
+        return ('片区',)
     if category == 'districts':
         return ('片区', '城区', '街区')
     if category == 'stops':
@@ -77,11 +127,65 @@ class NameBook:
     def __init__(self, city):
         self.city = city
         self.registry = city.s.setdefault('placeNames', {})
+        self.parcels = {p['id']: p for p in city.s.get('parcels', [])}
+        self.regions_ready = False
+        self.owners = {}
+        self.shared = {}
+        for facility in city.s.get('facilities', []):
+            if facility.get('ownsStop') and facility.get('stop'):
+                a, b = 'facilities:' + facility['id'], 'stops:' + facility['stop']
+                self.shared[a] = b; self.shared[b] = a
+        for category, identifier, obj in objects(city):
+            if not generic(obj):
+                self.owners.setdefault(obj['name'], set()).add(category + ':' + identifier)
         self.used = set(self.registry.values())
         self.used.update(obj['name'] for _, _, obj in objects(city) if not generic(obj))
 
+    def regional_root(self, category, identifier, obj):
+        if category not in REGIONAL_CATEGORIES:
+            return None
+        location = self.parcels.get(identifier, {}) if category == 'buildings' else obj
+        point = place_regions.anchor(category, location, self.parcels)
+        region = place_regions.region_at(self.city, point)
+        if region is None:
+            return None
+        # Name all regions in terrain order before naming any child. Even the
+        # first road is therefore independent of construction/enumeration order.
+        if not self.regions_ready:
+            for area in self.city.s['namingRegions']:
+                if generic(area):
+                    self.assign('namingRegions', area['id'], area)
+            self.regions_ready = True
+        obj['nameRegion'] = region['id']
+        return region['name'][:-2]  # region suffix is always 片区
+
     def assign(self, category, identifier, obj):
         key = category + ':' + identifier
+        root = self.regional_root(category, identifier, obj)
+        # Keep region/district identity, but upgrade the former repetitive
+        # child names once. Custom names always take precedence.
+        generated = obj.get('nameSource') == 'generated'
+        duplicate = (generated and bool(self.owners.get(obj.get('name'), set()) -
+                     {key, self.shared.get(key)}))
+        target_version = COMPACT_NAME_VERSION if category in COMPACT_CATEGORIES else NAME_VERSION
+        endings = suffixes(category, obj)
+        old_name = obj.get('name', '') or self.registry.get(key, '')
+        ending = next((e for e in sorted(endings, key=len, reverse=True) if old_name.endswith(e)), '')
+        old_stem = old_name[:-len(ending)] if ending else old_name
+        compact_upgrade = (category in COMPACT_CATEGORIES and len(old_stem) > 3
+                           and (generated or generic(obj) and key in self.registry)
+                           and obj.get('nameVersion', 0) < COMPACT_NAME_VERSION)
+        if compact_upgrade:
+            # Remove the accidentally appended word while retaining the old
+            # district's identity, even if its centre has since moved regions.
+            root = old_stem[:2]
+        upgrade = compact_upgrade or (category in REGIONAL_CATEGORIES - {'districts'}
+                   and (generated or generic(obj) and key in self.registry)
+                   and (obj.get('nameVersion', 0) < NAME_VERSION or duplicate))
+        if upgrade:
+            self.owners.get(obj.get('name'), set()).discard(key)
+            obj['name'] = ''
+            self.registry.pop(key, None)
         if not generic(obj):
             name = obj['name']
             obj.setdefault('nameSource', 'custom')
@@ -91,24 +195,41 @@ class NameBook:
         else:
             seed = str(self.city.terrain.data['config']['seed']) + ':places-v1:' + key
             rng = random.Random(hashlib.sha256(seed.encode()).digest())
-            endings = suffixes(category, obj)
-            # Additional characters extend the pool for large cities, rather
-            # than falling back to internal IDs or changing existing names.
             attempt = 0
+            offset = rng.randrange(len(endings)) if category in COMPACT_CATEGORIES else 0
             while True:
-                root = rng.choice(FIRST) + rng.choice(SECOND)
-                if attempt >= 32:
-                    root += rng.choice(SECOND)
-                if attempt >= 128:
-                    root += str(attempt - 127)
-                name = root + rng.choice(endings)
+                if category in COMPACT_CATEGORIES:
+                    # Try the short local name with each legal suffix first.
+                    # Several districts in one region can then borrow one local
+                    # character, instead of appending another two-character word.
+                    if root and attempt < len(endings):
+                        stem = root[:3]
+                    else:
+                        first = root[0] if root and attempt < 32 else rng.choice(FIRST)
+                        stem = first + rng.choice(SECOND)
+                        if attempt >= 64:
+                            stem += rng.choice(SECOND)
+                    ending = endings[(offset + attempt) % len(endings)]
+                elif category == 'namingRegions':
+                    # Preserve the established seed-to-region naming scheme.
+                    stem = rng.choice(FIRST) + rng.choice(SECOND)
+                    if attempt >= 32:
+                        stem += rng.choice(SECOND)
+                    ending = rng.choice(endings)
+                else:
+                    stem = distinct_stem(rng, category, obj, root, attempt)
+                    ending = rng.choice(endings)
+                name = stem + ending
                 if name not in self.used:
                     break
                 attempt += 1
             obj['nameSource'] = 'generated'
+        if obj.get('nameSource') == 'generated':
+            obj['nameVersion'] = target_version
         obj['name'] = name
         self.registry[key] = name
         self.used.add(name)
+        self.owners.setdefault(name, set()).add(key)
         return name
 
 
@@ -136,6 +257,11 @@ def ensure_names(city):
 def name_districts(city, previous):
     """The largest surviving child inherits a district name after a split."""
     book = NameBook(city)
+    # Migrate ancestors before overlap matching, so split/merge inheritance
+    # claims the compact name rather than the obsolete four-character stem.
+    for old in sorted(previous, key=lambda d: d['id']):
+        if not generic(old):
+            book.assign('districts', old['id'], old)
     remaining = {d['id']: d for d in previous if not generic(d)}
     districts = sorted(city.s['districts'], key=lambda d: (-len(d.get('parcels', [])), d['id']))
     claimed = set()

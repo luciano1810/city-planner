@@ -72,6 +72,19 @@ def occupancy_index(city):
     return parcels,STRtree([Point(p['center']) for p in parcels])
 
 
+def settled_building(parcel):
+    return bool(parcel.get('building') and parcel['building'].get('status')!='construction')
+
+
+def lane_growth_budget(city):
+    """Share a persistent construction cadence between both street builders."""
+    month=city.s['month']
+    dates=[r['growthMonth'] for r in city.s['roads'] if r.get('generated') and 'growthMonth' in r]
+    interval=city.s['policy']['laneGrowthIntervalMonths']
+    if any(0<month-date<interval for date in dates):return 0
+    return max(0,int(city.s['policy']['autoLanesPerMonth'])-dates.count(month))
+
+
 def street_extension_ready(city,line,index=None,block=None):
     """Extend local streets after nearby serviceable land has actually filled.
 
@@ -83,34 +96,52 @@ def street_extension_ready(city,line,index=None,block=None):
     region=Polygon(block) if block else None
     nearby=[parcels[int(i)] for i in tree.query(line.buffer(120),predicate='intersects')]
     if region:nearby=[p for p in nearby if region.covers(Point(p['center']))]
-    used=[p for p in nearby if p.get('building') or p.get('openSpace')]
-    if sum(bool(p.get('building')) for p in used)<city.s['policy']['streetGrowthMinimumBuildings']:return False
+    used=[p for p in nearby if settled_building(p) or p.get('openSpace')]
+    if sum(settled_building(p) for p in used)<city.s['policy']['streetGrowthMinimumBuildings']:return False
     # Interior subdivision unlocks an existing neighbourhood; it is different
     # from extending an open road outwards. Keep the stricter frontier gate.
     threshold=city.s['policy']['blockInfillThreshold'] if block else city.s['policy']['streetFillThreshold']
     return sum(p['area'] for p in used)/max(1,sum(p['area'] for p in nearby))>=threshold
 
 
-def grow_block_streets(city):
+def block_street_candidates(city, priorities, index=None):
     plans=plan_streets(city)
-    if not plans:return False
     built={r.get('growthKey') for r in city.s['roads']}
-    candidates=[p for p in plans if p['id'] not in built and city.s['month']-p.get('failed',-100)>6 and (p['parent'] is None or p['parent'] in built)]
-    # Finish central, inhabited blocks first; equal sites remain deterministic.
-    occupied=[p for p in city.s['parcels'] if p.get('building')]
-    def priority(plan):
-        point=LineString(plan['points']).centroid
-        activity=sum(math.exp(-Point(p['center']).distance(point)/300) for p in occupied)
-        return (-activity,plan['depth'],plan['id'])
-    made=0;index=occupancy_index(city)
-    for plan in sorted(candidates,key=priority):
-        if made>=int(city.s['policy']['autoLanesPerMonth']):break
-        if not street_extension_ready(city,LineString(plan['points']),index,plan.get('block')):continue
+    index=index if index is not None else occupancy_index(city)
+    candidates=[]
+    for plan in plans:
+        if plan['id'] in built or city.s['month']-plan.get('failed',-100)<=6:continue
+        if plan['parent'] is not None and plan['parent'] not in built:continue
+        line=LineString(plan['points'])
+        if not street_extension_ready(city,line,index,plan.get('block')):continue
+        priority=priorities.evaluate(line,priorities.nearby(line,block=plan.get('block')))
+        if priority is None:continue
+        candidates.append(dict(id=plan['id'],parent=plan['parent'],plan=plan,priority=priority,
+            command=dict(kind='lane',level=0,points=plan['points'],name='社区街 '+str(len(built)+1))))
+    return candidates
+
+
+def construct_streets(city, candidates, budget):
+    """One merit order for reserved block streets and open-road branches."""
+    made=0
+    for candidate in sorted(candidates,key=lambda c:(-c['priority']['score'],c['id'])):
+        if made>=budget:break
         try:
-            city.add_road(dict(kind='lane',level=0,points=plan['points'],name='社区街 '+str(len(built)+1)))
-            city.s['roads'][-1].update(generated=True,growthKey=plan['id'],parent=plan['parent'])
+            city.add_road(candidate['command'])
+            city.s['roads'][-1].update(generated=True,growthKey=candidate['id'],parent=candidate['parent'],
+                growthMonth=city.s['month'],growthPriority=candidate['priority'],exactPlacement=False)
+            if 'plan' not in candidate:city.s.setdefault('growthAttempts',[]).append(candidate['id'])
             made+=1
         except ValueError:
-            # Occupied buildings/protected spaces always win, including old saves.
-            plan['failed']=city.s['month']
+            # A valuable but blocked/unaffordable route does not consume the
+            # construction slot; continue with the next feasible proposal.
+            if 'plan' in candidate:candidate['plan']['failed']=city.s['month']
     return made>0
+
+
+def grow_block_streets(city):
+    budget=lane_growth_budget(city)
+    if not budget or not city.s['settings'].get('autoGrow',True) or city.s['settings']['growth']<=0:return False
+    from .street_priority import StreetPriorities
+    priorities=StreetPriorities(city)
+    return construct_streets(city,block_street_candidates(city,priorities),budget)

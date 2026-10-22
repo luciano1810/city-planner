@@ -6,7 +6,7 @@ def define(unit,keys):
 define('月序号','month')
 define('人','population employed movedIn movedOut relocated laborForce overburdenedPeople lowlandExposure')
 define('户','households housing pendingHousing housingInConstruction')
-define('岗位','jobs vacantJobs accessJobs publicJobs')
+define('岗位','jobs facilityJobs vacantJobs accessJobs publicJobs')
 define('%','unemployment vacancy modeShare mainModeShare burden combinedBurden meanSlope')
 define('栋','buildings construction floorDistribution')
 define('km','roadKm railKm autoRoadKm pathKm')
@@ -36,6 +36,7 @@ define('模拟币','renewalSpending')
 define('人','renewalRelocated renewalMovedOut')
 LABELS=dict(renewalProjects='进行中的更新项目',renewalCompleted='累计交付更新项目',renewalSpending='累计更新支出',renewalRelocated='更新累计城内安置人数',renewalMovedOut='更新累计迁出人数',population='常住人口',jobs='设立岗位',employed='就业人数',commute='平均通勤',landValue='土地估值中位数',rent='住宅租金中位数',housing='可用住房',vacancy='住房空置率',constructionCost='累计建设支出',terrainEngineeringCost='现存道路地形工程增量',vehicleKm='汽车车辆里程',personKm='完整旅程人员里程',estimatedCO2='汽车排放估算',firms='经营行业群组',firmRelocations='累计群组迁址',transfers='换乘次数',boardings='公交上车人次',meanWait='公交候车及上车时间')
 MONTHLY=set('movedIn movedOut relocated firmOpened firmClosed maintenance revenue firmProfit externalDemand localDemand fareRevenue operationCost'.split())
+LABELS['facilityJobs']='设施岗位'
 CUMULATIVE=set('constructionCost firmRelocations renewalCompleted renewalSpending renewalRelocated renewalMovedOut'.split())
 
 def metric_definitions(stats,model):

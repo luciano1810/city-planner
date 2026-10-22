@@ -1,5 +1,11 @@
 /* Identical chord-scaled interpolation to backend city.geometry.curve_points. */
 (function(root){
+  function facilityForParcel(state,parcel){
+    return parcel&&!parcel.building&&parcel.openSpace?state.facilities.find(f=>f.id===parcel.openSpace):null;
+  }
+  function inspectionId(state,id){
+    return facilityForParcel(state,state.parcels.find(p=>p.id===id))?.id||id;
+  }
   // A pointer is only a guide to the next click. It must never bend the
   // committed alignment or inherit a validation result for different points.
   function roadDraftPlan(controls,hover,curved=true,preview=null){
@@ -186,7 +192,7 @@
     }
     return best;
   }
-  const api={roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
+  const api={facilityForParcel,inspectionId,roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.CityGeometry=api;
 })(typeof window==='undefined'?{}:window);

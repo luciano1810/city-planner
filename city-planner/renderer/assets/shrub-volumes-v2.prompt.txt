@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: production transparent foliage sprite atlas for a polished miniature city map.
+Create one square 2 by 2 sprite atlas with EXACTLY FOUR separate low shrub masses. Camera orthographic from above, 76 degrees elevation, showing rounded top and a little of the lower volume. Premium realistic architectural miniature rendering. Lush fresh greens, large rounded overlapping leafy lobes with beautiful soft volume and very restrained tiny leaf detail. They should look like convincing planted bushes in a beautiful sunlit miniature city, NOT a real aerial-photo grain texture, NOT flat circles, NOT geometric low-poly balls. Lighting from upper left, rich luminous green tops and deep green lower-right side. No harsh black speckle. Each subject is a single compact cohesive naturally irregular mass:
+top-left: one asymmetrical rounded dense boxwood shrub in rich grass green;
+top-right: a short natural group of three overlapping small rounded lime-green bushes, with softly lobed unified outline;
+bottom-left: a low spreading dark-green broadleaf shrub with five broad lobes;
+bottom-right: a low lighter yellow-green rounded ornamental bush with six uneven lobes, no flowers.
+Place each at the exact center of its equal quadrant. ALL of each shrub must fit comfortably inside the CENTRAL 60 PERCENT width and 60 PERCENT height of its quadrant: a LOT of genuinely transparent breathing room around EVERY shrub and a wide transparent cross-shaped gap between the four subjects. No plant may cross a quadrant border. No ground, no cast shadow outside foliage, no soil, no pot, no rocks, no text, no labels, no logo, no frame, no grid, no watermark. Crisp antialiased edges with true transparent alpha around all four objects.

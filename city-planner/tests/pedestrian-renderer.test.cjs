@@ -23,3 +23,18 @@ test('textured pedestrian geometry stays at human scale and faces outward',()=>{
     assert(triangles>100&&triangles<1500);
   }
 });
+
+test('Canvas walkers reuse bounded sprites and release evicted backing stores',()=>{
+  const fs=require('node:fs'),vm=require('node:vm'),canvases=[];
+  const context=()=>new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(target,key)=>target[key]||(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+  const root={},document={createElement(){const canvas={width:0,height:0,getContext:context};canvases.push(canvas);return canvas;}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../renderer/pedestrian-renderer.js'),'utf8'),{window:root,document});
+  const api=root.CityPedestrians,walkers=Array.from({length:224},(_,id)=>({id,point:[100,100],heading:Math.floor(id/16)*Math.PI/8,height:1.72,speed:0,stride:0})),ctx=context();
+  api.paint(ctx,walkers,{scale:14});
+  assert.equal(api.stats.sprites,api.stats.limit);assert(api.stats.bytes<8*1024*1024);
+  assert(canvases.some(canvas=>canvas.width===1&&canvas.height===1),'evicted sprite storage must be released');
+  const generated=canvases.length,hits=api.stats.hits;
+  api.paint(ctx,walkers.slice(-32),{scale:14});
+  assert.equal(canvases.length,generated,'unchanged poses should only draw existing textures');assert.equal(api.stats.hits-hits,32);
+  api.paint(ctx,walkers,{scale:14,visible:()=>false});assert.equal(canvases.length,generated,'offscreen walkers should not allocate textures');
+});
