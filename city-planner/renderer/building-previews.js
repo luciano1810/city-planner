@@ -128,7 +128,7 @@
   }
   function render(kind){
     let m=models.get(kind);if(!m){m=kind==='metro_station'?metro():['airport','port','train_station'].includes(kind)?facility(kind):neighborhood(kind);models.set(kind,m);}
-    const canvas=document.createElement('canvas');canvas.width=600;canvas.height=360;const ctx=canvas.getContext('2d');
+    const canvas=document.createElement('canvas');canvas.width=600;canvas.height=360;const ctx=CityScene.useThumbnailMaterials(canvas.getContext('2d'));
     let frame;
     if(m.frame){const [x0,y0,x1,y1,z]=m.frame;frame=quad((x0+x1)/2,(y0+y1)/2,x1-x0,y1-y0).concat([[x0,y0,z],[x1,y0,z]]).map(project);}
     else frame=m.faces.flatMap(face=>face.points).map(project);

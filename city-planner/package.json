@@ -19,6 +19,7 @@
     "test:build-menu": "node scripts/check-build-menu.cjs",
     "test:block-menu": "node scripts/check-block-menu.cjs",
     "test:observe-menu": "node scripts/check-observe-menu.cjs",
+    "test:dock-textures": "node --test tests/city-layer-compositing.test.cjs tests/material-cache.test.cjs && node scripts/check-dock-texture-stability.cjs",
     "test:traffic:views": "node scripts/check-traffic-views.cjs",
     "test:calendar": "PYTHONPATH=backend .venv/bin/python -m unittest tests.test_daily_calendar tests.test_monthly_preparation tests.test_simulation tests.test_signals -v && node --test tests/simulation-driver.test.cjs tests/map-renderer.test.cjs tests/scene-renderer.test.cjs",
     "test:calendar:visual": "node scripts/check-construction-dates.cjs && node scripts/check-incremental-simulation.cjs",

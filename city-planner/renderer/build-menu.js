@@ -13,7 +13,7 @@
   // curb, median and rail paths as the detailed city view.
   function paintRoadThumbnail(canvas,kind,oneway,level,types) {
     const scene=window.CityScene,previous={settings:scene.settings,time:scene.time,quality:scene.effectiveQuality};
-    const ctx=canvas.getContext('2d'),scale=5;
+    const ctx=scene.useThumbnailMaterials(canvas.getContext('2d')),scale=5;
     canvas.width=400;canvas.height=240;
     const road={id:'build-preview-'+kind,kind,oneway,level,points:[[0,0],[260,0]]};
     const state={roads:[road],network:{edges:[],nodes:{},junctions:[]},roadTypes:types,meta:{roadTypes:types}};
