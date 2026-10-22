@@ -7,6 +7,7 @@ from shapely.ops import unary_union
 from shapely import affinity
 from height_format import HEIGHT_ENCODING, encode_heights
 from .engine import City
+from .construction import day
 from .urban import building_style
 
 LAYOUT_VERSION = 2
@@ -97,7 +98,7 @@ def build_visual_case():
         style=building_style(p,use,floors)
         area=footprint.area*floors;cap=int(area/25)
         p['building']=dict(id=city.uid('b'),use=use,floors=floors,floorArea=area,footprintArea=footprint.area,footprint=[list(q) for q in footprint.exterior.coords],
-            center=[x,y],capacity=cap,status='active',ready=0,age=12,occupied=0,positions=cap,employees=0,cost=int(area*2400),vacantMonths=0,
+            center=[x,y],capacity=cap,status='active',ready=0,age=12,lastAgeDay=int(day(city)),occupied=0,positions=cap,employees=0,cost=int(area*2400),vacantMonths=0,
             usableArea=area*.85,useAreas={use:area},businessActive=True,**style)
         p['building']['height']=floors*3.3;p['building']['roof']=i%4
         city.s['parcels'].append(p)

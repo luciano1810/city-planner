@@ -314,8 +314,8 @@
   }
   function car(batch,vehicle){
     const [x,y]=vehicle.point,a=vehicle.heading||0,id=Number(vehicle.id)||0,z=vehicle.z??(vehicle.level>0?6:0);
-    const style=root.SurfaceVariation.vehicle(id),paint=tinted('carPaint',style.color,0),rubber=solid(0x192022),bodyLength=style.length*style.scale,bodyWidth=style.width*style.scale;
-    if(detailLevel>1&&!carAtlas){
+    const style=root.SurfaceVariation.vehicle(id,vehicle.kind),paint=tinted('carPaint',style.color,0),rubber=solid(0x192022),bodyLength=style.length*style.scale,bodyWidth=style.width*style.scale;
+    if(vehicle.kind==='taxi'||detailLevel>1&&!carAtlas){
       const body=solid(style.color,.21,.26),glass=solid(0x284456,.14,.3),chrome=solid(0xb9cad0,.25,.6),van=style.cell>=12;
       batch.bevelBox(x,y,z+.28,bodyLength,bodyWidth,.64,a,body,body,.18);
       const cabin=local([x,y],a,van?-.34:-.18,0),cw=bodyWidth*.82,cl=bodyLength*(van?.66:.48),ch=van?.82:.58;
@@ -332,6 +332,10 @@
         batch.bevelBox(...rear,z+.7,.13,bodyWidth*.2,.12,a,solid(vehicle.speed<.2?0xff3930:0xa51f22),solid(0xe63a32),.03);
       }
       const grille=local([x,y],a,bodyLength*.495,0);batch.box(...grille,z+.44,.04,bodyWidth*.4,.19,a,rubber);
+      if(vehicle.kind==='taxi'){
+        const roof=local([x,y],a,-.3,0);batch.box(...roof,z+1.5,.48,.85,.12,a,rubber);
+        batch.box(...roof,z+1.62,.4,.76,.18,a,solid(vehicle.taxiState==='pickup'?0x5ee0aa:0xfff0ad));
+      }
       return;
     }
     batch.bevelBox(x,y,z+.26,bodyLength*.92,bodyWidth*.9,.34,a,paint,paint,.1);

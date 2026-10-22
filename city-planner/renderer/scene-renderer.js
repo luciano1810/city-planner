@@ -1094,7 +1094,7 @@
     ctx.restore();
   }
   function vehicle(ctx,car,scale){
-    let modelId=car.id,style=variation.vehicle(modelId);
+    let modelId=car.id,style=variation.vehicle(modelId,car.kind);
     // Passenger-car bays must not be populated with the road fleet's buses.
     if(car.parked)for(let tries=0;tries<32&&style.length*style.scale>5.4;tries++)style=variation.vehicle(++modelId);
     const sprite=vehicleSprite(style);
@@ -1136,7 +1136,12 @@
     ctx.fillStyle=style.color;ctx.beginPath();ctx.roundRect(-2.25,-.98,4.5,1.96,.42);ctx.fill();ctx.globalAlpha=.45;ctx.fillStyle=body;ctx.fill();ctx.globalAlpha=1;
     ctx.fillStyle=material(ctx,'glass',car.id);path(ctx,[[.1,-.76],[.85,-.65],[1,.65],[.1,.76]]);ctx.fill();ctx.fillRect(-1.2,-.68,.5,1.36);
     ctx.fillStyle='#fff5cc';ctx.fillRect(1.95,-.78,.3,.42);ctx.fillRect(1.95,.36,.3,.42);
-    ctx.fillStyle=car.speed<.2?'#ff5243':'#9a342c';ctx.fillRect(-2.25,-.8,.25,.45);ctx.fillRect(-2.25,.35,.25,.45);ctx.restore();
+    ctx.fillStyle=car.speed<.2?'#ff5243':'#9a342c';ctx.fillRect(-2.25,-.8,.25,.45);ctx.fillRect(-2.25,.35,.25,.45);
+    if(car.kind==='taxi'){
+      ctx.fillStyle='#253a42';ctx.fillRect(-.65,-.52,.55,1.04);
+      ctx.fillStyle=car.taxiState==='pickup'?'#5ee0aa':'#fff0ad';ctx.fillRect(-.58,-.43,.41,.86);
+    }
+    ctx.restore();
   }
   function vehicleSprite(style){
     const atlas=vehicleAtlases[style.spriteAtlas];if(!atlas)return null;

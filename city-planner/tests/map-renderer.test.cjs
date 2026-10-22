@@ -116,13 +116,24 @@ test('long destination names wrap into at most two readable lines',()=>{
 });
 
 
-test('planned buildings stay invisible until their dated start; construction has a distinct footprint',()=>{
+test('planned homes have a translucent dashed footprint distinct from construction and completion',()=>{
   const points=[[0,0],[0,20],[20,20],[20,0],[0,0]],paints=[];
   const ctx=new Proxy({},{set(o,k,v){if(k==='fillStyle')paints.push(v);o[k]=v;return true;},get(o,k){return k in o?o[k]:()=>{};}});
   const building={footprint:points,use:'residential',status:'planned'};
   const state={parcels:[{id:'dated',points,building}],facilities:[],roads:[],meta:{roadTypes:{}}};
   const options={scale:1,inView:()=>true,visible:()=>true,label:()=>{}};
-  map.paint(ctx,state,options);assert.equal(paints.length,0);
+  map.paint(ctx,state,options);assert(paints.includes('rgba(77,148,113,0.14)'));
+  paints.length=0;building.use='office';map.paint(ctx,state,options);assert.equal(paints.length,0);
+  building.use='residential';
   building.status='construction';map.paint(ctx,state,options);assert(paints.includes('#c7b68e'));
   paints.length=0;building.status='active';map.paint(ctx,state,options);assert(paints.includes(map.palette.building));
+});
+
+test('planned residential outlines save and restore canvas state without rendering solids',()=>{
+  const trace=[],ctx=new Proxy({},{get(o,k){return (...args)=>trace.push([k,...args]);},set(o,k,v){trace.push([k,v]);return true;}});
+  assert(map.plannedResidential(ctx,{building:{status:'planned',use:'residential',footprint:[[0,0],[10,0],[10,10],[0,0]]}},2));
+  assert.deepEqual(trace[0],['save']);assert.deepEqual(trace.at(-1),['restore']);
+  assert(trace.some(row=>row[0]==='setLineDash'&&row[1][0]===2));
+  assert(trace.some(row=>row[0]==='strokeStyle'&&row[1].includes('0.65')));
+  assert(!trace.some(row=>['drawImage','createPattern','translate'].includes(row[0])));
 });

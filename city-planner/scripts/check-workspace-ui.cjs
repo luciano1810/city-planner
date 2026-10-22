@@ -107,7 +107,7 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   // Simulation, signals and file dialog remain attached to the original controls.
   await click('#city-play');await page.waitForFunction(()=>document.getElementById('city-play').textContent==='暂停模拟');
   await page.waitForFunction(()=>CityApp.traffic);await click('#city-play');
-  await click('button[data-category="transit"]');await visible('#signal-hud');await openCategory('roads');
+  await click('button[data-category="transit"]');await visible('#signal-demand');assert.equal(await page.locator('#signal-hud').count(),0);await openCategory('roads');
   await click('#city-files');await visible('#workspace-settings');
   for(const id of ['#city-undo','#city-redo','#city-save','.workspace-file-menu>summary'])await visible(id);
   assert.equal(await page.locator('.workspace-bottom #city-hint,.workspace-bottom .workspace-files').count(),0);
@@ -139,7 +139,7 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
     const heights=await page.locator('.city-kpi:visible,.city-controlbar').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
     assert(Math.max(...heights)-Math.min(...heights)<1,`Top cards must share one height at ${width}: ${heights}`);
     evidence.sizes.push({width,height,...geometry});
-    assert.equal(await page.evaluate(()=>['.map-label','.map-view-switch','#signal-hud','.map-tools','.compass','.map-scale','.zoom-control','#city-hint','#city-legend'].some(s=>document.querySelector(s).closest('#map-frame'))),false,'Permanent controls must stay in the perimeter containers');
+    assert.equal(await page.evaluate(()=>['.map-label','.map-view-switch','#signal-hud','.map-tools','.compass','.map-scale','.zoom-control','#city-hint','#city-legend'].some(s=>document.querySelector(s)?.closest('#map-frame'))),false,'Permanent controls must stay in the perimeter containers');
     await page.screenshot({animations:'disabled',path:path.join(output,`city-final-${width}.png`)});
     await page.locator('.city-kpi').nth(1).scrollIntoViewIfNeeded();await page.locator('.city-kpi').nth(1).click();
     const anchor=await page.locator('.city-kpi').nth(1).boundingBox();
@@ -152,8 +152,9 @@ if(process.env.CHROMIUM_EXECUTABLE)browserOptions.executablePath=process.env.CHR
   await click('.city-brand-caption .panel-dismiss');await visible('#overview-map');
   await click('button[data-category="transit"]');await visible('#city-transit-panel');
   await page.setViewportSize({width:1600,height:1000});await click('button[data-category="transit"]');
-  await click('.workspace-view-panel>summary');await visible('.map-view-switch');await visible('#city-legend');
-  await click('.workspace-view-panel>summary');
+  await click('#workspace-observe');await visible('#city-render-quality');await visible('#city-legend');
+  assert.equal(await page.locator('.workspace-view-panel').isVisible(),false);
+  await click('#workspace-observe');
   await click('#fullscreen');await page.waitForFunction(()=>document.fullscreenElement);await visible('#measure');await click('#fullscreen');await page.waitForFunction(()=>!document.fullscreenElement);
   // Return home, open terrain again, and check the same small-screen layout.
   await click('#city-files');await click('.workspace-file-menu>summary');await click('#back-home');await click('#file-discard');await page.waitForFunction(()=>document.body.dataset.screen==='home');await click('#menu-new');

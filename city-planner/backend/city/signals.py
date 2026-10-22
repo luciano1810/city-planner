@@ -156,7 +156,8 @@ class LiveTraffic:
             return  # An access inside a junction cannot inject a car past red.
         car = dict(id=self.serial, route=route, segment=0, position=position,
                    speed=0., waiting=0., reason='', reservation=None, source=plan['source'],
-                   target=plan['target'], start=plan['start'], end=plan['end'], born=self.motion_time)
+                   target=plan['target'], start=plan['start'], end=plan['end'], born=self.motion_time,
+                   kind=plan.get('kind','car'), taxiState=plan.get('taxiState',''))
         lane = self.lane(car)
         if any(c['route'][c['segment']]==route[0] and self.lane(c)==lane and abs(c['position']-position)<FOLLOW_GAP for c in self.cars):
             return
@@ -189,6 +190,7 @@ class LiveTraffic:
         start = car.get('start', 0.)
         end = path.starts[-2]+car.get('end', self.links[car['route'][-1]]['length'])
         return dict(id=car['id'], point=point, heading=heading, speed=round(car['speed'],3),
+                    kind=car.get('kind','car'), taxiState=car.get('taxiState',''),
                     waiting=round(car['waiting'],1), state=car['reason'] or 'moving',
                     road=link['road'], level=link['level'], source=car.get('source',self.links[car['route'][0]]['a']),
                     target=car.get('target',self.links[car['route'][-1]]['b']),

@@ -1,5 +1,5 @@
 """Spatial coherence, demand-limited buildings, service catchments and CBD scale."""
-import copy,math,unittest
+import copy,datetime,math,unittest
 from collections import Counter
 from tests.test_city import City,flat_world,road,block_city
 from tests.test_city_v3 import complete
@@ -8,6 +8,7 @@ from city.urban import building_style,grow_public_spaces,clustered_districts
 from city.engine import USES,MODEL_VERSION
 from city.parameters import ROAD_TYPES
 from city.routing import shortest_paths
+from city import construction
 from shapely.geometry import Point,Polygon
 
 class UrbanFormTests(unittest.TestCase):
@@ -43,9 +44,22 @@ class UrbanFormTests(unittest.TestCase):
         p['businessCore']=1
         before=p['building']['floors'];c.develop()
         self.assertGreater(p['building'].get('extensionFloors',0),0)
-        ready=p['building']['extensionReady'];extra=p['building']['extensionFloors']
+        ready=p['building']['extensionCompletionDay'];extra=p['building']['extensionFloors']
+        capacity=p['building']['capacity']
         self.assertEqual(p['building']['floors'],before)
-        c.s['month']=ready;c.s['settings']['growth']=0;c.develop()
+        c.s['settings']['growth']=0
+        date=construction.EPOCH+datetime.timedelta(days=ready-1)
+        c.s['month']=(date.year-2026)*12+date.month-1
+        c.s['simulation']['monthSeconds']=(date.day-1)*86400
+        construction.advance(c)
+        self.assertEqual(p['building']['floors'],before)
+        self.assertEqual(p['building']['capacity'],capacity)
+        c.s['simulation']['monthSeconds']+=86400
+        construction.advance(c)
+        self.assertEqual(p['building']['floors'],before+extra)
+        self.assertGreater(p['building']['capacity'],capacity)
+        self.assertNotIn('extensionCompletionDay',p['building'])
+        construction.advance(c)
         self.assertEqual(p['building']['floors'],before+extra)
 
     def test_public_services_keep_distinct_catchments(self):
@@ -86,17 +100,19 @@ class UrbanFormTests(unittest.TestCase):
 class RoadGradeTests(unittest.TestCase):
     def test_draw_and_change_every_road_grade(self):
         c=City(flat_world());rid=road(c,[[500,1000],[3500,1000]],kind='lane')
+        name=c.s['roads'][0]['name'];self.assertTrue(name)
         speeds=[];widths=[];capacities=[];times=[]
         for kind in ('lane','street','avenue','highway','motorway'):
             c.command(dict(type='road_update',id=rid,kind=kind))
             cfg=ROAD_TYPES[kind];speeds.append(cfg['speed']);widths.append(cfg['width']);capacities.append(cfg['capacity'])
             times.append(sum(e['freeTime'] for e in c.network['edges']))
             self.assertEqual(c.s['roads'][0]['kind'],kind)
-            self.assertEqual(c.s['roads'][0]['name'],cfg['name'])
+            self.assertEqual(c.s['roads'][0]['name'],name)
             self.assertEqual(bool(c.s['parcels']),kind in ('lane','street','avenue'))
         self.assertEqual(speeds,sorted(set(speeds)));self.assertEqual(widths,sorted(set(widths)))
         self.assertEqual(capacities,sorted(set(capacities)));self.assertEqual(times,sorted(times,reverse=True))
         restored=City.restore(c.snapshot());self.assertEqual(restored.s['roads'][0]['kind'],'motorway')
+        self.assertEqual(restored.s['roads'][0]['name'],name)
         restored.command(dict(type='road_update',id=rid,kind='lane'))
         self.assertGreater(len(restored.s['parcels']),0)
 

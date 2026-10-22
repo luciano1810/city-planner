@@ -877,8 +877,9 @@
         if(root.CityScene){root.CityScene.vehicle(ctx,{...car,point:[car.point[0],car.point[1]-.28*vehicleHeight(car,layout)]},scale);continue;}
         ctx.save();ctx.translate(...car.point);ctx.rotate(car.heading);
         ctx.fillStyle='#203c3240';ctx.fillRect(-2.25+.6,-.95+.6,4.5,1.9);
-        ctx.fillStyle=['#f4cf80','#81bcc7','#e8e7df','#d79e81'][car.id%4];ctx.fillRect(-2.25,-.95,4.5,1.9);
+        ctx.fillStyle=car.kind==='taxi'?'#edbe42':['#f4cf80','#81bcc7','#e8e7df','#d79e81'][car.id%4];ctx.fillRect(-2.25,-.95,4.5,1.9);
         ctx.fillStyle='#405d63';ctx.fillRect(.35,-.7,.8,1.4);
+        if(car.kind==='taxi'){ctx.fillStyle=car.taxiState==='pickup'?'#5ee0aa':'#fff0ad';ctx.fillRect(-.6,-.45,.4,.9);}
         ctx.fillStyle=car.speed<.2?'#f7604d':'#b66d51';ctx.fillRect(-2.3,-.8,.35,.45);ctx.fillRect(-2.3,.35,.35,.45);ctx.restore();
       }
       for(const road of visibleRoads)if(road.id===selected){path(surfaceRoad(road,layout).points);ctx.strokeStyle='#d78b39';ctx.lineWidth=2/scale;ctx.stroke();}

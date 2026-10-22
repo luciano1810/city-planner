@@ -18,6 +18,11 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'city-service-stats-'));
   const groups=await page.evaluate(()=>CityServiceStatistics.groups.map(g=>g.key));
   for(const key of groups){
    const card=page.locator(`[data-service="${key}"]`);await card.scrollIntoViewIfNeeded();await card.click();
+   if(key==='taxi'){
+    assert.equal(await card.locator('strong').innerText(),'未运营');
+    assert(await page.locator('#city-taxi-panel').isVisible());
+    await page.keyboard.press('Escape');continue;
+   }
    const expected=await page.evaluate(key=>CityServiceStatistics.summary(CityApp.state,key).count,key);
    assert.equal(await card.locator('strong').innerText(),expected+' 处');
    assert.equal(await page.locator('.metric-value strong').innerText(),String(expected));

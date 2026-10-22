@@ -862,13 +862,24 @@ body.city-mode .city-kpis{top:18px;right:84px}
 body.city-mode :is(.city-sidebar,.city-inspector,.workspace-rail){top:138px;--rail-top:138px}
 body.city-mode .workspace-bottom{grid-template-columns:300px minmax(0,1fr)}
 body.city-mode .workspace-bottom .workspace-status-tray{max-height:calc(100dvh - 160px)}
-body.city-mode .workspace-status-tray .city-controlbar{position:static;inset:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;width:100%;height:auto;min-height:0;flex:none;padding:0 0 12px;margin:0 0 12px;gap:10px 12px;background:none;border:0;border-bottom:1px solid var(--ui-line);border-radius:0;box-shadow:none}
+body.city-mode .workspace-status-tray .city-controlbar{position:static;inset:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;width:100%;height:auto;min-height:0;flex:none;padding:0 0 12px;margin:0 0 12px;gap:10px 12px;background:none;border:0;border-bottom:1px solid var(--ui-line);border-radius:0;box-shadow:none}
 body.city-mode .workspace-status-tray .city-controlbar[hidden]{display:none}
+.city-demand-panel{padding:10px 0 2px;border-top:1px solid var(--ui-line);margin-top:8px}
+.city-demand-panel header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:11px}
+.city-demand-panel header strong{font-weight:600;color:var(--ui-ink)}
+.city-demand-panel header small,.city-demand-panel p{font-size:10px;color:var(--ui-muted)}
+.city-demand-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.city-demand-item{min-width:0;display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--ui-muted)}
+.city-demand-item>strong{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ui-ink);overflow-wrap:anywhere}
+.city-demand-track{height:4px;border-radius:3px;background:#edf1f5;overflow:hidden}
+.city-demand-track i{display:block;width:0;height:100%;border-radius:inherit;background:var(--demand-color);transition:width .2s}
+.city-demand-panel p{margin:9px 0 0;line-height:1.4}
+body.city-mode .workspace-bottom .workspace-status-tray .city-status:empty{display:none}
 body.city-mode .workspace-status-tray .city-play{display:contents}
-body.city-mode .workspace-status-tray .city-controlbar>.map-label{grid-column:1/-1;min-width:0;flex-wrap:wrap}
-body.city-mode .workspace-status-tray .city-date{grid-column:1;grid-row:2;font-size:12px}
-body.city-mode .workspace-status-tray #city-play{grid-column:2;grid-row:2;min-height:36px;padding:8px 12px}
-body.city-mode .workspace-status-tray .city-simulation-speed{grid-column:1/-1;grid-row:3;min-width:0;width:100%}
+body.city-mode .workspace-status-tray .city-controlbar>.map-label{display:none}
+body.city-mode .workspace-status-tray .city-date{grid-column:1;grid-row:1;font-size:12px}
+body.city-mode .workspace-status-tray #city-play{grid-column:2;grid-row:1;min-height:36px;padding:8px 12px}
+body.city-mode .workspace-status-tray .city-simulation-speed{grid-column:1/-1;grid-row:2;min-width:0;width:100%}
 body.city-mode .workspace-status-tray .city-simulation-speed label{font-size:11px}
 @media(max-width:1050px) and (min-width:701px){
  body.city-mode .workspace-bottom{grid-template-columns:260px minmax(0,1fr);right:18px}
@@ -894,3 +905,20 @@ body.city-mode .workspace-status-tray .city-simulation-speed label{font-size:11p
 body.city-mode .city-kpis{display:flex;right:auto;width:min(932px,calc(100% - 102px));overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;padding-bottom:0}
 body.city-mode .city-kpis .city-kpi,body.city-mode .city-kpis.show-services .city-kpi{flex:0 0 180px;width:180px;min-width:0;scroll-snap-align:start}
 @media(max-width:700px){body.city-mode .city-kpis{width:calc(100% - 74px)}}
+
+/* City display controls and legends live in Observe; terrain keeps its switch. */
+body.city-mode .workspace-view-panel{display:none}
+.junction-signal-heading{display:flex;align-items:center;gap:12px;padding:14px 12px;background:#f4f8ff;border-radius:11px;font-size:14px}
+.city-inspector #junction-countdown{margin:4px 0 0;line-height:1.5;font-variant-numeric:tabular-nums}
+.signal-dot.unknown{background:#94a0af;box-shadow:0 0 0 4px #94a0af17}
+.city-overview-detail:has([data-overview-section="liveTraffic"]:not([hidden])){display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.city-overview-detail:has([data-overview-section="liveTraffic"]:not([hidden])) .overview-detail-title{margin:0}
+.city-overview-detail:has([data-overview-section="liveTraffic"]:not([hidden])) .overview-detail-content{grid-column:1/-1}
+.live-traffic-counts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding:8px 10px;background:#f4f8ff;border-radius:9px}
+.live-traffic-counts dt{font-size:11px;color:var(--ui-muted)}
+.live-traffic-counts dd{margin:3px 0 0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.live-traffic-counts strong{font-size:19px;font-weight:650}
+.live-traffic-counts small{font-size:10px;margin-left:4px;color:var(--ui-muted)}
+.city-inspector .live-traffic-source{display:flex;gap:6px 16px;flex-wrap:wrap;margin:6px 0 0;font-size:11px;line-height:1.5}
+.city-inspector .live-traffic-note{margin:3px 0 0;font-size:11px;line-height:1.5}
+@media(max-width:480px){.live-traffic-counts{grid-template-columns:repeat(3,minmax(0,1fr))}.live-traffic-counts strong{font-size:17px}}

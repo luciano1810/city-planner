@@ -166,7 +166,7 @@ class CityService:
                     self.close()
                     result=advance(city,payload.get('seconds',0),payload.get('speed'),
                                    payload.get('mode','observed'),payload.get('reset',False),payload.get('daylightSeconds'))
-                if result['monthsAdvanced'] or result.get('weeksAdvanced'):
+                if result['monthsAdvanced'] or result.get('settlementsAdvanced'):
                     try:self.autosave(city)
                     except OSError as exc:result['saveWarning']='自动保存失败，请检查磁盘空间：'+str(exc)
                 return result
@@ -233,7 +233,7 @@ class CityService:
                 from .construction import day,date_string
                 return dict(model=MODEL_VERSION,name=city.s['name'],month=city.s['month'],settings=city.s['settings'],policy=city.s['policy'],
                             stats=city.s['stats'],districts=city.s['districts'],annual=city.s['annual'],
-                            date=date_string(day(city)),weeklyHistory=city.s['weeklyHistory'],
+                            date=date_string(day(city)),dailyHistory=city.s['dailyHistory'],
                             units=dict(land='模拟币/m² 土地',rent='模拟币/m² 建筑/月',traffic='典型工作日',time='分钟'),
                             terrain=city.terrain.data['grid'],origin=city.s.get('origin'),events=city.s['events'],
                             metrics=metric_definitions(city.s['stats'],MODEL_VERSION),accessibilityGroups=city.s.get('accessibilityGroups',[]),

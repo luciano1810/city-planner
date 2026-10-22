@@ -90,10 +90,10 @@ class SignalTests(unittest.TestCase):
         for key in ('signalGreenSeconds','signalYellowSeconds','signalClearanceSeconds'):
             snapshot['state']['policy'].pop(key)
         restored=City.restore(snapshot)
-        self.assertEqual(restored.s['version'],'shanhai-city-11')
+        self.assertEqual(restored.s['version'],'shanhai-city-12')
         self.assertEqual(restored.s['roads'],roads)
         self.assertEqual(restored.s['policy']['signalGreenSeconds'],12)
-        self.assertIn('模型 11',restored.s['migrationNote'])
+        self.assertIn('模型 12',restored.s['migrationNote'])
 
     def test_invalid_api_step_and_timing_are_atomic(self):
         with tempfile.TemporaryDirectory() as folder:

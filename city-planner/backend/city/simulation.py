@@ -4,7 +4,7 @@ import copy
 import math
 
 DAY = 86400
-SPEEDS = (1, 2, 3, 5, 15, 60, 300, 3600, 21600, 86400, 604800, 2592000)
+SPEEDS = (1, 2, 3, 5, 15, 60, 300, 3600, 21600, 86400, 259200, 604800, 2592000)
 MAX_STEP = 31 * DAY
 
 
@@ -32,20 +32,36 @@ def validate(state, month):
 def ensure_calendar(city):
     from .construction import day
     now = int(day(city))
-    city.s.setdefault('calendar', dict(nextWeekDay=now+7, lastWeekDay=now,
+    city.s.setdefault('calendar', dict(nextSettlementDay=now+1, lastSettlementDay=now,
         projectCredit=0., migrationCredit=0., monthRevenue=0., monthMaintenance=0.))
-    city.s.setdefault('weeklyHistory', [])
+    city.s.setdefault('dailyHistory', [])
     state = city.s['calendar']
-    if not isinstance(state,dict):raise ValueError('无效的周结算状态')
+    if not isinstance(state,dict):raise ValueError('无效的日结算状态')
+    if 'lastWeekDay' in state:
+        for key in ('lastWeekDay','nextWeekDay'):
+            if type(state.get(key)) is not int or state[key]<0:
+                raise ValueError('无效的历史周结算日期')
+        if state['nextWeekDay']<=state['lastWeekDay'] or state['lastWeekDay']>now:
+            raise ValueError('无效的历史周结算间隔')
+        # The first daily close includes the uncharged tail of the old week.
+        # Its record carries the full date range; old weekly rows are archived.
+        state['lastSettlementDay']=state.pop('lastWeekDay')
+        state.pop('nextWeekDay')
+        state['nextSettlementDay']=now+1
+        previous={key:city.s.get(key,0) for key in ('revenue','maintenance','movedIn','movedOut','relocated')}
+        city.s['legacyWeeklyAccounts']=previous
+        for key in previous:
+            city.s[key]=0
+            city.s.get('stats',{})[key]=0
     for key in ('projectCredit','migrationCredit','monthRevenue','monthMaintenance','monthMovedIn','monthMovedOut','monthRelocated'):
         state.setdefault(key, 0.)
         if type(state[key]) not in (int,float) or not math.isfinite(state[key]) or state[key]<0:
-            raise ValueError('无效的周结算余额')
-    for key in ('nextWeekDay','lastWeekDay'):
+            raise ValueError('无效的日结算余额')
+    for key in ('nextSettlementDay','lastSettlementDay'):
         if type(state.get(key)) is not int or state[key] < 0:
-            raise ValueError('无效的周结算日期')
-    if state['nextWeekDay'] <= state['lastWeekDay']:
-        raise ValueError('无效的周结算间隔')
+            raise ValueError('无效的日结算日期')
+    if state['nextSettlementDay'] <= state['lastSettlementDay']:
+        raise ValueError('无效的日结算间隔')
     return state
 
 
@@ -71,26 +87,27 @@ def daily_boundary(city, month_changed=False):
     renewal.advance(city)
     for key,previous in before_moves.items():
         ledger['month'+key[0].upper()+key[1:]]+=city.s[key]-previous
-    weekly = today >= ledger['nextWeekDay']
-    if weekly:
-        factor=period_factor(ledger['lastWeekDay'], today)
-        ledger['lastWeekDay']=today
-        ledger['nextWeekDay']=today+7
-        city.settle_week(factor)
+    daily = today >= ledger['nextSettlementDay']
+    if daily:
+        start=ledger['lastSettlementDay']
+        factor=period_factor(start, today)
+        ledger['lastSettlementDay']=today
+        ledger['nextSettlementDay']=today+1
+        city.settle_day(factor, start_day=start)
     else:
         city.refresh_construction_stats()
         city.s['revision']+=1
         city.undo=[];city.redo=[]
     if month_changed:
         city.close_month()
-    return int(weekly)
+    return int(daily)
 
 
 def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
-    """Process every midnight, dated construction event and weekly close."""
+    """Process every midnight, dated construction event and daily close."""
     from .construction import day
     ensure_calendar(city)
-    state=city.s['simulation'];remaining=float(seconds);weeks=0;days=0
+    state=city.s['simulation'];remaining=float(seconds);settlements=0;days=0
     while remaining > 1e-9:
         duration=month_days(city.s['month'])*DAY
         midnight=(int(state['monthSeconds']//DAY)+1)*DAY
@@ -104,15 +121,15 @@ def advance_calendar(city, seconds, daylight_seconds=0., settlement=None):
             if month_changed:
                 state['monthSeconds']=0.
                 city.s['month']+=1
-            if settlement is not None and int(day(city)) >= city.s['calendar']['nextWeekDay']:
+            if settlement is not None and int(day(city)) >= city.s['calendar']['nextSettlementDay']:
                 settlement(city)
-                weeks+=1
+                settlements+=1
             else:
-                weeks+=daily_boundary(city,month_changed)
+                settlements+=daily_boundary(city,month_changed)
             days+=1
             state=city.s['simulation']
     if not seconds:city.s['sceneTimeSeconds']+=daylight_seconds
-    return days,weeks
+    return days,settlements
 
 
 def step_months(city, months):
@@ -123,12 +140,11 @@ def step_months(city, months):
     index=city.s['month']+months
     target=datetime.date(2026+index//12,index%12+1,min(now.day,month_days(index)))
     seconds=((target-EPOCH).days-int(day(city)))*DAY
-    before=(copy.deepcopy(city.s),city.rng.getstate(),city.runtime(),copy.deepcopy(city.undo),copy.deepcopy(city.redo))
+    before=city.checkpoint()
     try:
         advance_calendar(city,seconds)
     except Exception:
-        city.s,rng,runtime,city.undo,city.redo=before
-        city.rng.setstate(rng);city.rebuild();city.restore_runtime(runtime)
+        city.rollback(before)
         raise
 
 
@@ -147,8 +163,7 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
     if type(daylight_seconds) not in (int, float) or not math.isfinite(daylight_seconds) or not 0 <= daylight_seconds <= MAX_STEP:
         raise ValueError('无效的光照推进时长')
     crosses_day = seconds > 0 and int((state['monthSeconds']+seconds)//DAY) > int(state['monthSeconds']//DAY)
-    before = (copy.deepcopy(city.s), city.rng.getstate(), city.runtime(),
-              copy.deepcopy(city.undo), copy.deepcopy(city.redo)) if crosses_day else None
+    before = city.checkpoint() if crosses_day else None
     initial_month = city.s['month']
     previous_live = city.live_traffic
     def road_signature():
@@ -157,7 +172,7 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
     try:
         if speed is not None:
             state['speed'] = speed
-        days,weeks=advance_calendar(city,seconds,daylight_seconds,settlement)
+        days,settlements=advance_calendar(city,seconds,daylight_seconds,settlement)
         state=city.s['simulation']
         target = state['elapsedSeconds']
         live = city.live_traffic
@@ -186,14 +201,11 @@ def advance(city, seconds, speed=None, mode='observed', reset=False, daylight_se
         if seconds:
             state['sampled'] = sampled
         result = dict(simulation=copy.deepcopy(state), sceneTimeSeconds=city.s['sceneTimeSeconds'],
-                      month=city.s['month'], monthsAdvanced=city.s['month']-initial_month, daysAdvanced=days, weeksAdvanced=weeks,
+                      month=city.s['month'], monthsAdvanced=city.s['month']-initial_month, daysAdvanced=days, settlementsAdvanced=settlements,
                       traffic=live.view(),trafficAnimation=live.animation(),trafficReset=replaced)
         if days:result['city']=city.view()
         return result
     except Exception:
         if before:
-            city.s, rng, runtime, city.undo, city.redo = before
-            city.rng.setstate(rng)
-            city.rebuild()
-            city.restore_runtime(runtime)
+            city.rollback(before)
         raise

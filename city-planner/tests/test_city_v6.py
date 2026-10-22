@@ -47,6 +47,13 @@ class BlockLayoutTests(unittest.TestCase):
         self.assertGreater(shape.area/p['area'],.75)
         complete(c,p,'commercial');c.rebuild()
         self.assertTrue(grow_public_spaces(c));c.rebuild()
+        self.assertFalse(any(f['kind']=='park' for f in c.s['facilities']))
+        home=next(p for p in c.s['parcels'] if p.get('blockLayout')!='single'
+                  and not p.get('blockCommon') and not p.get('building') and not p.get('openSpace'))
+        complete(c,home,'residential',10)
+        c.s['households']=[dict(id=c.uid('h'),home=home['id'],job=None,size=4,income=6000,car=False,
+                              stress=0,unemployedMonths=0,burden=.1,commute=None,commuteFailed=False) for _ in range(10)]
+        c.rebuild();self.assertTrue(grow_public_spaces(c));c.rebuild()
         for kind in ('park','plaza'):
             f=next(f for f in c.s['facilities'] if f['kind']==kind)
             self.assertEqual(c.parcelmap[f['parcel']]['blockLayout'],'single')

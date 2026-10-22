@@ -2,8 +2,8 @@
  * already committed by the backend; changing cities invalidates that response. */
 (function(root){
   'use strict';
-  const speeds=[1,2,3,5,15,60,300,3600,21600];
-  const labels=['1× · 实时','2×','3×','5×','15×','60× · 1 分钟/秒','5 分钟/秒','1 小时/秒','6 小时/秒'];
+  const speeds=[1,2,3,5,15,60,300,3600,21600,86400,259200];
+  const labels=['1× · 实时','2×','3×','5×','15×','60× · 1 分钟/秒','5 分钟/秒','1 小时/秒','6 小时/秒','1 天/秒','3 天/秒'];
   const daylightRate=speed=>speed>=86400?1:speed;
   class Driver{
     constructor({request,apply,onState=()=>{},onError=()=>{},now=()=>performance.now(),schedule=(...args)=>setTimeout(...args),cancel=id=>clearTimeout(id)}){
@@ -47,7 +47,7 @@
     }
     setSpeed(speed,{persist=true}={}){
       // Older saves may retain a speed above the current UI limit.
-      if([86400,604800,2592000].includes(speed))speed=speeds.at(-1);
+      if([604800,2592000].includes(speed))speed=speeds.at(-1);
       if(!speeds.includes(speed))throw new Error('未知模拟速度');
       this.accrue();this.speed=speed;this.onState();
       return persist?this.send(0):Promise.resolve();

@@ -2,6 +2,7 @@
 (function(root){
   'use strict';
   const groups=[
+    ['taxi','出租车',[],'M3 11l2-6h14l2 6M3 11h18v8H3ZM6 19v2m12-2v2M7 14h1m8 0h1M10 5V3h4v2','典型工作日出租车服务；接客等待、载客与空驶均来自实际交通分配。'],
     ['water','供水',['water_plant'],'M12 2C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-13Z','供水量、用水需求与管网覆盖尚未模拟。'],
     ['power','供电',['power_plant','substation'],'m13 2-9 12h7l-1 8 10-13h-8Z','发电量、用电需求与电网覆盖尚未模拟。'],
     ['sanitation','污水与环卫',['sewage_plant','recycling_center'],'M4 7h16M9 3h6l2 4M6 7l1 14h10l1-14M10 11v6m4-6v6','污水流量、垃圾产量及处理负荷尚未模拟。'],
@@ -27,17 +28,20 @@
   const icon=g=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${g.path}"/></svg>`;
   function summary(state,key){
     const group=groups.find(g=>g.key===key);
+    if(key==='taxi')return {group,facilities:[],count:state?.taxi?.fleetSize||0,taxi:state?.taxi||{enabled:false,fleetSize:0},report:state?.taxiReport||{}};
     const facilities=(state?.facilities||[]).filter(f=>group.key==='other'?!known.has(f.kind):group.kinds.includes(f.kind));
     const total=field=>{const values=facilities.map(f=>f[field]).filter(valid);return values.length?values.reduce((a,b)=>a+b,0):facilities.length?null:0;};
     return {group,facilities,count:facilities.length,connected:facilities.filter(f=>f.connected===true).length,unknownConnection:facilities.filter(f=>typeof f.connected!=='boolean').length,capacity:total('capacity'),visits:total('visits'),parkingSpaces:total('parkingSpaces'),chargingSpaces:total('chargingSpaces'),rooms:total('rooms'),maintenance:total('maintenance'),cost:total('cost'),missingMaintenance:facilities.filter(f=>!valid(f.maintenance)).length};
   }
   function subtitle(s){
+    if(s.group.key==='taxi')return s.taxi.enabled?`${fmt(s.count)} 辆 · 等待 ${fmt(s.report.meanWait)} 分钟`:'尚未运营 · 点击配置服务';
     if(s.group.key==='parking')return `${fmt(s.parkingSpaces)} 个规划车位`;
     if(s.group.key==='charging')return `${fmt(s.chargingSpaces)} 个充电车位`;
     if(['health','education'].includes(s.group.key)&&s.capacity>0)return `${fmt(s.capacity)} 个服务名额`;
     return `${s.connected} 处已接入道路`;
   }
   function detail(s,names={}){
+    if(s.group.key==='taxi')return '<div class="metric-body taxi-metric-body"></div>';
     const rows=[['设施总数',s.count+' 处'],['已接入道路',s.connected+' 处'],['待连接道路',(s.count-s.connected-s.unknownConnection)+' 处'],...(s.unknownConnection?[['接入状态未记录',s.unknownConnection+' 处']]:[]),['月维护费',fmt(s.maintenance)+' 币'],['现有设施建设费用',fmt(s.cost)+' 币']];
     if(s.group.key==='parking')rows.push(['规划车位',fmt(s.parkingSpaces)+' 个'],['实际占用率','未模拟']);
     if(s.group.key==='charging')rows.push(['充电车位',fmt(s.chargingSpaces)+' 个'],['实际占用率','未模拟']);
@@ -46,6 +50,7 @@
     const kinds=s.group.key==='other'?[...new Set(s.facilities.map(f=>f.kind))]:s.group.kinds;
     return `<div class="metric-body"><div class="metric-value"><strong>${s.count}</strong><span>处设施</span></div><p class="metric-note">${esc(s.group.note)}</p><dl class="metric-details">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>${s.missingMaintenance?'<p class="metric-note">部分设施未记录维护费，金额仅汇总已有数据。</p>':''}<h3>设施类型</h3><div class="service-type-counts">${kinds.map(k=>`<span>${esc(names[k]||k)}<b>${s.facilities.filter(f=>f.kind===k).length}</b></span>`).join('')}</div><h3>设施明细 · 点击定位</h3>${s.count?`<div class="service-facility-list">${s.facilities.map(f=>`<button class="service-facility" data-service-facility="${esc(f.id)}"><strong>${esc(f.name||names[f.kind]||f.kind)}</strong><small>${esc(names[f.kind]||f.kind)} · ${f.connected===true?'已接入道路':f.connected===false?'待连接道路':'接入状态未记录'}${valid(f.parkingSpaces)?' · '+fmt(f.parkingSpaces)+' 个车位':valid(f.chargingSpaces)?' · '+fmt(f.chargingSpaces)+' 个充电位':f.capacity>0?' · '+fmt(f.capacity)+' 名额':''}</small></button>`).join('')}</div>`:'<p class="metric-empty">暂无此类设施。开启自动生长后，城市会按需求与选址条件建设配套；交通枢纽可在建造菜单规划。</p>'}</div>`;
   }
-  const api={groups,summary,subtitle,detail,icon};
+  const value=s=>s.group.key==='taxi'?(s.taxi.enabled?`${fmt(s.report.completed??0)} 人次`:'未运营'):`${s.count} 处`;
+  const api={groups,summary,subtitle,detail,icon,value};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityServiceStatistics=api;
 })(typeof window!=='undefined'?window:globalThis);

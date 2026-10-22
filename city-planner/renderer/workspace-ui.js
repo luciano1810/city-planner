@@ -103,7 +103,7 @@
   blockMenu=window.CityBlockMenu.create({button:$('workspace-blocks'),dock,onOpen:()=>{closeMetric();buildMenu.close();observeMenu?.close();}});
   observeMenu=window.CityObserveMenu.create({button:$('workspace-observe'),dock,onOpen:()=>{closeMetric();buildMenu.close();blockMenu.close();}});
   // Existing listeners toggle active state on the original tool buttons.
-  one('.city-kpi').insertAdjacentHTML('afterend','<div class="city-kpi"><span>可用财政 / 币</span><strong id="ck-treasury">—</strong><small id="ck-treasury-sub">周收入 — 币</small></div>');
+  one('.city-kpi').insertAdjacentHTML('afterend','<div class="city-kpi"><span>可用财政 / 币</span><strong id="ck-treasury">—</strong><small id="ck-treasury-sub">日收入 — 币</small></div>');
   const kpiIcons=['service','grid','building','grid','bus'];
   all('.city-kpi').forEach((card,i)=>card.insertAdjacentHTML('afterbegin',`<span class="kpi-symbol">${icon(kpiIcons[i])}</span>`));
   const overview=$('city-dashboard');overview.className='city-overview-button';
@@ -118,7 +118,22 @@
   selection.innerHTML=`<span class="selection-symbol">${icon('check')}</span><span><strong id="selection-title">自由探索城市</strong><small id="selection-subtitle">选择对象查看详情</small></span><span aria-hidden="true">›</span>`;
   selection.onclick=()=>{closeMetric();document.body.classList.add('show-inspector');};one('.app-layout').append(selection);
   const statusTray=document.createElement('section');statusTray.className='workspace-status-tray';statusTray.setAttribute('aria-label','选择与操作状态');
-  statusTray.append(overview,selection,$('city-status'),one('.workspace-files'));one('.app-layout').append(statusTray);
+  const demandPanel=document.createElement('section');demandPanel.className='city-demand-panel';demandPanel.setAttribute('aria-label','建筑实时需求');
+  const demandUses=[['residential','住宅','#57966e'],['commercial','商业','#c99546'],['office','办公','#528fab'],['industrial','工业','#a080a5'],['warehouse','仓储','#9a9169']];
+  demandPanel.innerHTML='<header><strong>实时需求</strong><small>未满足缺口</small></header><div class="city-demand-grid">'+demandUses.map(([use,name,color])=>`<div class="city-demand-item" data-demand-use="${use}" style="--demand-color:${color}"><span>${name}</span><strong>—</strong><div class="city-demand-track" role="meter" aria-label="${name}未满足需求占比" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>`).join('')+'</div><p>住宅按户 · 其他按岗位容量</p>';
+  demandPanel.title='显示可达就业对应的住房缺口与各类经营空间缺口；已扣除现有及待开工、在建供应。需求随城市结算与建设编辑更新，不代表可立即开工的建筑栋数。';
+  function refreshDemand(){
+    const demand=window.CityApp.state?.developmentDemand;
+    for(const item of demandPanel.querySelectorAll('[data-demand-use]')){
+      const row=demand?.uses?.[item.dataset.demandUse],valid=Number.isFinite(row?.shortage),ratio=valid?Math.max(0,Math.min(1,row.ratio||0)):0;
+      item.querySelector('strong').textContent=valid?row.shortage.toLocaleString('zh-CN',{maximumFractionDigits:1}):'—';
+      const meter=item.querySelector('[role="meter"]');meter.querySelector('i').style.width=`${ratio*100}%`;
+      if(valid){meter.setAttribute('aria-valuenow',String(Math.round(ratio*100)));meter.setAttribute('aria-valuetext',`${row.shortage} ${row.unit}，未满足 ${Math.round(ratio*100)}%`);}
+      else{meter.removeAttribute('aria-valuenow');meter.setAttribute('aria-valuetext','等待需求数据');}
+      item.title=valid?`${demand.date} · ${item.firstElementChild.textContent}缺口 ${row.shortage} ${row.unit}，已扣除现有与已规划供应`:'等待需求数据';
+    }
+  }
+  statusTray.append(overview,demandPanel,selection,$('city-status'),one('.workspace-files'));one('.app-layout').append(statusTray);
   const inspector=$('city-inspector');
   let activeOverview=null;
   function positionCityOverview(){
@@ -138,9 +153,10 @@
     const s=state.stats,number=value=>typeof value==='number'&&Number.isFinite(value)?value.toLocaleString('zh-CN',{maximumFractionDigits:1}):'—';
     const groups=[
       {key:'housing',title:'建筑与住房',icon:'building',value:number(s.buildings)+' 栋',note:`在建 ${number(s.construction)} · 空置率 ${number(s.vacancy)}%`},
-      {key:'population',title:'人口与迁移',icon:'service',value:number(s.population)+' 人',note:`本周迁入 ${number(s.movedIn)} · 迁出 ${number(s.movedOut)}`},
+      {key:'population',title:'人口与迁移',icon:'service',value:number(s.population)+' 人',note:`今日迁入 ${number(s.movedIn)} · 迁出 ${number(s.movedOut)}`},
       {key:'travel',title:'出行与可达性',icon:'bus',value:number(s.commute)+' 分钟',note:`平均通勤 · 完成 ${number(s.completedTrips)} 次旅程`},
-      {key:'finance',title:'财政与账目',icon:'grid',value:number(s.treasury)+' 币',note:`周收入 ${number(s.revenue)} · 分项收支`},
+      {key:'liveTraffic',title:'实时交通',icon:'road',value:CityApp.traffic?`${number(CityApp.traffic.vehicles?.length)} 辆车 · ${number(CityApp.traffic.pedestrians?.length)} 位行人`:'暂无样本',note:CityApp.traffic?`${state.simulation?.sampled?'高速抽样':'精细人车'} · ${CityApp.traffic.mode==='test'?'验证人车流':'城市交通分配'}`:'等待交通样本'},
+      {key:'finance',title:'财政与账目',icon:'grid',value:number(s.treasury)+' 币',note:`日收入 ${number(s.revenue)} · 分项收支`},
       {key:'growth',title:'地形与生长',icon:'mountain',value:number(s.autoRoadKm)+' km',note:`自动支路 · 公共空间 ${number(s.publicSpaceArea)} m²`},
       {key:'economy',title:'产业与分布',icon:'chart',value:number(s.firms)+' 个企业群组',note:`空缺岗位 ${number(s.vacantJobs)} · 建筑与交通分布`},
       {key:'districts',title:'城区与中心',icon:'grid',value:state.districts.length+' 个城区',note:`${(state.growthCenters||[]).filter(c=>c.rank).length} 处发展中心 · 点击城区定位`},
@@ -148,12 +164,12 @@
       {key:'comparison',title:'基线对照',icon:'sliders',value:'变化对比',note:'人口、岗位、通勤与土地价格'}
     ];
     const sections=new Map(groups.map(g=>{const section=document.createElement('section');section.dataset.overviewSection=g.key;section.hidden=true;section.setAttribute('aria-label',g.title);return [g.key,section];}));
-    const headingGroups={'人口变化':'population','出行方式 · 已完成旅程':'travel','城市账目':'finance','与基线比较':'comparison','地形与自动生长':'growth','城区':'districts','城市记事':'events','分项账目':'finance'};
+    const headingGroups={'实时交通':'liveTraffic','人口变化':'population','出行方式 · 已完成旅程':'travel','城市账目':'finance','与基线比较':'comparison','地形与自动生长':'growth','城区':'districts','城市记事':'events','分项账目':'finance'};
     let current='housing';
     for(const node of [...inspector.children]){
       if(node.tagName==='H2')continue;
       if(node.classList.contains('inspector-index')){node.remove();continue;}
-      if(node.tagName==='H3')current=headingGroups[node.textContent.trim()]||current;
+      if(node.tagName==='H3'){current=headingGroups[node.textContent.trim()]||current;if(current==='liveTraffic'){node.remove();continue;}}
       const summary=node.tagName==='DETAILS'?node.querySelector('summary')?.textContent:'';
       let target=current;
       if(summary?.startsWith('发展中心')){target='districts';node.open=true;}
@@ -203,9 +219,10 @@
     const heading=inspector.querySelector('h2');
     const title=heading?[...heading.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim():'';
     const state=window.CityApp.state;
+    refreshDemand();
     selection.hidden=!window.CityApp.selected;
     $('overview-city-name').textContent=state?.name||'我的城市';$('overview-city-name').title=state?.name||'';
-    $('overview-city-meta').textContent=state?`${Number(state.stats.buildings||0).toLocaleString('zh-CN')} 栋建筑 · ${state.districts.length} 个城区 · 查看统计`:'查看城市统计与发展记录';
+    $('overview-city-meta').textContent=state?`${Number(state.stats.buildings||0).toLocaleString('zh-CN')} 栋建筑${state.stats.plannedBuildings?` · ${state.stats.plannedBuildings} 栋待开工`:''} · ${state.districts.length} 个城区`:'查看城市统计与发展记录';
     if(window.CityApp.selected&&window.CityApp.selected!==lastSelected)closeMetric();
     lastSelected=window.CityApp.selected;
     $('selection-title').textContent='已选择 1 个对象';
@@ -312,9 +329,8 @@
   const layout=one('.app-layout'),mapFrame=$('map-frame');
   const viewPanel=document.createElement('details');viewPanel.className='workspace-view-panel';
   viewPanel.innerHTML='<summary>视图与图例</summary>';
-  viewPanel.append(one('.map-view-switch'),$('city-legend'));
+  viewPanel.append(one('.map-view-switch'));
   caption.after(viewPanel);
-  one('.signal-panel').prepend($('signal-hud'));
   const terrainContext=document.createElement('div');terrainContext.className='terrain-context';layout.append(terrainContext);
   const mapLabel=one('.map-label');
   const bottom=document.createElement('section');bottom.className='workspace-bottom';bottom.setAttribute('aria-label','工作台操作栏');
@@ -384,13 +400,14 @@
   });
   // Expand a KPI directly below its card, keeping the tool panel available.
   const metricConfigs=[
-    {key:'population',title:'人口与迁移',unit:'人',icon:'service',series:[['population','常住人口','#087bff']],rows:[['households','家庭数量','户'],['movedIn','本周迁入','人'],['movedOut','本周迁出','人'],['pendingHousing','等待迁入','户'],['vacancy','住房空置率','%']]},
-    {key:'treasury',title:'财政收支',unit:'币',icon:'grid',series:[['treasury','可用资金','#e89423']],rows:[['revenue','周收入','币'],['maintenance','周维护与运营','币'],['constructionCost','累计建设费用','币']]},
+    {key:'population',title:'人口与迁移',unit:'人',icon:'service',series:[['population','常住人口','#087bff']],rows:[['households','家庭数量','户'],['movedIn','今日迁入','人'],['movedOut','今日迁出','人'],['pendingHousing','等待迁入','户'],['vacancy','住房空置率','%']]},
+    {key:'treasury',title:'财政收支',unit:'币',icon:'grid',series:[['treasury','可用资金','#e89423']],rows:[['revenue','日收入','币'],['maintenance','日维护与运营','币'],['constructionCost','累计建设费用','币']]},
     {key:'jobs',title:'就业与岗位',unit:'个 / 人',icon:'building',series:[['jobs','岗位','#087bff'],['employed','就业人数','#21a27b']],rows:[['employed','就业人数','人'],['jobs','岗位数量','个'],['vacantJobs','空缺岗位','个'],['unemployment','失业率','%'],['accessJobs','可达岗位均值','个']]},
     {key:'landValue',title:'土地价格',unit:'币 / m²',icon:'grid',series:[['landValue','中位数','#8c69df'],['landP10','P10','#a9b4c7'],['landP90','P90','#e89423']],rows:[['landValue','土地估值中位数','币/m²'],['landP10','土地估值 P10','币/m²'],['landP90','土地估值 P90','币/m²'],['rent','住宅租金中位数','币/m²/月'],['floorRatio','容积率','']]},
     {key:'commute',title:'通勤与出行',unit:'分钟',icon:'bus',series:[['commute','平均通勤','#21a27b'],['commuteP90','90% 通勤用时','#e89423']],rows:[['commute','平均通勤','分钟'],['commuteP90','90% 通勤不超过','分钟'],['completedTrips','已完成旅程','次'],['failedTrips','出行失败（典型工作日）','次'],['meanWait','平均候车','分钟']]}
   ];
   const serviceStats=window.CityServiceStatistics,metricStrip=one('.city-kpis');
+  const taxiControls=$('city-taxi-panel'),serviceControls=$('city-service-controls');
   const cityMetricCount=metricConfigs.length;
   for(const group of serviceStats.groups){
     metricConfigs.push({key:group.key,title:group.title,service:true});
@@ -409,7 +426,7 @@
   function refreshServices(){
     const state=CityApp.state;if(!state||(serviceState===state&&serviceRevision===state.revision))return;
     serviceState=state;serviceRevision=state.revision;
-    metricCards.slice(cityMetricCount).forEach(card=>{const s=serviceStats.summary(state,card.dataset.service);card.querySelector('strong').textContent=s.count+' 处';card.querySelector('small').textContent=serviceStats.subtitle(s);});
+    metricCards.slice(cityMetricCount).forEach(card=>{const s=serviceStats.summary(state,card.dataset.service);card.querySelector('strong').textContent=serviceStats.value(s);card.querySelector('small').textContent=serviceStats.subtitle(s);});
   }
   function positionMetricToolbar(){
     const r=metricStrip.getBoundingClientRect();metricToolbar.style.left=r.left+'px';metricToolbar.style.top=(r.top-26)+'px';metricToolbar.style.width=r.width+'px';
@@ -433,6 +450,7 @@
   function closeMetric({focus=false}={}){
     if(activeMetric===null)return;
     const previous=activeMetric;activeMetric=null;metricPanel.hidden=true;document.body.classList.remove('metric-open');
+    serviceControls.append(taxiControls);
     metricCards.forEach(card=>card.setAttribute('aria-expanded','false'));
     if(focus)metricCards[previous].focus();
   }
@@ -449,9 +467,9 @@
   one('.city-kpis').addEventListener('scroll',positionMetric,{passive:true});
   function metricHistory(state){
     const now=Date.UTC(2026+Math.floor(state.month/12),state.month%12+1,1)/86400000-Date.UTC(2026,0,1)/86400000+(state.simulation?.monthSeconds||0)/86400;
-    const weeks=new Map((state.weeklyHistory||[]).map(row=>[row.day,{...row,month:row.day/30.436875,date:row.date}]));
-    weeks.set(now,{...state.stats,month:now/30.436875,date:new Date(Date.UTC(2026,0,1)+now*86400000).toISOString().slice(0,10)});
-    return [...weeks.values()].sort((a,b)=>a.month-b.month).filter(row=>!metricRange||row.month>now/30.436875-metricRange);
+    const days=new Map((state.dailyHistory||[]).map(row=>[row.day,{...row,month:row.day/30.436875,date:row.date}]));
+    days.set(now,{...days.get(now),...state.stats,month:now/30.436875,date:new Date(Date.UTC(2026,0,1)+now*86400000).toISOString().slice(0,10)});
+    return [...days.values()].sort((a,b)=>a.month-b.month).filter(row=>!metricRange||row.month>now/30.436875-metricRange);
   }
   function metricChart(rows,config){
     const values=rows.flatMap(row=>config.series.map(([key])=>row[key])).filter(finite);
@@ -459,7 +477,7 @@
     const lo=Math.min(0,...values),hi=Math.max(...values),span=Math.max(1,hi-lo),max=Math.max(1,hi+span*.12),min=lo<0?lo-span*.08:0;
     const x=month=>48+(month-rows[0].month)/Math.max(1,rows.at(-1).month-rows[0].month)*248;
     const y=value=>158-(value-min)/(max-min)*134;
-    let svg=`<svg viewBox="0 0 312 192" role="img" aria-label="${config.title}周度趋势，单位${config.unit}">`;
+    let svg=`<svg viewBox="0 0 312 192" role="img" aria-label="${config.title}日度趋势，单位${config.unit}">`;
     for(let i=0;i<4;i++){const value=min+(max-min)*i/3,py=y(value);svg+=`<line x1="48" x2="296" y1="${py}" y2="${py}" stroke="#e8eef6"/><text x="41" y="${py+3}" text-anchor="end">${axisNumber(value)}</text>`;}
     for(const [key,label,color] of config.series){
       let path='',connected=false;
@@ -475,9 +493,11 @@
     const state=CityApp.state;if(activeMetric===null||!state)return;
     const config=metricConfigs[activeMetric];
     if(config.service){
+      serviceControls.append(taxiControls);
       const summary=serviceStats.summary(state,config.key);metricStamp=`${state.revision}/${state.month}/${state.history?.length}`;
       metricPanel.innerHTML=`<header class="metric-heading"><span>${serviceStats.icon(summary.group)}</span><div><small>公共服务</small><h2>${config.title}</h2></div><button class="icon-btn metric-close" aria-label="收起指标详情">${icon('close')}</button></header>${serviceStats.detail(summary,serviceNames)}`;
       metricPanel.querySelector('.metric-close').onclick=()=>closeMetric({focus:true});
+      if(config.key==='taxi')metricPanel.querySelector('.taxi-metric-body').append(taxiControls);
       metricPanel.querySelectorAll('[data-service-facility]').forEach(button=>button.onclick=()=>{
         const picker=$('city-object-picker');if(![...picker.options].some(o=>o.value===button.dataset.serviceFacility))return;
         picker.value=button.dataset.serviceFacility;closeMetric();buildMenu.close();blockMenu.close();observeMenu.close();picker.dispatchEvent(new Event('change'));
@@ -491,18 +511,18 @@
       <div class="metric-body"><div class="metric-value"><strong>${metricNumber(s[config.key])}</strong><span>${config.unit}</span></div><p class="metric-change">${delta===null?'暂无可比较的历史记录':`较 ${previous.date||metricDate(previous.month)} ${delta>0?'+':''}${metricNumber(delta)} ${config.unit}`}</p>
       <div class="metric-ranges" aria-label="趋势时间范围">${[[12,'12 个月'],[36,'36 个月'],[0,'全部']].map(([n,label])=>`<button data-months="${n}" aria-pressed="${n===metricRange}">${label}</button>`).join('')}</div>
       <div class="metric-chart">${metricChart(rows,config)}</div><div class="metric-legend">${config.series.map(([,label,color])=>`<span><i style="background:${color}"></i>${label}</span>`).join('')}</div>
-      <p class="metric-note">${rows.length<2?'目前只有当前数据点，推进一周后形成趋势。':'历史数据取每周结算记录，最后一点为当前状态。'}</p>
+      <p class="metric-note">${rows.length<2?'目前只有当前数据点，推进一天后形成趋势。':'历史数据取每日结算记录，最后一点为当前状态。'}</p>
       <h3>当前明细</h3><dl class="metric-details">${config.rows.map(([key,label,unit])=>`<dt>${label}</dt><dd>${metricNumber(s[key])}${finite(s[key])&&unit?' '+unit:''}</dd>`).join('')}</dl>
       ${config.key==='commute'?`<section class="metric-explanation" aria-label="通勤指标说明"><h3>这些数字怎么看</h3><p><strong>平均通勤</strong>仅统计已完成的上班通勤，单位为单程分钟。</p><p><strong>90% 通勤用时（P90）</strong>表示已完成通勤中，约 90% 的单程用时不超过该数值，用于观察较慢的通勤情况。</p><p><strong>出行失败次数</strong>统计典型工作日里因道路不连通、运力或可接受时间受限等原因未能完成的出行，涵盖所有出行目的。0 次表示没有失败，不是正在路上的人数。</p></section>`:''}
-      <details class="metric-history"><summary>查看所选时段的逐周数据</summary><div class="city-table-wrap"><table class="city-table"><thead><tr><th>结算日期</th>${config.series.map(([,label])=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${rows.slice().reverse().map(row=>`<tr><td>${row.date||metricDate(row.month)}</td>${config.series.map(([key])=>`<td>${metricNumber(row[key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>
+      <details class="metric-history"><summary>查看所选时段的逐日数据</summary><div class="city-table-wrap"><table class="city-table"><thead><tr><th>结算日期</th>${config.series.map(([,label])=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${rows.slice().reverse().map(row=>`<tr><td>${row.periodDays>1?row.periodStartDate+' 至 '+row.date:row.date||metricDate(row.month)}</td>${config.series.map(([key])=>`<td>${metricNumber(row[key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>
       <button class="metric-overview city-btn">查看完整城市统计 ↗</button></div>`;
     metricPanel.querySelector('.metric-close').onclick=()=>closeMetric({focus:true});
     metricPanel.querySelector('.metric-overview').onclick=()=>overview.click();
     metricPanel.querySelectorAll('[data-months]').forEach(button=>button.onclick=()=>{metricRange=Number(button.dataset.months);renderMetric();metricPanel.querySelector(`[data-months="${metricRange}"]`).focus();});
   }
-  function refreshMetric(){refreshServices();const state=CityApp.state;if(activeMetric!==null&&state&&metricStamp!==`${state.revision}/${state.month}/${state.history?.length}`)renderMetric();}
+  function refreshMetric(){refreshServices();refreshDemand();const state=CityApp.state;if(activeMetric!==null&&state&&metricStamp!==`${state.revision}/${state.month}/${state.history?.length}`)renderMetric();}
   metricCards.forEach((card,index)=>{
-    card.setAttribute('role','button');card.tabIndex=0;card.setAttribute('aria-controls',metricPanel.id);card.setAttribute('aria-expanded','false');card.setAttribute('aria-label',`查看${metricConfigs[index].title}${metricConfigs[index].service?'设施统计':'趋势与详细数据'}`);
+    card.setAttribute('role','button');card.tabIndex=0;card.setAttribute('aria-controls',metricPanel.id);card.setAttribute('aria-expanded','false');card.setAttribute('aria-label',`查看${metricConfigs[index].title}${metricConfigs[index].key==='taxi'?'运营与出行统计':metricConfigs[index].service?'设施统计':'趋势与详细数据'}`);
     const open=()=>{if(activeMetric===index){closeMetric();return;}activeMetric=index;metricPanel.hidden=false;document.body.classList.add('metric-open');metricCards.forEach((node,i)=>node.setAttribute('aria-expanded',String(i===index)));renderMetric();metricPanel.scrollTop=0;positionMetric();};
     card.addEventListener('click',open);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}});
   });

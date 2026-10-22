@@ -32,7 +32,7 @@ test('resume never counts paused wall time and settings updates do not advance t
   const x=setup();x.driver.start();x.setTime(1000);await x.driver.tick();await x.driver.pause();
   x.setTime(100000);await x.driver.setSpeed(86400);assert.equal(x.applied.at(-1).seconds,0);
   x.driver.start();await x.driver.tick();assert.equal(x.applied.at(-1).seconds,0);
-  x.setTime(100500);await x.driver.tick();assert.equal(x.applied.at(-1).seconds,10800);assert.equal(x.applied.at(-1).daylightSeconds,10800);
+  x.setTime(100500);await x.driver.tick();assert.equal(x.applied.at(-1).seconds,43200);assert.equal(x.applied.at(-1).daylightSeconds,.5);
   x.driver.pause();
 });
 test('a failed update stops the driver and reports the failure',async()=>{
@@ -66,20 +66,20 @@ for(const action of ['pause','invalidate','failure'])test(`slow settlement clear
   assert.deepEqual(x.errors,action==='failure'?['settlement failed']:[]);
 });
 
-test('legacy speeds are capped at six hours per second without resetting accumulated time',async()=>{
+test('daylight changes rate at one day per second without resetting accumulated time',async()=>{
   const {daylightRate}=require('../renderer/simulation-driver.js');
   for(const speed of [1,2,3,5,60,3600,21600])assert.equal(daylightRate(speed),speed);
   for(const speed of [86400,604800,2592000])assert.equal(daylightRate(speed),1);
   const x=setup();await x.driver.setSpeed(5,{persist:false});x.driver.start();
   x.setTime(1000);await x.driver.setSpeed(86400,{persist:false});x.setTime(2000);
-  await x.driver.tick();assert.equal(x.applied[0].seconds,21605);assert.equal(x.applied[0].daylightSeconds,21605);
+  await x.driver.tick();assert.equal(x.applied[0].seconds,86405);assert.equal(x.applied[0].daylightSeconds,6);
   x.setTime(3000);await x.driver.setSpeed(3,{persist:false});x.setTime(4000);
-  await x.driver.tick();assert.equal(x.applied[1].daylightSeconds,21603);x.driver.pause();
+  await x.driver.tick();assert.equal(x.applied[1].daylightSeconds,4);x.driver.pause();
 });
 
 test('partial daily ticks retain unaccepted calendar time without replaying daylight',async()=>{
   const x=setup(async p=>({...p,advancedSeconds:Math.min(p.seconds,86400)}));
-  await x.driver.setSpeed(2592000,{persist:false});x.driver.start();x.setTime(120000);
+  await x.driver.setSpeed(2592000,{persist:false});x.driver.start();x.setTime(10000);
   await x.driver.tick();assert.equal(x.driver.carry,2592000-86400);assert.equal(x.driver.daylightCarry,0);
   await x.driver.tick();assert.equal(x.applied.at(-1).seconds,2592000-86400);
   assert.equal(x.applied.at(-1).daylightSeconds,0);assert.equal(x.driver.carry,2592000-2*86400);

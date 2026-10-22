@@ -50,9 +50,11 @@ def build_demand(live, terminals):
         live.balances[key] = 0.
 
     if live.mode == 'observed':
-        demand = Counter((t['source'],t['target']) for t in getattr(city, 'trips', [])
-                         if t.get('completed') and t.get('mode') == 'car')
-        for (source, target), count in sorted(demand.items()):
+        demand = Counter((t['source'],t['target'],t['mode'],'occupied' if t['mode']=='taxi' else '')
+                         for t in getattr(city, 'trips', []) if t.get('completed') and t.get('mode') in ('car','taxi'))
+        demand.update((t['source'],t['target'],'taxi','pickup')
+                      for t in city.s.get('taxiReport',{}).get('emptyJourneys',[]))
+        for (source, target, mode, taxi_state), count in sorted(demand.items()):
             choices = []
             for first, start in access(source):
                 arm = live.arms.get((first['b'],first['road'],first['direction']))
@@ -74,7 +76,10 @@ def build_demand(live, terminals):
                         continue
                     choices.append((cost, dict(route=route, start=start, end=end, source=source, target=target)))
             if choices:
-                add(f'od:{source}>{target}', [min(choices, key=lambda q:q[0])[1]], count)
+                plan=min(choices, key=lambda q:q[0])[1]
+                plan.update(kind=mode,taxiState=taxi_state)
+                key=f'od:{source}>{target}' if mode=='car' else f'taxi:{taxi_state}:{source}>{target}'
+                add(key, [plan], count)
         # A city assignment is authoritative, including an assignment with no
         # car journeys. Edge volume is not a second source of synthetic trips.
         if getattr(city, 'trips', []):

@@ -6,6 +6,16 @@
   function inspectionId(state,id){
     return facilityForParcel(state,state.parcels.find(p=>p.id===id))?.id||id;
   }
+  function junctionAt(junctions,point,scaleX,scaleY,radius=10){
+    let nearest=null,distance=radius;
+    for(const junction of junctions){
+      // Endpoints and shape vertices are not inspectable intersections.
+      if(new Set(junction.approaches.map(a=>a.road)).size<2)continue;
+      const d=Math.hypot((junction.point[0]-point[0])*scaleX,(junction.point[1]-point[1])*scaleY);
+      if(d<distance){nearest=junction;distance=d;}
+    }
+    return nearest;
+  }
   // A pointer is only a guide to the next click. It must never bend the
   // committed alignment or inherit a validation result for different points.
   function roadDraftPlan(controls,hover,curved=true,preview=null){
@@ -192,7 +202,7 @@
     }
     return best;
   }
-  const api={facilityForParcel,inspectionId,roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
+  const api={facilityForParcel,inspectionId,junctionAt,roadSnap,curvePoints,roadDraftPlan,roadControlAt,footprintAxis,polygonArea,containsPoint,rectangleInside,fitBuildingMasses,buildingMassing};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.CityGeometry=api;
 })(typeof window==='undefined'?{}:window);

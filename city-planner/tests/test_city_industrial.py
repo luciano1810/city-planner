@@ -54,6 +54,7 @@ class IndustrialHallTests(unittest.TestCase):
         p=c.s['parcels'][0];complete(c,p,'warehouse');c.rebuild()
         saved=c.snapshot();saved['model']=saved['state']['version']='shanhai-city-7'
         before=copy.deepcopy(p['building'])
+        next(site for site in saved['state']['parcels'] if site['id']==p['id'])['building'].pop('lastAgeDay')
         restored=City.restore(saved)
         self.assertEqual(restored.s['version'],MODEL_VERSION)
         self.assertEqual(before,restored.parcelmap[p['id']]['building'])

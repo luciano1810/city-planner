@@ -4,7 +4,7 @@
   const $=id=>document.getElementById(id);
   const layers=[
     ['use','城市地图','建筑用途','city'],['population','居住人口','人口分布','city'],['jobs','岗位密度','就业空间','city'],['districts','功能城区','城区与街区','city'],['height','建筑高度','建筑楼层','city'],['development','开发状态','施工与使用','city'],
-    ['land','土地单价','土地估值','economy'],['rent','空间租金','空间使用成本','economy'],['vacancy','建筑空置','空置比例','economy'],['change','土地涨跌','周度价格变化','economy'],['comparison','方案差异','比较存档后查看','economy'],
+    ['land','土地单价','土地估值','economy'],['rent','空间租金','空间使用成本','economy'],['vacancy','建筑空置','空置比例','economy'],['change','土地涨跌','日度价格变化','economy'],['comparison','方案差异','比较存档后查看','economy'],
     ['access','岗位可达','30 分钟可达岗位','traffic'],['traffic','道路流量','分时车流与拥挤度','traffic'],['transit','公交服务','线路与站点','traffic'],['flows','人员流向','出行方向','traffic'],
     ...Object.entries(window.CityTrafficMetrics.views).map(([key,view])=>[key,view.label,view.note,'traffic']),
     ['pollution','环境压力','环境压力指数','nature'],['slope','地块坡度','地形坡度','nature'],['cost','工程成本','地形建设成本','nature'],['landscape','景观品质','景观资源','nature'],['risk','低地邻水','低地邻水指数','nature']
@@ -137,6 +137,7 @@
       $('observe-layers').querySelector('.build-cards').append(node);cards.set(kind,node);
     }
     const display=menu.querySelector('.observe-display-settings');
+    display.append($('city-legend'));
     display.append($('city-traffic-controls'));
     display.append($('city-render-quality').closest('label'));
     const clock=document.createElement('div');clock.className='observe-lighting';clock.append(source.querySelector('label[for="city-time-of-day"]'),$('city-time-of-day'));display.append(clock);

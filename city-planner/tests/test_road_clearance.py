@@ -1,11 +1,13 @@
 """Manual roadworks clear sites atomically and resettle real occupants."""
 import copy
 import unittest
+from unittest.mock import patch
 from shapely.geometry import Polygon,LineString
 from tests.test_city import City,flat_world,road
 from tests.test_city_v3 import complete
 from tests.test_renewal import neighborhood,begin
 from city.parameters import ROAD_TYPES
+from city.simulation import advance
 
 
 def occupied_street(alternative=True,households=2):
@@ -110,6 +112,24 @@ class RoadClearanceTests(unittest.TestCase):
         for key in ('parcels','households','roads','pendingHousing','migrationQueue','treasury','capitalAccounts'):
             self.assertEqual(c.s[key],after['state'][key])
         City.restore(c.snapshot())
+
+    def test_late_failure_restores_graphs_live_traffic_and_next_edit(self):
+        c,_,source,_,_=occupied_street()
+        advance(c,1)
+        before=c.snapshot();graphs=copy.deepcopy(c.graphs)
+        control=City.restore(before)
+        with patch.object(c,'summarize',side_effect=RuntimeError('after road rebuild')):
+            with self.assertRaisesRegex(RuntimeError,'after road rebuild'):
+                c.command(cutting(source))
+        self.assertEqual(c.snapshot(),before)
+        self.assertEqual(c.graphs,graphs)
+        self.assertIs(c.live_traffic.city,c)
+        for p in c.s['parcels']:self.assertIs(c.parcelmap[p['id']],p)
+        for edge in c.network['edges']:self.assertIs(c.edge_map[edge['id']],edge)
+        # A failed transaction must also leave a usable city for the next edit.
+        command=cutting(source)
+        c.command(command);control.command(command)
+        self.assertEqual(c.snapshot(),control.snapshot())
 
     def test_employer_moves_to_same_use_building_or_closes(self):
         for relocate in (False,True):

@@ -84,6 +84,10 @@ class UnifiedSimulationTests(unittest.TestCase):
     def test_fast_forward_settles_every_crossed_month_and_samples_safe_traffic(self):
         expected=City.restore(self.city.snapshot())
         expected.step(2)
+        # Two months end on March 1; 62 days reach March 4. Daily markets
+        # must also include the final three days rather than waiting a week.
+        from city.simulation import advance_calendar
+        advance_calendar(expected,3*DAY)
         self.call(seconds=31*DAY, speed=2592000)
         result = self.call(seconds=31*DAY)
         self.assertEqual(result['month'], 2)

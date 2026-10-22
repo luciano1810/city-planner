@@ -2,6 +2,18 @@ const test=require('node:test');const assert=require('node:assert/strict');
 const {curvePoints,footprintAxis}=require('../renderer/city-geometry.js');
 const {buildingMassing,fitBuildingMasses,rectangleInside,polygonArea,containsPoint}=require('../renderer/city-geometry.js');
 const {roadDraftPlan,roadControlAt}=require('../renderer/city-geometry.js');
+test('junction inspection chooses the nearest intersection in screen pixels, excluding endpoints',()=>{
+ const {junctionAt}=require('../renderer/city-geometry.js');
+ const junction=(id,point,roads)=>({id,point,approaches:roads.map(road=>({road}))});
+ const endpoint=junction('end',[100,100],['a','a']);
+ const a=junction('a',[104,100],['a','b']),b=junction('b',[107,100],['c','d']);
+ assert.equal(junctionAt([endpoint,b,a],[100,100],1,1),a);
+ assert.equal(junctionAt([a,b],[106,100],1,1),b);
+ assert.equal(junctionAt([a],[100,100],3,1),null);
+ assert.equal(junctionAt([a],[104,106],1,2),null);
+ assert.equal(junctionAt([endpoint],[100,100],1,1),null);
+ assert.equal(junctionAt([],[100,100],1,1),null);
+});
 test('inspection follows facility ownership after construction and releases it after demolition',()=>{
  const {inspectionId,facilityForParcel}=require('../renderer/city-geometry.js');
  const p={id:'p',openSpace:'f'},f={id:'f',kind:'charging_station'},state={parcels:[p],facilities:[f]};

@@ -281,7 +281,7 @@ def spatial_summary(city,parcels,facilities=None):
                 rent=round(float(np.median([p['rent'] for p in parcels])),2) if parcels else None,
                 incoming=incoming,outgoing=outgoing,parcels=sorted(ids),
                 stage='形成中' if not ages or sum(ages)/len(ages)<24 else '成长中' if sum(ages)/len(ages)<60 else '成熟',
-                modeShare={mode:modes[mode]/len(trips)*100 if trips else None for mode in ('walk','car','bus','metro','tram','train')},
+                modeShare={mode:modes[mode]/len(trips)*100 if trips else None for mode in ('walk','car','taxi','bus','metro','tram','train')},
                 reason=f'基于 {len(buildings)} 栋建筑用途与实际通勤：流入 {incoming} 人、流出 {outgoing} 人',
                 slope=round(sum(p.get('terrain',{}).get('slope',0) for p in parcels)/max(1,len(parcels)),3),
                 uses=dict(Counter({u:sum(p['building']['floorArea'] for p in buildings if p['building']['use']==u) for u in ('residential','commercial','office','industrial','warehouse')})))
@@ -360,13 +360,13 @@ def detailed_metrics(city):
     prices=[p['landValue'] for p in parcels]
     modes=Counter(t.get('mainMode',t['mode']) for t in completed)
     firms=city.s['firms'];active=[f for f in firms if f['status']=='active']
-    traffic_km=sum(t.get('distance',0)/1000 for t in completed if t['mode']=='car')
+    traffic_km=sum(t.get('distance',0)/1000 for t in completed if t['mode'] in ('car','taxi'))+city.s.get('taxiReport',{}).get('emptyKm',0)
     return dict(regionalPassengers=sum(t.get('purpose')=='regional' for t in trips),railFreightTonnes=city.s.get('regionalFreight',{}).get('tonnes',0),unservedFreightTonnes=city.s.get('regionalFreight',{}).get('unserved',0),laborForce=len(households),vacantJobs=max(0,city.s['stats']['jobs']-city.s['stats']['employed']),
         housingInConstruction=sum(b['capacity'] for b in buildings if b['use']=='residential' and b['status'] in ('planned','construction')),
         floorDistribution=dict(Counter(str(b['floors']) for b in buildings)),meanBuildingAge=avg([b['age'] for b in buildings]),
         buildableArea=round(area),floorRatio=sum(b['floorArea'] for b in buildings)/max(1,area),
         builtDensity=population/max(.0001,developed/1e6),jobDensity=city.s['stats']['jobs']/max(.0001,developed/1e6),
-        firms=len(active),firmOpened=sum(construction.day(city)-7<f.get('openedDay',-10000)<=construction.day(city) for f in firms),firmClosed=sum(construction.day(city)-7<f.get('closedDay',-10000)<=construction.day(city) for f in firms),
+        firms=len(active),firmOpened=sum(construction.day(city)-1<f.get('openedDay',-10000)<=construction.day(city) for f in firms),firmClosed=sum(construction.day(city)-1<f.get('closedDay',-10000)<=construction.day(city) for f in firms),
         firmRelocations=sum(f['relocations'] for f in firms),firmProfit=sum(f.get('profit',0) for f in active),
         externalDemand=sum(f.get('externalDemand',0) for f in active),localDemand=sum(f.get('localDemand',0) for f in active),
         landP10=float(np.percentile(prices,10)) if prices else None,landP90=float(np.percentile(prices,90)) if prices else None,
@@ -375,7 +375,7 @@ def detailed_metrics(city):
         commuteMedian=float(np.median([t['minutes'] for t in commute])) if commute else None,
         commuteDistance=avg([t['distance'] for t in commute]),meanWait=avg([t.get('wait',0) for t in completed if t['mode']=='public']),
         transfers=sum(t.get('transfers',0) for t in completed),publicJourneys=sum(t['mode']=='public' for t in completed),
-        mainModeShare={mode:modes[mode]/len(completed)*100 if completed else None for mode in ('walk','car','bus','tram','metro','train')},
+        mainModeShare={mode:modes[mode]/len(completed)*100 if completed else None for mode in ('walk','car','taxi','bus','tram','metro','train')},
         tripsByPurpose=dict(Counter(t['purpose'] for t in trips)),vehicleKm=traffic_km,personKm=sum(t.get('distance',0)/1000 for t in completed),
         constructionCost=round(city.s['constructionCost']),fareRevenue=round(sum(t.get('fee',0) for t in completed if t['mode']=='public')*city.s['policy']['workingDaysPerMonth']),
         operationCost=round(sum(l.get('operatingCost',0) for l in city.s['lines']+city.s['regionalServices'])),

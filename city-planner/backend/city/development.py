@@ -245,6 +245,20 @@ def development_targets(city, housing_market=None):
                 **{u:regional[u]+population*rate for u,rate in local.items()})
 
 
+def demand_summary(city):
+    """Current net demand, including all committed supply, for the live HUD."""
+    from .construction import day, date_string
+    housing = HousingMarket(city)
+    business = BusinessMarket(city)
+    def row(shortage, target, unit):
+        shortage = max(0., shortage)
+        return dict(shortage=round(shortage, 1), target=round(target, 1),
+                    ratio=min(1., shortage / max(1., target)), unit=unit)
+    return dict(date=date_string(day(city)),
+                uses=dict(residential=row(sum(n['count'] for n in housing.needs), housing.total, '户'),
+                          **{u: row(business.shortage(u), business.totals[u], '岗位容量') for u in business.needs}))
+
+
 def planned_supply(city, *, housing_credit=1.):
     supply=Counter()
     replaced=set()
@@ -294,7 +308,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
                 '坡度超过 45%，保留为不可开发陡坡' if p['terrain'].get('maxSlope',p['terrain']['slope'])>.45 else
                 '发展速度为零，已停止新开发' if city.s['settings']['growth']<=0 else
                 '新项目名额为零' if city.s['settings']['maxProjects']<=0 else None)
-        p['developmentReason']=reason or '等待本周开发评估'
+        p['developmentReason']=reason or '等待今日开发评估'
         if not reason:candidates.append(p)
     startup=sum(h['size'] for h in city.s['households'])<100
 
@@ -434,7 +448,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
             age=0,occupied=0,positions=0,employees=0,cost=round(cost),vacantMonths=0,**style(p,use,floors))
         b=p['building']
         from .construction import schedule, day
-        schedule(city,b,start=int(day(city))+1+started%7)
+        schedule(city,b,start=int(day(city))+1+started%3)
         if len(footprint.exterior.coords)>7 and use in ('residential','commercial'):b['form']='courtyard'
         b['usableArea']=round(floor_area*b['usableRatio'],1);b['useAreas']={use:round(floor_area,1)}
         started+=1
@@ -452,7 +466,7 @@ def select_projects(city,uses,style,housing_market=None,business_market=None):
         if not options:
             p['developmentReason']='；'.join(sorted(exclusions[p['id']])) or '规划用途没有可行的开发方案'
         elif any(needed(use,p) for use in options):
-            p['developmentReason']=f'本周新建名额已用尽（{started}/{max_projects}），等待下周选址'
+            p['developmentReason']=f'今日新建名额已用尽（{started}/{max_projects}），等待明日选址'
         elif options=={'residential'}:
             p['developmentReason']=f"本地通勤范围内住房缺口 {housing_market.gap(p):.0f} 户；可负担空房与已承诺住房已按就业地点抵扣，等待局部需求"
         else:

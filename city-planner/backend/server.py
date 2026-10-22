@@ -70,6 +70,7 @@ class Handler(BaseHTTPRequestHandler):
                    '/landscape-layout.js': 'landscape-layout.js',
                    '/surface-variation.js': 'surface-variation.js', '/simulation-driver.js': 'simulation-driver.js',
                    '/traffic-playback.js': 'traffic-playback.js', '/traffic-metrics.js': 'traffic-metrics.js',
+                   '/taxi-panel.js': 'taxi-panel.js',
                    '/special-buildings.js': 'special-buildings.js',
                    '/civic-buildings.js': 'civic-buildings.js',
                    '/civic-details.js': 'civic-details.js',

@@ -1,4 +1,4 @@
-"""Dated construction, weekly cashflow, rollback and deterministic restore."""
+"""Dated construction, daily cashflow, rollback and deterministic restore."""
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -8,7 +8,7 @@ from city import construction
 from city.simulation import DAY, advance, advance_calendar, period_factor
 from city.service import CityService
 
-class WeeklyCalendarTests(unittest.TestCase):
+class DailyCalendarTests(unittest.TestCase):
     def city(self):
         c=block_city();c.s['settings'].update(autoGrow=False,autoRenew=False,growth=0)
         return c
@@ -37,16 +37,25 @@ class WeeklyCalendarTests(unittest.TestCase):
         advance_calendar(c,DAY);self.assertEqual(b['status'],'active')
         self.assertEqual([e['date'] for e in c.s['events'] if e['category']=='竣工'],['2026-01-06','2026-01-07'])
 
-    def test_weekly_finance_never_charges_at_month_end(self):
+    def test_daily_finance_charges_once_including_month_end(self):
         c=self.city();initial=c.s['treasury'];monthly=sum(r['constructionCost'] for r in c.s['roads'])*.0006
-        advance_calendar(c,6*DAY-c.s['simulation']['monthSeconds']);self.assertEqual(c.s['treasury'],initial)
-        advance_calendar(c,DAY)
-        self.assertEqual(len(c.s['weeklyHistory']),1)
-        self.assertAlmostEqual(initial-c.s['treasury'],round(monthly*7/31,2),2)
-        advance_calendar(c,23*DAY);self.assertEqual(len(c.s['weeklyHistory']),4)
-        balance=c.s['treasury'];advance_calendar(c,DAY)
-        self.assertEqual(c.s['month'],1);self.assertEqual(c.s['treasury'],balance)
+        advance_calendar(c,DAY-c.s['simulation']['monthSeconds']-1)
+        self.assertEqual(c.s['treasury'],initial)
+        advance_calendar(c,1)
+        daily=round(monthly/31,2)
+        self.assertEqual(len(c.s['dailyHistory']),1)
+        self.assertAlmostEqual(initial-c.s['treasury'],daily,2)
+        self.assertTrue(all(len(p['history'])==1 for p in c.s['parcels']))
+        advance_calendar(c,30*DAY)
+        self.assertEqual(c.s['month'],1);self.assertEqual(len(c.s['dailyHistory']),31)
+        self.assertAlmostEqual(initial-c.s['treasury'],31*daily,2)
         self.assertEqual(len(c.s['history']),1)
+        self.assertAlmostEqual(c.s['history'][0]['maintenance'],31*daily,2)
+        balance=c.s['treasury'];advance_calendar(c,0)
+        self.assertEqual(c.s['treasury'],balance)
+        advance_calendar(c,DAY)
+        self.assertAlmostEqual(balance-c.s['treasury'],round(monthly/28,2),2)
+        self.assertEqual(c.s['dailyHistory'][-1]['periodDays'],1)
 
     def test_month_and_leap_year_rate_conversion(self):
         self.assertAlmostEqual(period_factor(0,31),1.)
@@ -56,35 +65,35 @@ class WeeklyCalendarTests(unittest.TestCase):
     def test_restore_preserves_progress_and_future_outcome(self):
         c=self.city();self.building(c,c.s['parcels'][0],2,12);advance_calendar(c,4*DAY)
         other=City.restore(c.snapshot());advance_calendar(c,12*DAY);advance_calendar(other,12*DAY)
-        for k in ('parcels','weeklyHistory','calendar','events','treasury','simulation'):self.assertEqual(c.s[k],other.s[k],k)
+        for k in ('parcels','dailyHistory','calendar','events','treasury','simulation'):self.assertEqual(c.s[k],other.s[k],k)
         self.assertEqual(c.rng.getstate(),other.rng.getstate())
 
     def test_large_tick_matches_daily_ticks(self):
         c=self.city();other=City.restore(c.snapshot());advance_calendar(c,25*DAY)
         for _ in range(25):advance_calendar(other,DAY)
-        for k in ('parcels','weeklyHistory','calendar','treasury','events'):self.assertEqual(c.s[k],other.s[k],k)
+        for k in ('parcels','dailyHistory','calendar','treasury','events'):self.assertEqual(c.s[k],other.s[k],k)
 
-    def test_failed_second_week_rolls_back_entire_tick(self):
+    def test_failed_second_day_rolls_back_entire_tick(self):
         c=self.city();self.building(c,c.s['parcels'][0],2,12);c.rebuild();before=c.snapshot();original=c.finance;calls=0
         def fail():
             nonlocal calls
             calls+=1
-            if calls==2:raise RuntimeError('weekly failure')
+            if calls==2:raise RuntimeError('daily failure')
             original()
         with patch.object(c,'finance',side_effect=fail):
-            with self.assertRaisesRegex(RuntimeError,'weekly failure'):advance(c,20*DAY)
+            with self.assertRaisesRegex(RuntimeError,'daily failure'):advance(c,20*DAY)
         self.assertEqual(c.snapshot(),before)
 
     def test_month_button_uses_the_same_daily_rules(self):
         c=self.city();self.building(c,c.s['parcels'][0],2,12);other=City.restore(c.snapshot())
         c.step();advance_calendar(other,31*DAY)
-        self.assertEqual(c.s,other.s);self.assertEqual(len(c.s['weeklyHistory']),4)
+        self.assertEqual(c.s,other.s);self.assertEqual(len(c.s['dailyHistory']),31)
 
     def test_plans_reserve_capacity_without_becoming_available_homes(self):
-        c=self.city();c.s['settings']['growth']=1;advance_calendar(c,7*DAY)
+        c=self.city();c.s['settings']['growth']=1;advance_calendar(c,3*DAY-c.s['simulation']['monthSeconds'])
         planned=[p for p in c.s['parcels'] if p.get('building')]
         self.assertTrue(planned);self.assertTrue(all(p['building']['status']=='planned' for p in planned))
-        self.assertFalse(c.available_homes());self.assertTrue(all(7<p['building']['startDay']<=14 for p in planned))
+        self.assertFalse(c.available_homes());self.assertTrue(all(3<p['building']['startDay']<=6 for p in planned))
         self.assertEqual(c.s['stats']['buildings'],0);self.assertEqual(c.s['stats']['construction'],0)
         self.assertEqual(c.s['stats']['plannedBuildings'],len(planned))
 
@@ -92,11 +101,11 @@ class WeeklyCalendarTests(unittest.TestCase):
         c=self.city();b=self.building(c,c.s['parcels'][0],2,12);b['status']='construction'
         for k in ('startDay','completionDay','startDate','completionDate','constructionProgress'):b.pop(k)
         c.s['simulation']['monthSeconds']=10*DAY;data=c.snapshot()
-        data['state'].pop('calendar');data['state'].pop('weeklyHistory');other=City.restore(data)
-        self.assertEqual(other.s['calendar']['nextWeekDay'],17)
+        data['state'].pop('calendar');data['state'].pop('dailyHistory');other=City.restore(data)
+        self.assertEqual(other.s['calendar']['nextSettlementDay'],11)
         self.assertIn('completionDay',other.s['parcels'][0]['building']);self.assertEqual(other.s['treasury'],c.s['treasury'])
 
-    def test_background_week_matches_direct_settlement(self):
+    def test_background_day_matches_direct_settlement(self):
         c=self.city();advance_calendar(c,6*DAY-c.s['simulation']['monthSeconds'])
         other=City.restore(c.snapshot());advance_calendar(other,DAY)
         with tempfile.TemporaryDirectory() as directory:
@@ -106,8 +115,8 @@ class WeeklyCalendarTests(unittest.TestCase):
                 job=service.preparation;self.assertIsNotNone(job);job.thread.join(20)
                 self.assertIsNone(job.error);self.assertIsNotNone(job.result)
                 r=service.handle('simulate',dict(id='test',seconds=DAY,incremental=True,speed=2592000))
-                self.assertEqual(r['weeksAdvanced'],1);self.assertIsNone(service.preparation)
-                for k in ('parcels','weeklyHistory','calendar','treasury','events'):self.assertEqual(c.s[k],other.s[k],k)
+                self.assertEqual(r['settlementsAdvanced'],1);self.assertIsNone(service.preparation)
+                for k in ('parcels','dailyHistory','calendar','treasury','events'):self.assertEqual(c.s[k],other.s[k],k)
             finally:service.close()
 
     def test_invalid_saved_schedule_and_credit_are_rejected(self):
@@ -119,10 +128,10 @@ class WeeklyCalendarTests(unittest.TestCase):
         data=copy.deepcopy(snapshot);data['state']['calendar']['projectCredit']=-1
         with self.assertRaises(ValueError):City.restore(data)
 
-    def test_weekly_commit_on_calendar_month_boundary(self):
+    def test_daily_commit_on_calendar_month_boundary(self):
         from city.monthly import Preparation
         c=self.city();c.s['month']=8;c.s['simulation']['monthSeconds']=29*DAY
-        c.s['calendar'].update(lastWeekDay=266,nextWeekDay=273)
+        c.s['calendar'].update(lastSettlementDay=272,nextSettlementDay=273)
         expected=City.restore(c.snapshot());advance_calendar(expected,DAY)
         with tempfile.TemporaryDirectory() as directory:
             service=CityService(directory);service.cities['test']=c
@@ -130,9 +139,47 @@ class WeeklyCalendarTests(unittest.TestCase):
                 service.handle('simulate',dict(id='test',seconds=DAY,incremental=True,speed=2592000))
                 job=service.preparation;job.thread.join(20);self.assertIsNone(job.error)
                 result=service.handle('simulate',dict(id='test',seconds=DAY,incremental=True,speed=2592000))
-                self.assertEqual(result['weeksAdvanced'],1);self.assertEqual(result['monthsAdvanced'],1)
-                for key in ('calendar','weeklyHistory','history','treasury','month'):
+                self.assertEqual(result['settlementsAdvanced'],1);self.assertEqual(result['monthsAdvanced'],1)
+                for key in ('calendar','dailyHistory','history','treasury','month'):
                     self.assertEqual(c.s[key],expected.s[key],key)
             finally:service.close()
+
+    def test_weekly_save_migration_keeps_paid_balance_credit_and_unsettled_days(self):
+        c=self.city();c.s['simulation']['monthSeconds']=10*DAY+43200
+        data=c.snapshot();data['model']=data['state']['version']='shanhai-city-11'
+        state=data['state'];state.pop('dailyHistory')
+        weekly_row=dict(day=7,date='2026-01-08',revenue=70,maintenance=35)
+        state['weeklyHistory']=[weekly_row]
+        state['calendar'].update(lastWeekDay=7,nextWeekDay=14,projectCredit=.25,migrationCredit=.75)
+        state['calendar'].pop('lastSettlementDay');state['calendar'].pop('nextSettlementDay')
+        state['revenue']=70;state['maintenance']=35
+        other=City.restore(data);initial=other.s['treasury']
+        self.assertEqual(other.s['dailyHistory'],[])
+        self.assertEqual(other.s['weeklyHistory'],[weekly_row])
+        self.assertEqual(other.s['revenue'],0);self.assertEqual(other.s['maintenance'],0)
+        self.assertEqual(other.s['calendar']['lastSettlementDay'],7)
+        self.assertEqual(other.s['calendar']['nextSettlementDay'],11)
+        self.assertEqual(other.s['calendar']['projectCredit'],.25)
+        self.assertEqual(other.s['calendar']['migrationCredit'],.75)
+        self.assertEqual(other.s['treasury'],initial)
+        advance_calendar(other,DAY/2)
+        row=other.s['dailyHistory'][-1]
+        self.assertEqual(row['periodDays'],4);self.assertEqual(row['periodStartDate'],'2026-01-08')
+        monthly=sum(r['constructionCost'] for r in other.s['roads'])*.0006
+        self.assertAlmostEqual(initial-other.s['treasury'],round(monthly*4/31,2),2)
+        restored=City.restore(other.snapshot())
+        advance_calendar(other,DAY);advance_calendar(restored,DAY)
+        self.assertEqual(other.s,restored.s)
+        self.assertEqual(other.s['dailyHistory'][-1]['periodDays'],1)
+        self.assertAlmostEqual(other.s['maintenance'],round(monthly/31,2),2)
+
+    def test_daily_project_quota_preserves_monthly_total_and_fractional_credit(self):
+        c=self.city();c.s['settings']['growth']=1;limits=[]
+        for _ in range(31):
+            advance_calendar(c,DAY)
+            limits.append(c.s['housingDemand']['projectLimit'])
+        self.assertEqual(sum(limits),c.s['settings']['maxProjects'])
+        self.assertAlmostEqual(c.s['calendar']['projectCredit'],0.)
+        self.assertGreater(sum(n>0 for n in limits),1)
 
 if __name__=='__main__':unittest.main()

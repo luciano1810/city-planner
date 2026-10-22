@@ -31,7 +31,7 @@ const output=path.join(root,'output/playwright/incremental-simulation');fs.mkdir
   await page.locator('#city-play').click();
   await page.waitForFunction(()=>CityApp.state.settlement?.pending&&CityApp.state.settlement.progress>.03);
   const progress=await page.locator('#city-simulation-note').textContent();
-  assert(progress.includes('本周'));
+  assert(progress.includes('日结算'));
   const started=Date.now();await page.locator('#city-play').click();
   await page.waitForFunction(()=>document.getElementById('city-play').textContent==='开始模拟');
   const pauseMs=Date.now()-started;

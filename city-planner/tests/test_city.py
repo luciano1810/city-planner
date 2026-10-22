@@ -217,7 +217,7 @@ class SimulationTests(unittest.TestCase):
         self.assertTrue(all(p['landValue']>0 and p['rent']>0 for p in self.city.s['parcels']))
         self.assertTrue(any(p['landValue']!=p['rent'] for p in self.city.s['parcels']))
         for p in self.city.s['parcels']:
-            self.assertEqual(len(p['history']),len(self.city.s['weeklyHistory']))
+            self.assertEqual(len(p['history']),len(self.city.s['dailyHistory']))
             history=p['history']
             for a,b in zip(history,history[1:]):
                 self.assertLessEqual(abs(b['land']-a['land']),a['land']*.071+.02)

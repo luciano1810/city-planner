@@ -23,9 +23,9 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'city-overview-'));
   assert(await page.locator('#city-transit-panel').isVisible(),'transit controls remain accessible');
   await page.locator('#workspace-build').click();await page.locator('#city-dashboard').click();
   assert(!await page.locator('#workspace-build-menu').isVisible());
-  const cards=page.locator('.overview-stat-card');assert.equal(await cards.count(),8);
+  const cards=page.locator('.overview-stat-card');assert.equal(await cards.count(),9);
   assert.equal(await page.locator('#city-inspector .inspector-index').count(),0);
-  const checks={housing:['住房空置率','住房收入比'],population:['人口变化'],travel:['出行方式','收入组与时段可达性'],finance:['城市账目','分项账目'],growth:['地形与自动生长'],economy:['完整统计与分布'],districts:['城区'],events:['城市记事','全部城市记事']};
+  const checks={housing:['住房空置率','住房收入比'],population:['人口变化'],travel:['出行方式','收入组与时段可达性'],liveTraffic:['样本车辆','等待车辆','样本通过','模拟精度','交通来源'],finance:['城市账目','分项账目'],growth:['地形与自动生长'],economy:['完整统计与分布'],districts:['城区'],events:['城市记事','全部城市记事']};
   for(const [key,texts] of Object.entries(checks)){
    await page.locator(`[data-overview-card="${key}"]`).click();assert.equal(await page.locator('[data-overview-section]:visible').count(),1);
    const detail=await page.locator('.city-overview-detail').innerText();for(const text of texts)assert(detail.includes(text),key+': '+text);
@@ -65,8 +65,8 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'city-overview-'));
    await page.screenshot({path:path.join(output,`housing-${width}.png`)});
   }
   await page.locator('#workspace-observe').click();await page.locator('#observe-tab-reports').click();await page.locator('#city-baseline').click();
-  await page.locator('#city-dashboard').click();assert.equal(await cards.count(),9);
+  await page.locator('#city-dashboard').click();assert.equal(await cards.count(),10);
   await page.locator('[data-overview-card="comparison"]').click();assert((await page.locator('.city-overview-detail').innerText()).includes('岗位变化'));
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['empty legacy sidebar removed','transit controls accessible','lower-left overview and detail at three viewport sizes','eight category cards','all original sections reachable','population chart','no city mutation','keyboard and back navigation','district inspection stays on right','complete event dialog'],errors}));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['empty legacy sidebar removed','transit controls accessible','lower-left overview and detail at three viewport sizes','nine category cards','all original sections reachable','population chart','no city mutation','keyboard and back navigation','district inspection stays on right','complete event dialog'],errors}));
  }finally{await browser?.close();server.kill();fs.rmSync(temp,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

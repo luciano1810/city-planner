@@ -1,6 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const S=require('../renderer/service-statistics.js');
 const civic=require('../renderer/civic-buildings.js');
+test('taxi card reports actual trips and waits independently of facility inventory',()=>{
+ const state={taxi:{enabled:true,fleetSize:12},taxiReport:{completed:30,meanWait:4.5},facilities:[{kind:'parking_lot'}]};
+ const before=JSON.stringify(state),taxi=S.summary(state,'taxi');
+ assert.equal(S.value(taxi),'30 人次');assert.equal(S.subtitle(taxi),'12 辆 · 等待 4.5 分钟');
+ assert.equal(taxi.facilities.length,0);assert.equal(S.summary(state,'parking').count,1);
+ assert.equal(S.value(S.summary({},'taxi')),'未运营');
+ assert.equal(JSON.stringify(state),before);
+});
 test('every current civic and transport kind belongs to exactly one category',()=>{
  const kinds=[...Object.keys(civic.names),'school','clinic','park','plaza','parking_lot','parking_garage','airport','port','train_station'];
  for(const kind of kinds)assert.equal(S.groups.filter(g=>g.kinds.includes(kind)).length,1,kind);

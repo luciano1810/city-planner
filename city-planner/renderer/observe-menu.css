@@ -12,6 +12,7 @@
 .observe-display-settings>label:has(input){white-space:normal}
 #city-traffic-controls{flex-basis:100%;padding-bottom:10px;border-bottom:1px solid #edf0ee}
 #city-traffic-controls[hidden]{display:none}
+.observe-menu #city-legend{position:static;flex-basis:100%;width:auto;max-width:none;flex-wrap:wrap;margin:0;padding:0;box-shadow:none;background:transparent;border:0}
 #city-traffic-controls>label{display:flex;align-items:center;gap:12px}
 #city-traffic-controls .city-note{margin:8px 0 0}
 .traffic-period-table{overflow-x:auto}

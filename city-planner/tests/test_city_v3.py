@@ -10,12 +10,13 @@ from city.parameters import definitions
 from city.development import select_projects,update_location_context,opportunity_fields
 from city.urban import building_style
 from city.engine import USES
+from city.construction import day
 
 
 def complete(city,p,use,capacity=20):
     shape=building_footprint(p,use)
     p['building']=dict(id=city.uid('b'),use=use,floors=2,floorArea=shape.area*2,footprintArea=shape.area,footprint=[list(q) for q in shape.exterior.coords],
-        capacity=capacity,occupied=0,positions=capacity if use!='residential' else 0,employees=0,status='active',age=20,vacantMonths=0,cost=100000,**building_style(p,use,2))
+        capacity=capacity,occupied=0,positions=capacity if use!='residential' else 0,employees=0,status='active',age=20,lastAgeDay=int(day(city)),vacantMonths=0,cost=100000,**building_style(p,use,2))
 
 
 class ConnectedGrowthTests(unittest.TestCase):

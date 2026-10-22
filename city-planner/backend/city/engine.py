@@ -1,4 +1,4 @@
-"""Authoritative daily construction and weekly land-use/transport simulation in metric coordinates.
+"""Authoritative daily construction and daily land-use/transport simulation in metric coordinates.
 
 Households have one worker each; trips represent typical working-day morning and
 evening periods. Capacity is assigned per direction and segment, never inferred
@@ -16,7 +16,7 @@ from shapely.ops import nearest_points
 
 from .geometry import ROAD_TYPES, TRANSIT_TYPES, Terrain, RoadConflict, make_network, parcels_for, building_footprint, curve_points, group, stable_id, road_contacts
 from .routing import shortest_paths, reconstruct
-from .development import update_location_context, select_projects, opportunity_fields, desired_floors
+from .development import update_location_context, select_projects, opportunity_fields, desired_floors, demand_summary
 from .urban import POLICY, grow_lanes, grow_public_spaces, building_style, update_entrances, update_firms, spatial_summary, clustered_districts, detailed_metrics, observe_changes, aggregate_flows, accessibility_by_group
 from .reporting import metric_definitions
 from .parameters import definitions as parameter_definitions, catalog as calibration_catalog
@@ -32,9 +32,9 @@ from . import housing
 from .employment import facility_workplaces, sync_facilities, facility_capacity
 from .business import BusinessMarket, workplace_supply
 from . import special_buildings, auto_facilities
-from . import road_clearance
+from . import road_clearance, taxis
 
-MODEL_VERSION = 'shanhai-city-11'
+MODEL_VERSION = 'shanhai-city-12'
 from .parameters import USES,ROAD_KINDS,DRIVABLE_ROADS,FRONTAGE_ROADS
 
 
@@ -67,11 +67,13 @@ class City:
                                     budget=False, taxRate=.06, maxProjects=12, autoGrow=True, autoRenew=True, accessBudget=30),
                       treasury=100000000., constructionCost=0., maintenance=0., revenue=0.,
                       pendingHousing=0, migrationQueue=[], migrationDemand={}, housingMarketVersion=1, movedIn=0, movedOut=0, relocated=0, stats={})
+        self.s['taxi']=dict(taxis.DEFAULTS)
+        self.s['taxiReport']={}
         self.s['gateway']=None
         self.s['sceneTimeSeconds']=9*3600.
         self.s['simulation']=simulation.initial_state()
-        self.s['calendar']=dict(nextWeekDay=7,lastWeekDay=0,projectCredit=0.,migrationCredit=0.,monthRevenue=0.,monthMaintenance=0.,monthMovedIn=0.,monthMovedOut=0.,monthRelocated=0.)
-        self.s['weeklyHistory']=[]
+        self.s['calendar']=dict(nextSettlementDay=1,lastSettlementDay=0,projectCredit=0.,migrationCredit=0.,monthRevenue=0.,monthMaintenance=0.,monthMovedIn=0.,monthMovedOut=0.,monthRelocated=0.)
+        self.s['dailyHistory']=[]
         self.s.update(firms=[], localPaths=[], growthAttempts=[], laneCadenceVersion=2, districtCells={}, policy=dict(POLICY), annual=[],migrationFlows=[],capitalAccounts={})
         self.s.update(streetPlans=[],plannedBlocks=0,regionalServices=[],regionalFlows=[],growthCenters=[],blockLayouts=[],renewals=[])
         self.undo, self.redo = [], []
@@ -106,6 +108,24 @@ class City:
                                   trips=getattr(self,'trips',[]), paths=self.paths,
                                   liveTraffic=self.live_traffic.snapshot() if self.live_traffic else None))
 
+    def checkpoint(self):
+        """Copy a transaction's state and graph aliases without regenerating geometry."""
+        state=dict(self.__dict__)
+        # Search caches can be recomputed. Terrain is immutable and undo entries
+        # are replaced, never edited by a transaction, so avoid copying them.
+        state.pop('_housing_commutes',None)
+        state.update(route_cache={},route_solutions={},surface_journeys=OrderedDict(),surface_journey_edges=0)
+        memo={id(self):self,id(self.terrain):self.terrain,
+              id(self.undo):list(self.undo),id(self.redo):list(self.redo)}
+        memo.update({id(value):value for value in state.values() if callable(value)})
+        return copy.deepcopy(state,memo)
+
+    def rollback(self, checkpoint):
+        # rebuild() is a planning operation: it may move entrances and paths.
+        # Restore their original graphs together with the authoritative objects.
+        self.__dict__.clear()
+        self.__dict__.update(checkpoint)
+
     def restore_runtime(self, runtime):
         for edge in self.network['edges']:
             if edge['id'] in runtime.get('edges',{}):
@@ -120,10 +140,12 @@ class City:
 
     @classmethod
     def restore(cls, data):
-        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10'):
+        if not isinstance(data, dict) or data.get('format') != 1 or data.get('model') not in (MODEL_VERSION, 'shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10','shanhai-city-11'):
             raise ValueError('存档格式或模型版本不受支持')
         city = cls(data['terrain'], data['state']['name'])
         s = copy.deepcopy(data['state'])
+        s['taxi']=taxis.settings(s.get('taxi',{}))
+        s.setdefault('taxiReport',{})
         s['sceneTimeSeconds']=number(s.get('sceneTimeSeconds',9*3600.),0,1e12,'城市时钟')
         s.setdefault('simulation',simulation.initial_state(s['sceneTimeSeconds'],
             (data.get('runtime',{}).get('liveTraffic') or {}).get('seconds',0.)))
@@ -166,12 +188,12 @@ class City:
         unclassified=s['constructionCost']-sum(accounts.values())
         if unclassified<-.01: raise ValueError('建设分项支出超过累计支出')
         if unclassified>.01: accounts['历史建设（未分项）']=accounts.get('历史建设（未分项）',0)+unclassified
-        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10'):
+        if old_model in ('shanhai-city-1','shanhai-city-2','shanhai-city-3','shanhai-city-4','shanhai-city-5','shanhai-city-6','shanhai-city-7','shanhai-city-8','shanhai-city-9','shanhai-city-10','shanhai-city-11'):
             s['version']=MODEL_VERSION
             s['policy']['version']=POLICY['version']
-            s['migrationNote']='已迁移到模型 11；保留既有建筑、街区与校准值，施工改为逐日推进，财政与市场改为每周结算'
+            s['migrationNote']='已迁移到模型 12；保留既有建筑、街区与校准值，施工改为逐日推进，财政与市场改为每日结算'
             s['policy']['version']=POLICY['version']
-        required = set(city.s) - {'calendar','weeklyHistory'}
+        required = set(city.s) - {'calendar','dailyHistory','developmentDemand'}
         if not required <= set(s) or s['version'] != MODEL_VERSION:
             raise ValueError('存档缺少必要字段')
         if any(not isinstance(s[k], list) for k in ['roads','stops','lines','parcels','households','facilities','events','history']):
@@ -231,7 +253,7 @@ class City:
                 raise ValueError('存档建筑超出地块')
         city.s = s
         if 'calendar' not in s:
-            # A legacy monthly amount is not a completed weekly cashflow.
+            # A legacy monthly amount is not a completed daily cashflow.
             s['legacyMonthlyAccounts']={key:s.get(key,0) for key in ('revenue','maintenance','movedIn','movedOut','relocated')}
             for key in s['legacyMonthlyAccounts']:
                 s[key]=0
@@ -252,6 +274,8 @@ class City:
         city.restore_runtime(data.get('runtime',{}))
         if any(f.get('jobCapacity') for f in s['facilities']) and 'facilityJobs' not in s.get('stats',{}):
             city.summarize()
+        else:
+            city.s['developmentDemand'] = demand_summary(city)
         return city
 
     def rebuild(self, regenerate=False):
@@ -484,6 +508,8 @@ class City:
         self.route_solutions = {}
         self.surface_journeys = OrderedDict()
         self.surface_journey_edges = 0
+        self._taxi_preview = None
+        self._taxi_dispatch = None
 
     def path_points(self, path):
         points=[]
@@ -542,6 +568,11 @@ class City:
         return value
 
     def route(self, source, target, car=True, income=6000, allocate=False, period='am', departure=480, required_mode=None):
+        if taxis.enabled(self) and not required_mode:
+            return taxis.route(self,source,target,car,income,allocate,period,departure)
+        return self._route_without_taxi(source,target,car,income,allocate,period,departure,required_mode)
+
+    def _route_without_taxi(self, source, target, car=True, income=6000, allocate=False, period='am', departure=480, required_mode=None, commit=True):
         if not self.line_segments:
             if required_mode:return None
             options=[]
@@ -552,7 +583,7 @@ class City:
                     options.append((minutes+journey['fee']/max(.15,income/10000),mode,journey))
             if not options:return None
             result=min(options,key=lambda row:(row[0],row[1]))[2]
-            if allocate:
+            if allocate and commit:
                 for edge in result['path']:
                     if edge['kind']=='car' and edge.get('ref'):self.road_load[(period,edge['ref'])]+=1
             return result
@@ -561,7 +592,7 @@ class City:
         if cached is not None:
             rides=[e for e in cached['path'] if e['kind']=='ride']
             if not allocate or all(self.segment_load[(period,e['segment'])]+1<=self.line_segments[e['segment']]['capacity'] for e in rides):
-                if allocate:
+                if allocate and commit:
                     for e in cached['path']:
                         if e['kind']=='ride':self.segment_load[(period,e['segment'])]+=1
                         elif e['kind']=='car' and e.get('ref'):self.road_load[(period,e['ref'])]+=1
@@ -641,7 +672,7 @@ class City:
         if not options:
             return None
         _,mode,minutes,path,fee,extra_wait=min(options,key=lambda row:(row[0],row[1]))
-        if allocate:
+        if allocate and commit:
             for e in path:
                 if e['kind']=='ride':
                     self.segment_load[(period,e['segment'])]+=1
@@ -685,7 +716,8 @@ class City:
             self.rebuild()
             self.restore_runtime(runtime)
             return self.view()
-        before=(copy.deepcopy(self.s),self.rng.getstate(),self.runtime())
+        checkpoint=self.checkpoint()
+        before=(checkpoint['s'],checkpoint['rng'].getstate(),self.runtime())
         try:
             if op in ('delete','zone'):
                 if any(project['status'] not in renewal.TERMINAL and any(p['id'] in project['preservedIds'] and cmd.get('id') in (p['id'],p.get('openSpace')) for p in self.s['parcels']) for project in self.s['renewals']):
@@ -836,6 +868,12 @@ class City:
                 number(self.s['policy']['trafficIterations'],1,6,'交通分配轮次',True)
                 self._integration_signature=None
                 self.rebuild()
+            elif op=='taxi_settings':
+                self.s['taxi']=taxis.settings(cmd.get('values',{}),self.s['taxi'])
+                self._taxi_preview=None
+                self._taxi_dispatch=None
+                self.s['taxiReport']={}
+                self.live_traffic=None
             elif op=='settings':
                 limits=dict(migration=(0,500),externalJobs=(0,10000),growth=(0,3),fare=(0,20),taxRate=(0,.3),maxProjects=(0,50),accessBudget=(10,90))
                 for k,v in cmd.get('values',{}).items():
@@ -892,10 +930,7 @@ class City:
                 self.assign_traffic()
             self.summarize()
         except Exception:
-            self.s,state,runtime=before
-            self.rng.setstate(state)
-            self.rebuild()
-            self.restore_runtime(runtime)
+            self.rollback(checkpoint)
             raise
         self.undo.append(before)
         self.undo=self.undo[-20:]
@@ -1112,15 +1147,17 @@ class City:
         return USES[use]['name']
 
     def step(self, months=1, *, advance_clock=True, return_view=True):
-        """Fast-forward through the same daily/weekly calendar used by live play."""
+        """Fast-forward through the same daily/daily calendar used by live play."""
         months=number(months,1,24,'推进月份',True)
         # advance_clock is retained for callers of the old API. Economic time
         # can no longer advance independently of the authoritative calendar.
         simulation.step_months(self, months)
         return self.view() if return_view else None
 
-    def settle_week(self, factor):
+    def settle_day(self, factor, *, start_day=None):
         self._period_factor=factor
+        today=int(construction.day(self))
+        start_day=today-1 if start_day is None else start_day
         try:
             self.s['movedIn']=self.s['movedOut']=self.s['relocated']=0
             self.s['migrationFlows']=[]
@@ -1139,7 +1176,7 @@ class City:
             self.monthly_progress(.72,'建设评估')
             self.redevelop()
             self.develop()
-            self.monthly_progress(.88,'财政周结算')
+            self.monthly_progress(.88,'财政日结算')
             update_entrances(self)
             clustered_districts(self)
             self.finance()
@@ -1149,12 +1186,13 @@ class City:
             for key in ('movedIn','movedOut','relocated'):
                 self.s['calendar']['month'+key[0].upper()+key[1:]]+=self.s[key]
             stamp=construction.date_string(construction.day(self))
-            self.s['weeklyHistory'].append(dict(copy.deepcopy(self.s['stats']),date=stamp,day=int(construction.day(self)),model=MODEL_VERSION))
-            self.s['weeklyHistory']=self.s['weeklyHistory'][-1040:]
+            self.s['dailyHistory'].append(dict(copy.deepcopy(self.s['stats']),date=stamp,day=today,
+                periodStartDate=construction.date_string(start_day),periodDays=today-start_day,model=MODEL_VERSION))
+            self.s['dailyHistory']=self.s['dailyHistory'][-7305:]
             self.undo=[];self.redo=[]
         finally:
             self.__dict__.pop('_period_factor',None)
-        self.monthly_progress(1,'周结算已准备')
+        self.monthly_progress(1,'日结算已准备')
 
     def close_month(self):
         """Monthly infrastructure cadence and archival report, not a cash debit."""
@@ -1323,6 +1361,9 @@ class City:
         for iteration in range(self.s['policy']['trafficIterations']):
             self.segment_load=defaultdict(float); self.road_load=defaultdict(float)
             self.paths=[]; trips=[]; boardings=Counter(); stop_board=Counter(); stop_alight=Counter()
+            self._taxi_dispatch=None
+            self._taxi_preview=None
+            requests=[]
             facility_load=Counter()
             facilities={f['id']:f for f in self.s['facilities']}
             freight_km=0.; freight_trips=0
@@ -1368,27 +1409,37 @@ class City:
                         targets.extend([(h['home'],f['id'],purpose,'am' if kind=='school' else 'off',departure),
                                         (f['id'],h['home'],purpose,'off',departure+120 if kind!='school' else 960)])
                 for source,target,purpose,period,depart in targets:
-                    route=self.route(source,target,h['car'],h['income'],True,period,depart)
-                    item=dict(source=source,target=target,purpose=purpose,period=period,people=1,completed=route is not None)
-                    if route:
-                        h['transportCost']+=route['fee']*self.s['policy']['workingDaysPerMonth']
-                        item.update({k:v for k,v in route.items() if k!='path'})
-                        boards=[e for e in route['path'] if e['kind']=='board']
-                        for edge in boards:
-                            boardings[edge['ref']]+=1; stop_board[edge['origin']]+=1
-                        for edge in route['path']:
-                            if edge['kind']=='alight': stop_alight[edge['to']]+=1
-                        if purpose=='work' and period=='am': h['commute']=route['minutes']
-                        if len(self.paths)<250:
-                            sp=self.parcelmap[source]['center'] if source in self.parcelmap else facilities[source]['point']
-                            tp=self.parcelmap[target]['center'] if target in self.parcelmap else facilities[target]['point']
-                            self.paths.append(dict(source=sp,target=tp,
-                                                   mode=route['mode'],purpose=purpose,points=self.path_points(route['path']),minutes=route['minutes']))
-                    else:
-                        connected=target in self.distances(source,'public')[0] or (h['car'] and target in self.distances(source,'car')[0])
-                        item['failureReason']='班次、运力或可接受时间受限' if connected else '起终点无合法网络连接'
-                        if purpose=='work': h['commuteFailed']=True
-                    trips.append(item)
+                    if taxis.enabled(self) and purpose=='work':
+                        # Stable departures distributed across the two-hour peak.
+                        depart += int(hashlib.sha256(h['id'].encode()).hexdigest()[:6],16)%120-60
+                    requests.append((h,source,target,purpose,period,depart))
+            if taxis.enabled(self):
+                requests.sort(key=lambda row:(taxis.service_time(self,row[5]),hashlib.sha256(row[0]['id'].encode()).hexdigest(),row[1],row[2]))
+            self._taxi_dispatch=taxis.Dispatch(self)
+            for h,source,target,purpose,period,depart in requests:
+                route=self.route(source,target,h['car'],h['income'],True,period,depart)
+                item=dict(source=source,target=target,purpose=purpose,period=period,people=1,completed=route is not None)
+                if route:
+                    h['transportCost']+=route['fee']*self.s['policy']['workingDaysPerMonth']
+                    item.update({k:v for k,v in route.items() if k!='path'})
+                    boards=[e for e in route['path'] if e['kind']=='board']
+                    for edge in boards:
+                        boardings[edge['ref']]+=1; stop_board[edge['origin']]+=1
+                    for edge in route['path']:
+                        if edge['kind']=='alight': stop_alight[edge['to']]+=1
+                    if purpose=='work' and period=='am': h['commute']=route['minutes']
+                    if len(self.paths)<250:
+                        sp=self.parcelmap[source]['center'] if source in self.parcelmap else facilities[source]['point']
+                        tp=self.parcelmap[target]['center'] if target in self.parcelmap else facilities[target]['point']
+                        self.paths.append(dict(source=sp,target=tp,
+                                               mode=route['mode'],purpose=purpose,points=self.path_points(route['path']),minutes=route['minutes']))
+                else:
+                    connected=target in self.distances(source,'public')[0] or ((h['car'] or taxis.enabled(self)) and target in self.distances(source,'car')[0])
+                    item['failureReason']='班次、运力或可接受时间受限' if connected else '起终点无合法网络连接'
+                    if purpose=='work': h['commuteFailed']=True
+                trips.append(item)
+            self.s['taxiReport']=self._taxi_dispatch.report()
+            self._taxi_dispatch=None
             regional=assign_regional_passengers(self,trips,boardings,stop_board,stop_alight)
             freight_trips,freight_km,freight_flows=assign_freight(self)
             self.s['regionalFlows']=regional+freight_flows
@@ -1551,6 +1602,7 @@ class City:
 
     def summarize(self):
         naming.ensure_names(self)
+        self.s['developmentDemand'] = demand_summary(self)
         pop=sum(h['size'] for h in self.s['households'])
         buildings=[p for p in self.s['parcels'] if p.get('building')]
         ready=[p for p in buildings if p['building']['status'] not in ('planned','construction')]
@@ -1575,7 +1627,7 @@ class City:
             landValue=float(np.median(values)) if values else None,rent=float(np.median(rents)) if rents else None,
             trips=len(trips),completedTrips=len(completed),failedTrips=len(trips)-len(completed),
             commute=avg(commutes),commuteP90=float(np.percentile(commutes,90)) if commutes else None,
-            modeShare={k:modes[k]/len(completed)*100 if completed else 0 for k in ('walk','car','public')},
+            modeShare={k:modes[k]/len(completed)*100 if completed else 0 for k in ('walk','car','taxi','public')},
             boardings=sum(l.get('boardings',0) for l in self.s['lines']),
             accessJobs=avg([self.parcelmap[h['home']].get('accessJobs' if h['car'] else 'publicJobs',0) for h in self.s['households']]),
             publicJobs=avg([self.parcelmap[h['home']].get('publicJobs',0) for h in self.s['households']]),
@@ -1586,9 +1638,13 @@ class City:
             movedIn=self.s['movedIn'],movedOut=self.s['movedOut'],relocated=self.s['relocated'],
             pendingHousing=self.s['pendingHousing'],
             developedArea=sum(p['area'] for p in ready),floorArea=sum(p['building']['floorArea'] for p in ready),
-            estimatedCO2=round(sum(t.get('distance',0)/1000*self.s['policy']['carCO2KgPerKm'] for t in completed if t['mode']=='car'),2),
+            estimatedCO2=round(sum(t.get('distance',0)/1000*self.s['policy']['carCO2KgPerKm'] for t in completed if t['mode'] in ('car','taxi'))+self.s.get('taxiReport',{}).get('emptyKm',0)*self.s['policy']['carCO2KgPerKm'],2),
             freightTrips=self.s.get('freightTrips',0),freightKm=self.s.get('freightKm',0),
             uses={use:sum(p['building']['floorArea'] for p in ready if p['building']['use']==use) for use in USES})
+        taxi=self.s.get('taxiReport',{})
+        self.s['stats'].update(taxiTrips=taxi.get('completed',0),taxiRescuedTrips=taxi.get('rescued',0),
+                              taxiUnserved=taxi.get('unserved',0),taxiMeanWait=taxi.get('meanWait'),
+                              taxiEmptyKm=taxi.get('emptyKm',0),taxiOccupiedKm=taxi.get('occupiedKm',0))
         self.s['stats']['density']=pop/(self.terrain.width*self.terrain.height/1e6)
         self.s['stats'].update(detailed_metrics(self))
         self.s['stats'].update(renewalProjects=sum(p['status'] not in renewal.TERMINAL for p in self.s['renewals']),
@@ -1622,6 +1678,9 @@ class City:
                 b['footprintArea']=round(Polygon(b['footprint']).area,1)
         state={k:v for k,v in self.s.items() if k not in ('households','commands','placeNames','namingGeography')}
         state['parcels']=parcels
+        # Detailed representative-day schedules remain in the save, not in
+        # every UI response. Live samples consume the authoritative report.
+        state['taxiReport']={k:v for k,v in self.s['taxiReport'].items() if k not in ('bookings','emptyJourneys')}
         migration=Counter()
         for flow in self.s['migrationFlows']:
             migration[(tuple(flow['source']),tuple(flow['target']),flow['kind'])]+=flow['people']

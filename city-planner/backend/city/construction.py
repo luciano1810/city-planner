@@ -30,6 +30,7 @@ def offset(key, maximum=7):
 
 def schedule(city, building, *, start=None, months=None):
     now = int(day(city))
+    building.setdefault('lastAgeDay',now)
     start = now + offset(building['id']) if start is None else int(start)
     months = max(1, building.get('ready', city.s['month'] + 3) - city.s['month']) if months is None else months
     # Site-specific durations prevent identical floor counts completing together.

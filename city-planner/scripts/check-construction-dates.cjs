@@ -8,10 +8,10 @@ const output=path.join(root,'output/playwright/construction-dates');fs.mkdirSync
 const fixture=spawnSync(path.join(root,'.venv/bin/python'),['-c',`
 import json,sys
 from pathlib import Path
-from tests.test_weekly_calendar import WeeklyCalendarTests
+from tests.test_daily_calendar import DailyCalendarTests
 from city.simulation import advance_calendar,DAY
 from city.construction import day
-case=WeeklyCalendarTests();city=case.city()
+case=DailyCalendarTests();city=case.city()
 for i,p in enumerate(city.s['parcels'][:3]):
  b=case.building(city,p,2+i,12+i);b.update(floors=6,height=19.8,floorArea=1200)
 city.rebuild()
@@ -36,31 +36,46 @@ assert.equal(fixture.status,0,fixture.stderr);const center=JSON.parse(fixture.st
   for(const stage of ['planned','foundation','structure','complete']){
    await page.locator('#city-import-file').setInputFiles(path.join(temp,stage+'.json'));
    await page.waitForFunction(()=>CityApp.active&&!CityApp.working&&CityScene.assetsReady);
-   const state=await page.evaluate(()=>({buildings:CityApp.state.parcels.filter(p=>p.building).map(p=>({status:p.building.status,progress:p.building.constructionProgress})),weeks:CityApp.state.weeklyHistory.length}));
-   if(stage==='planned')assert(state.buildings.every(b=>b.status==='planned'));
+   const state=await page.evaluate(()=>({buildings:CityApp.state.parcels.filter(p=>p.building).map(p=>({status:p.building.status,progress:p.building.constructionProgress})),days:CityApp.state.dailyHistory.length}));
+   if(stage==='planned'){
+    assert(state.buildings.every(b=>b.status==='planned'));
+    await page.locator('.city-demand-panel').waitFor({state:'visible'});
+    assert.equal(await page.locator('[data-demand-use]').count(),5);
+    assert.equal(await page.locator('[data-demand-use="office"]>strong').textContent(),'45');
+    // A real settings command must refresh the HUD without advancing time.
+    await page.locator('#city-external').evaluate(el=>{el.value='180';});
+    await page.locator('#city-settings').evaluate(el=>el.click());
+    await page.waitForFunction(()=>!CityApp.working&&CityApp.state.settings.externalJobs===180);
+    assert.equal(await page.locator('[data-demand-use="office"]>strong').textContent(),'90');
+    assert.equal(await page.locator('#city-status').textContent(),'');
+    assert((await page.locator('#overview-city-meta').textContent()).includes('3 栋待开工'));
+    await page.locator('.workspace-status-tray').screenshot({path:path.join(output,'demand-card.png')});
+   }
    if(stage==='structure')assert(state.buildings.every(b=>b.status==='construction'&&b.progress>0&&b.progress<1));
    if(stage==='complete')assert(state.buildings.every(b=>b.status==='active'&&b.progress===1));
-   for(const renderer of ['textures','webgl']){
+   for(const renderer of ['map','textures','webgl']){
     await page.evaluate(({center,renderer})=>{
-     CityScene.configure({quality:'high',renderer});
+     CityScene.configure({quality:renderer==='map'?'map':'high',renderer:renderer==='map'?'textures':renderer});
      const t=MapWorkspace.terrain,c=document.getElementById('map'),fit=Math.max(c.clientWidth/t.width,c.clientHeight/t.height),world=fit*Math.min(t.width/t.grid.widthMeters,t.height/t.grid.heightMeters);
-     MapWorkspace.focus(center,Math.max(CityScene.detailZoom,5/world));MapWorkspace.draw();
+     MapWorkspace.focus(center,renderer==='map'?1/world:Math.max(CityScene.detailZoom,5/world));MapWorkspace.draw();
     },{center,renderer});
     await page.screenshot({path:path.join(output,`${stage}-${renderer}.png`)});
    }
    results.push({stage,...state});
   }
   await page.locator('#city-history').evaluate(el=>el.click());
-  assert((await page.locator('#city-dialog').textContent()).includes('每周结算'));
+  assert((await page.locator('#city-dialog').textContent()).includes('每日结算'));
   await page.locator('#city-dialog-close').click();
   const csvReady=page.waitForEvent('download');await page.locator('#city-csv').evaluate(el=>el.click());
   const csv=fs.readFileSync(await (await csvReady).path(),'utf8');
-  assert(csv.includes('周结算日期'));assert(csv.includes('2026-01-08'));assert(csv.includes('2026-01-15'));
+  assert(csv.includes('日结算日期'));assert(csv.includes('结算覆盖天数'));
+  assert.equal(csv.trim().split('\r\n').length,17);
+  assert(csv.includes('2026-01-02'));assert(csv.includes('2026-01-03'));assert(csv.includes('2026-01-17'));
   const summaryReady=page.waitForEvent('download');await page.locator('#city-summary').evaluate(el=>el.click());
   const summary=JSON.parse(fs.readFileSync(await (await summaryReady).path(),'utf8'));
-  assert.equal(summary.weeklyHistory.length,2);assert.equal(summary.date,'2026-01-17');
+  assert.equal(summary.dailyHistory.length,16);assert.equal(summary.date,'2026-01-17');
   assert.deepEqual(errors,[]);
-  const labels=await page.locator('#ck-treasury-sub').textContent();assert(labels.includes('周收入'));
+  const labels=await page.locator('#ck-treasury-sub').textContent();assert(labels.includes('日收入'));
   const report={results,errors};fs.writeFileSync(path.join(output,'acceptance.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
  }finally{await browser?.close();server.kill();fs.rmSync(temp,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

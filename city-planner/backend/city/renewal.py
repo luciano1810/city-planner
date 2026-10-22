@@ -308,7 +308,7 @@ def _move(city, project, phase, assignments):
 
 
 def advance(city):
-    """Advance dated phases at daily boundaries, before weekly allocation."""
+    """Advance dated phases at daily boundaries, before daily allocation."""
     from .construction import day, add_months, date_string, schedule
     changed=False
     for project in city.s['renewals']:

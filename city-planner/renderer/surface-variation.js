@@ -137,7 +137,8 @@
     ['dodge-challenger-orange','道奇挑战者 · 橙',5.03,2.02,'#dd641f'],['dodge-challenger-purple','道奇挑战者 · 紫',5.03,2.02,'#70328e']
   ].map(([id,name,length,width,color],cell)=>({id,name,length,width,color,cell}));
   const vehicleAtlases={vehicles:{columns:4,rows:4},'vehicles-real':{columns:4,rows:4},'vehicles-sport':{columns:2,rows:2}};
-  function vehicle(id){
+  function vehicle(id,kind){
+    if(kind==='taxi')return {cell:0,color:'#edbe42',length:4.6,width:1.85,scale:1,spriteAtlas:null,spriteCell:0,model:'taxi'};
     const n=hash((Number(id)||0)+873),cell=fleet[n%fleet.length],sportSeed=hash(n^0x6f2d391b);
     const sport=sportSeed%10===0?sportVehicles[(sportSeed>>>8)%sportVehicles.length]:null;
     // Adding an occasional sports car does not reshuffle the existing atlas

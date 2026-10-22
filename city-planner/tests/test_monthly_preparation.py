@@ -15,7 +15,7 @@ from city.construction import day
 class HeldPreparation(Preparation):
     def __init__(self,city):
         self.city=city;self.signature=(city.s['revision'],city.s['month'])
-        self.start=day(city)*DAY;self.end=city.s['calendar']['nextWeekDay']*DAY
+        self.start=day(city)*DAY;self.end=city.s['calendar']['nextSettlementDay']*DAY
         self.progress=(0.,'测试阶段');self.result=None;self.error=None;self.stopped=False
     def cancel(self):self.stopped=True
 
@@ -24,8 +24,8 @@ class MonthlyPreparationTests(unittest.TestCase):
     def setUp(self):
         self.folder=tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup)
         self.service=CityService(self.folder.name);self.addCleanup(self.service.close)
-        self.city=block_city();self.city.s['saveGroup']='weekly-test'
-        self.city.s['simulation']['monthSeconds']=6*DAY
+        self.city=block_city();self.city.s['saveGroup']='daily-test'
+        self.city.s['simulation']['monthSeconds']=0.
         self.service.cities['test']=self.city
 
     def call(self,seconds=DAY,**extra):
@@ -46,7 +46,7 @@ class MonthlyPreparationTests(unittest.TestCase):
         self.assertTrue(result['settlement']['pending'])
 
     def test_ready_commit_preserves_current_clock_name_and_save_identity(self):
-        city=self.city;city.s['simulation']['monthSeconds']=7*DAY-10
+        city=self.city;city.s['simulation']['monthSeconds']=DAY-10
         job=self.service.preparation=HeldPreparation(city)
         prepared=City.restore(city.snapshot());advance_calendar(prepared,10)
         job.result=prepared
@@ -56,9 +56,9 @@ class MonthlyPreparationTests(unittest.TestCase):
         with patch.object(City,'step',side_effect=AssertionError('request must not run settlement')):
             result=self.call(31*DAY)
         self.assertEqual(result['advancedSeconds'],10)
-        self.assertEqual(result['weeksAdvanced'],1)
+        self.assertEqual(result['settlementsAdvanced'],1)
         self.assertEqual(city.s['stats'],expected_stats)
-        self.assertEqual(city.s['simulation']['monthSeconds'],7*DAY)
+        self.assertEqual(city.s['simulation']['monthSeconds'],DAY)
         self.assertEqual(city.s['simulation']['elapsedSeconds'],clock+10)
         self.assertAlmostEqual(city.s['sceneTimeSeconds'],sun+.1)
         self.assertEqual(city.s['name'],'计算中改名');self.assertEqual(city.s['saveGroup'],'new-save-group')
@@ -75,7 +75,7 @@ class MonthlyPreparationTests(unittest.TestCase):
         self.assertIsNotNone(self.service.preparation)
 
     def test_failure_after_commit_rolls_back_and_discards_prepared_rng(self):
-        city=self.city;city.s['simulation']['monthSeconds']=7*DAY-10
+        city=self.city;city.s['simulation']['monthSeconds']=DAY-10
         job=self.service.preparation=HeldPreparation(city)
         job.result=City.restore(city.snapshot());advance_calendar(job.result,10)
         before=city.snapshot()
@@ -103,7 +103,7 @@ class MonthlyPreparationTests(unittest.TestCase):
         self.assertTrue(old.stopped);self.assertEqual(result['monthsAdvanced'],0)
         self.assertIsNot(self.service.preparation,old)
 
-    def test_real_process_matches_weekly_rules_and_does_not_modify_city_until_commit(self):
+    def test_real_process_matches_daily_rules_and_does_not_modify_city_until_commit(self):
         expected=City.restore(self.city.snapshot());advance_calendar(expected,DAY)
         self.call();job=self.service.preparation
         job.thread.join(timeout=15)
@@ -111,8 +111,8 @@ class MonthlyPreparationTests(unittest.TestCase):
         self.assertIsNotNone(job.result);self.assertEqual(self.city.s['month'],0)
         for _ in range(32):
             result=self.call()
-            if result['weeksAdvanced']:break
-        self.assertEqual(result['weeksAdvanced'],1)
+            if result['settlementsAdvanced']:break
+        self.assertEqual(result['settlementsAdvanced'],1)
         for key in ('stats','parcels','households','history','events','treasury'):
             self.assertEqual(self.city.s[key],expected.s[key],key)
         self.assertEqual(self.city.rng.getstate(),expected.rng.getstate())

@@ -1,4 +1,4 @@
-"""Prepare an isolated weekly transaction while the visible calendar advances.
+"""Prepare an isolated daily transaction while the visible calendar advances.
 
 Only completed results may replace authoritative state. The child process has
 no save directory or service access; edits invalidate its revision, and a
@@ -13,7 +13,7 @@ from collections import OrderedDict
 from .simulation import DAY, MAX_STEP
 
 
-def prepare_week(city, seconds, connection):
+def prepare_day(city, seconds, connection):
     try:
         last_time=0.;last_fraction=0.
         def progress(fraction,label):
@@ -47,13 +47,13 @@ class Preparation:
         self.signature=(city.s['revision'],city.s['month'])
         from .construction import day
         self.start=day(city)*DAY
-        self.end=city.s['calendar']['nextWeekDay']*DAY
-        self.progress=(0.,'准备周结算')
+        self.end=city.s['calendar']['nextSettlementDay']*DAY
+        self.progress=(0.,'准备日结算')
         self.result=None;self.error=None
         self.cancelled=threading.Event()
         # Copy the current derived graphs as well as authoritative state. A
         # save/restore here would rebuild newly developed entrances early and
-        # could change the next week's growth decisions versus direct step().
+        # could change the next day's growth decisions versus direct step().
         draft=copy.copy(city)
         draft.__dict__=dict(city.__dict__)
         draft.__dict__.pop('_housing_commutes',None)
@@ -63,7 +63,7 @@ class Preparation:
         draft=copy.deepcopy(draft)
         context=multiprocessing.get_context('spawn')
         self.receiver,sender=context.Pipe(duplex=False)
-        self.process=context.Process(target=prepare_week,args=(draft,self.end-self.start,sender),daemon=True)
+        self.process=context.Process(target=prepare_day,args=(draft,self.end-self.start,sender),daemon=True)
         # Starting a spawned process serializes its input. Keep that IPC and
         # result decoding off the request thread as well as the actual solve.
         self.thread=threading.Thread(target=self._receive,args=(sender,),daemon=True)
@@ -85,7 +85,7 @@ class Preparation:
                     return
                 else:self.error=value;return
         except Exception as exc:
-            if not self.cancelled.is_set():self.error='周结算进程中断：'+str(exc)
+            if not self.cancelled.is_set():self.error='日结算进程中断：'+str(exc)
         finally:
             sender.close();self.receiver.close()
             if self.process.pid is not None:
@@ -109,11 +109,11 @@ class Preparation:
         from .construction import day
         if (self.city is not city or self.signature[0]!=city.s['revision']
                 or abs(day(city)*DAY-self.end)>.001 or self.result is None):
-            raise ValueError('周结算结果已失效')
+            raise ValueError('日结算结果已失效')
         prepared=self.result
         terrain=city.terrain
         # These fields may change while economics is prepared (sun scrubbing,
-        # manual naming, saving); they are not weekly economic inputs.
+        # manual naming, saving); they are not daily economic inputs.
         for key in ('simulation','sceneTimeSeconds','name','saveGroup'):
             if key in city.s:prepared.s[key]=city.s[key]
         city.__dict__.update(prepared.__dict__)
@@ -123,7 +123,7 @@ class Preparation:
 
     def status(self):
         return dict(progress=1. if self.result is not None else self.progress[0],
-                    stage='周结算已准备' if self.result is not None else self.progress[1],
+                    stage='日结算已准备' if self.result is not None else self.progress[1],
                     pending=self.result is None)
 
 
@@ -145,13 +145,13 @@ def advance_incremental(service,city,payload):
     from .construction import day
     from .simulation import ensure_calendar
     ledger=ensure_calendar(city)
-    # Prepare only the last day before each weekly close. Other midnights
-    # execute lightweight construction events directly in the foreground.
-    if job is None and seconds and int(day(city))+1 >= ledger['nextWeekDay']:
+    # Each midnight runs one isolated daily close. Its result is published
+    # only once the requested calendar reaches that boundary.
+    if job is None and seconds and int(day(city))+1 >= ledger['nextSettlementDay']:
         job=service.preparation=Preparation(city)
     if job is not None and job.error:
         error=job.error;job.cancel();service.preparation=None
-        raise ValueError('周结算失败，城市结算尚未提交：'+error)
+        raise ValueError('日结算失败，城市结算尚未提交：'+error)
     accepted=job.allowance(city,seconds) if job else min(seconds,DAY, (int(day(city))+1-day(city))*DAY)
     try:result=advance(city,accepted,speed,mode,reset,daylight,settlement=job.commit if job else None)
     except Exception:
@@ -162,7 +162,7 @@ def advance_incremental(service,city,payload):
         raise
     result['advancedSeconds']=accepted
     result['settlement']=job.status() if job else None
-    if result['weeksAdvanced']:
+    if result['settlementsAdvanced']:
         service.preparation=None
         result['settlement']=None
     return result

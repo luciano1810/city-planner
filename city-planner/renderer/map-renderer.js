@@ -91,11 +91,22 @@
     label(object.name||root.CitySpecialBuildings?.names[object.kind]||{park:'公园',plaza:'广场',school:'学校',clinic:'诊所'}[object.kind]||'公共设施',object.point,chosen?16:14,color,chosen?110:object.kind==='park'?65:55,'left',
       {kind:'poi',id:object.id,icon,badge,weight:600,selected:chosen});
   }
+  function plannedResidential(ctx,p,scale){
+    const b=p.building;
+    if(b?.status!=='planned'||b.use!=='residential'||!b.footprint?.length)return false;
+    ctx.save();path(ctx,b.footprint,true);
+    ctx.fillStyle='rgba(77,148,113,0.14)';ctx.fill();
+    ctx.strokeStyle='rgba(57,126,91,0.65)';ctx.lineWidth=1.5/scale;
+    ctx.setLineDash([4/scale,3/scale]);ctx.stroke();ctx.restore();
+    return true;
+  }
   function paint(ctx,state,{scale,inView,visible,label,selected,sourceParcel}){
     const fill=(points,color)=>{if(!points?.length)return;path(ctx,points,true);ctx.fillStyle=color;ctx.fill();};
     for(const p of state.parcels){
       if(!inView(p.points))continue;
       const b=p.building?.status==='planned'?null:p.building;
+      if(scale>=.075&&plannedResidential(ctx,p,scale)&&(scale>=.85||p.id===selected)&&visible(p.center))
+        label('规划住宅',p.building.center||p.center,11,'#397e5b',p.id===selected?115:16,'center',{kind:'building',id:p.id});
       if(p.use==='protected'||p.openSpace==='park')fill(p.points,palette.park);
       else if(b&&['commercial','office'].includes(b.use))fill(p.points,palette.commercial);
       else if(b&&['industrial','warehouse'].includes(b.use))fill(p.points,palette.industrial);
@@ -203,6 +214,6 @@
     }
     ctx.restore();return placed;
   }
-  const api={palette,roadStyle,paint,paintLabels,poi,category,wrapText,sampleLine,roadCandidates,upright,rotatedBox,overlaps};
+  const api={palette,roadStyle,paint,paintLabels,plannedResidential,poi,category,wrapText,sampleLine,roadCandidates,upright,rotatedBox,overlaps};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityMapRenderer=api;
 })(typeof window==='undefined'?{}:window);
