@@ -123,7 +123,7 @@
   const statusTray=document.createElement('section');statusTray.className='workspace-status-tray';statusTray.setAttribute('aria-label','选择与操作状态');
   const demandPanel=document.createElement('section');demandPanel.className='city-demand-panel';demandPanel.setAttribute('aria-label','建筑实时需求');
   const demandUses=[['residential','住宅','#57966e'],['commercial','商业','#c99546'],['office','办公','#528fab'],['industrial','工业','#a080a5'],['warehouse','仓储','#9a9169']];
-  demandPanel.innerHTML='<header><strong>实时需求</strong><small>未满足缺口</small></header><div class="city-demand-grid">'+demandUses.map(([use,name])=>`<div class="city-demand-item" data-demand-use="${use}"><span>${name}</span><strong>—</strong><div class="city-demand-track" role="meter" aria-label="${name}未满足需求占比" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>`).join('')+'</div><p>住宅按户 · 其他按岗位容量</p>';
+  demandPanel.innerHTML='<header><strong>实时需求</strong><small>未满足缺口</small></header><div class="city-demand-grid">'+demandUses.map(([use,name])=>`<div class="city-demand-item" data-demand-use="${use}"><span>${name}</span><strong>—</strong><div class="city-demand-track" role="meter" aria-label="${name}未满足需求占比" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>`).join('')+'</div>';
   for(const [use,,color] of demandUses)demandPanel.querySelector(`[data-demand-use="${use}"]`).style.setProperty('--demand-color',color);
   demandPanel.title='显示可达就业对应的住房缺口与各类经营空间缺口；已扣除现有及待开工、在建供应。需求随城市结算与建设编辑更新，不代表可立即开工的建筑栋数。';
   function refreshDemand(){
