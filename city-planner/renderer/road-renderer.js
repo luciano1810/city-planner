@@ -107,7 +107,7 @@
         }
       }
     }
-    const result={joins,ramps,roadMap,surfaces:new Map()};connectionPlans.set(network,result);return result;
+    const result={joins,ramps,roadMap,junctions:network.junctions||[],types,surfaces:new Map()};connectionPlans.set(network,result);return result;
   }
   function nearestDistance(points,p){
     const {distances}=measure(points);let best=Infinity,distance=0;
@@ -183,12 +183,57 @@
     if(layout.surfaces.has(road.id))return layout.surfaces.get(road.id);
     if(road.level===0){
       const length=measure(road.points).length;
-      const contacts=layout.joins.flatMap(j=>j.approaches.filter(a=>a.road===road.id));
+      const contacts=[...layout.joins,...(layout.junctions||[])].flatMap(j=>j.approaches.filter(a=>a.road===road.id));
       const openStart=contacts.some(a=>a.distance<.1),openEnd=contacts.some(a=>a.distance>length-.1);
-      // The ground half of a ramp is connected too: its sidewalk must end
-      // flush at the landing instead of retaining a rounded cul-de-sac cap.
+      // Connected ground endpoints finish flush, including at-grade T junctions
+      // and ramp landings; only genuinely free endpoints retain round caps.
       const profile=landingProfile(road,layout);
-      const result=openStart||openEnd?{...road,openStart,openEnd,...(profile?{surfaceProfile:profile,points:profile.map(s=>s.point)}:{})}:road;
+      const mouthClips=[],pathJoins=[];
+      for(const j of layout.junctions||[]){
+        const own=j.approaches.filter(a=>a.road===road.id);if(!own.length)continue;
+        const receiver=j.approaches.filter(a=>a.road!==road.id&&a.level===0&&motorKinds.has(a.kind))
+          .sort((a,b)=>b.width-a.width)[0];
+        if(!receiver)continue;
+        const receiving=layout.roadMap.get(receiver.road),through=j.approaches.some(a=>a!==receiver&&a.road===receiver.road&&a.direction!==receiver.direction);
+        if(road.kind==='path'){
+          const half=receiver.width/2,spine=receiving.points;
+          mouthClips.push([...offsetPath(spine,half+.05),...offsetPath(spine,-half-.05).slice().reverse()]);
+          for(const arm of own){
+            const tangent=receiver.tangent,normal=[-tangent[1],tangent[0]];
+            if(normal[0]*arm.tangent[0]+normal[1]*arm.tangent[1]<0)normal.forEach((v,i)=>normal[i]=-v);
+            const available=arm.direction>0?length-arm.distance:arm.distance;
+            const next=contacts.map(a=>(a.distance-arm.distance)*arm.direction).filter(d=>d>.1);
+            const span=Math.min(available*.8,...next.map(d=>d*.45),Math.max(24,half/Math.max(.15,Math.abs(normal[0]*arm.tangent[0]+normal[1]*arm.tangent[1]))+12));
+            if(span>half+5)pathJoins.push({arm,normal,point:j.point,half,span});
+          }
+        }else if(through){
+          for(const arm of own){
+            if(arm.distance>.1&&arm.distance<length-.1)continue;
+            const u=receiver.tangent,n=[-u[1],u[0]],extent=Math.max(100,arm.width*4);
+            if(n[0]*arm.tangent[0]+n[1]*arm.tangent[1]<0)n.forEach((v,i)=>n[i]=-v);
+            const at=(along,across)=>j.point.map((v,i)=>v+u[i]*along+n[i]*across);
+            // A connected branch ends at the far edge of the receiving road;
+            // its round terminal cap must never protrude through that edge.
+            mouthClips.push([at(-extent,-receiver.width/2),at(extent,-receiver.width/2),at(extent,-extent),at(-extent,-extent)]);
+          }
+        }
+      }
+      let points=profile?profile.map(s=>s.point):road.points;
+      if(pathJoins.length){
+        const stations=new Set(measure(road.points).distances);
+        for(const join of pathJoins)for(let i=0;i<=24;i++)stations.add(join.arm.distance+join.arm.direction*join.span*i/24);
+        points=[...stations].sort((a,b)=>a-b).map(d=>{
+          const join=pathJoins.find(j=>{const along=(d-j.arm.distance)*j.arm.direction;return along>=0&&along<=j.span;});
+          if(!join)return sample(road.points,d).point;
+          const {arm,normal,point,half,span}=join,along=(d-arm.distance)*arm.direction,neck=half+1.5;
+          if(along<=neck)return point.map((v,i)=>v+normal[i]*along);
+          const outer=sample(road.points,arm.distance+arm.direction*span),from=point.map((v,i)=>v+normal[i]*neck);
+          const reach=(span-neck)*.45,c1=from.map((v,i)=>v+normal[i]*reach),c2=outer.point.map((v,i)=>v-outer.tangent[i]*arm.direction*reach);
+          const t=(along-neck)/(span-neck),u=1-t;
+          return from.map((v,i)=>u*u*u*v+3*u*u*t*c1[i]+3*u*t*t*c2[i]+t*t*t*outer.point[i]);
+        });
+      }
+      const result=openStart||openEnd||mouthClips.length||pathJoins.length?{...road,openStart,openEnd,points,mouthClips,...(profile?{surfaceProfile:profile}:{})}:road;
       layout.surfaces.set(road.id,result);return result;
     }
     const length=measure(road.points).length,distances=new Set(measure(road.points).distances);
@@ -301,7 +346,7 @@
       // opposite arms continue the road and must not become an acute fork
       // with a clearance extending hundreds of metres down both approaches.
       const dot=arm.tangent[0]*other.tangent[0]+arm.tangent[1]*other.tangent[1];
-      if(cross>.05)distance=Math.max(distance,(other.width/2+arm.width/2*dot)/cross+2);
+      if(cross>.001)distance=Math.max(distance,(other.width/2+arm.width/2*dot)/cross+2);
     }
     return distance;
   }
@@ -374,9 +419,12 @@
       arrows.push({road:road.id,level:road.level,point:[at.point[0]-travel[1]*offset,at.point[1]+travel[0]*offset],travel,turns,laneWidth});
     };
     for(const junction of junctions){
+      const motorArms=junction.approaches.filter(a=>motorKinds.has(a.kind));
+      const pedestrianOnly=junction.approaches.some(a=>a.kind==='path')&&new Set(motorArms.map(a=>a.road)).size===1;
+      let pedestrianCrossingAdded=false;
       for(const arm of junction.approaches){
         const road=roadMap.get(arm.road);if(!road)continue;
-        const length=measure(road.points).length,clearance=clearDistance(arm,junction.approaches);
+        const length=measure(road.points).length,clearance=pedestrianOnly?0:clearDistance(arm,junction.approaches);
         const available=arm.direction>0?length-arm.distance:arm.distance;
         // Neighbouring junctions bound the approach; frontage nodes do not.
         let room=available;
@@ -389,12 +437,13 @@
         // Advancing a stop line must not expose another set of crossings and
         // poles on short internal links of an already overlapping junction.
         if(room<clearance+(Number.isFinite(arm.crossingDistance)?18:14))continue;
-        const at=sample(road.points,arm.distance+arm.direction*(clearance+3));
+        const at=sample(road.points,arm.distance+arm.direction*(pedestrianOnly?0:clearance+3));
         const tangent=at.tangent.map(v=>v*arm.direction);
         const furniture={road:road.id,level:road.level,point:at.point,tangent,width:arm.width,oneway:road.oneway,
           junction:junction.id,approach:`${arm.road}:${arm.direction}`,initial:junction.signal?.initial};
         if(junction.crossings&&motorKinds.has(road.kind)&&roadTypes[road.kind].walk){
-          crosswalks.push(furniture);
+          if(!pedestrianOnly||!pedestrianCrossingAdded)crosswalks.push(pedestrianOnly?{...furniture,point:sample(road.points,arm.distance).point}:furniture);
+          pedestrianCrossingAdded=true;
           // A pedestrian head belongs to an end of a crossing, not to a vehicle
           // approach. Both ends face across the road beside the zebra, with
           // room for the far-side vehicle mast and perpendicular crossing.
@@ -521,18 +570,60 @@
         }
       }
     }
-    const guides=[];
+    const guides=[],guideKeys=new Set();
     for(const j of junctions){
-      const candidates=j.approaches.filter(arm=>roadMap.has(arm.road)&&arm.level===0&&motorKinds.has(arm.kind)&&j.approaches.some(a=>a.road===arm.road&&a.direction!==arm.direction));
-      // One continuous corridor owns the through-lane guide. Crossing two
-      // complete sets produces a dotted grid rather than usable lane guidance.
-      // Width and road continuity choose it deterministically, without adding
-      // lanes or modifying any routing/signal state.
-      const arm=candidates.sort((a,b)=>b.width-a.width||measure(roadMap.get(b.road).points).length-measure(roadMap.get(a.road).points).length||String(a.road).localeCompare(String(b.road)))[0];
-      if(!arm)continue;
-      const road=roadMap.get(arm.road),extent=Math.max(...j.approaches.map(a=>a.width))/2-.6,count=laneCounts[road.kind],width=roadTypes[road.kind].width;
-      const start=Math.max(0,arm.distance-extent),points=slice(road.points,start,Math.min(measure(road.points).length,arm.distance+extent));
-      for(let lane=1;lane<count;lane++)if(lane!==count/2||road.oneway)guides.push({road:road.id,phase:start%5.7,points:offsetPath(points,-width/2+lane*width/count)});
+      const arms=j.approaches.filter(a=>roadMap.has(a.road)&&motorKinds.has(a.kind));
+      if(!arms.some(a=>a.kind!=='lane'))continue;
+      const anchor=(arm,offset)=>{
+        const road=roadMap.get(arm.road),extent=Math.max(2,clearDistance(arm,j.approaches)-1);
+        const length=measure(road.points).length,available=arm.direction>0?length-arm.distance:arm.distance;
+        if(available<extent+8)return null;
+        for(const distance of roadJunctions.get(road.id)){
+          const delta=(distance-arm.distance)*arm.direction;
+          if(delta>.1&&delta/2<extent+8)return null;
+        }
+        const at=sample(road.points,arm.distance+arm.direction*extent),t=at.tangent.map(v=>v*arm.direction);
+        return {point:[at.point[0]-t[1]*offset,at.point[1]+t[0]*offset],tangent:t};
+      };
+      for(const a of arms.filter(a=>a.incoming))for(const b of arms.filter(b=>b!==a&&b.outgoing&&b.level===a.level)){
+        const through=arms.filter(o=>o!==a&&o.outgoing&&o.level===a.level&&a.tangent[0]*o.tangent[0]+a.tangent[1]*o.tangent[1]<-.82)
+          .sort((x,y)=>(x.road===a.road?-1:0)-(y.road===a.road?-1:0)||(a.tangent[0]*(x.tangent[0]-y.tangent[0])+a.tangent[1]*(x.tangent[1]-y.tangent[1])))[0];
+        // Continue each through corridor once. Turning-only branches receive
+        // curved guides; drawing every possible movement over every other
+        // movement makes acute junctions an unreadable mesh of dashed lines.
+        if(through&&(!a.laneTurns||a.laneTurns.some(turns=>turns.includes('straight')))&&b!==through)continue;
+        const dot=-a.tangent[0]*b.tangent[0]-a.tangent[1]*b.tangent[1];
+        if(dot<=-.82)continue; // No guide towards an unavailable U-turn.
+        const cross=-a.tangent[0]*b.tangent[1]+a.tangent[1]*b.tangent[0];
+        const turn=dot>.82?'straight':cross>0?'right':'left';
+        const incoming=a.laneCount||(a.oneway?laneCounts[a.kind]:laneCounts[a.kind]/2);
+        const outgoing=b.oneway?laneCounts[b.kind]:laneCounts[b.kind]/2;
+        const width=a.laneWidth||a.width/(a.oneway?incoming:incoming*2),outWidth=b.width/laneCounts[b.kind];
+        let straightDrawn=false;
+        for(let lane=0;lane<incoming;lane++){
+          const allowed=a.laneTurns?.[lane]||turnsFor(a,arms).filter(t=>t==='straight'||incoming===1||t==='left'&&lane===0||t==='right'&&lane===incoming-1);
+          if(!allowed.includes(turn))continue;
+          // Guide along a lane boundary, leaving the lane centre for vehicles.
+          // Turns use the inside of their turning corridor; straight movements
+          // continue the centre divider without duplicating opposing guides.
+          const boundary=turn==='left'?1:0,target=turn==='right'?outgoing-1:Math.min(lane,outgoing-1);
+          if(turn==='straight'&&straightDrawn)continue;
+          const from=anchor(a,turn==='straight'?0:-((a.oneway?-a.width/2:0)+(lane+boundary)*width));
+          const to=anchor(b,turn==='straight'?0:(b.oneway?-b.width/2:0)+(target+boundary)*outWidth);
+          if(turn==='straight')straightDrawn=true;
+          if(!from||!to)continue;
+          const span=Math.hypot(to.point[0]-from.point[0],to.point[1]-from.point[1]);
+          if(span<2)continue;
+          const reach=span*(turn==='straight'?.33:.55);
+          const c1=from.point.map((v,k)=>v-from.tangent[k]*reach),c2=to.point.map((v,k)=>v-to.tangent[k]*reach);
+          const steps=Math.max(12,Math.ceil(span/2)),points=Array.from({length:steps+1},(_,i)=>{
+            const t=i/steps,u=1-t;return from.point.map((v,k)=>u*u*u*v+3*u*u*t*c1[k]+3*u*t*t*c2[k]+t*t*t*to.point[k]);
+          });
+          const key=points.map(p=>p.map(v=>v.toFixed(2)).join(',')).join(';'),reverse=points.slice().reverse().map(p=>p.map(v=>v.toFixed(2)).join(',')).join(';');
+          if(guideKeys.has(key)||guideKeys.has(reverse))continue;
+          guideKeys.add(key);guides.push({road:a.road,toRoad:b.road,junction:j.id,level:a.level,turn,lane,phase:0,points});
+        }
+      }
     }
     const result={arrows,crosswalks,stopLines,signals,pedestrianSignals,centerlines,medians,edgeLines,guides,curbRoads,pockets,laneBays};plans.set(network,result);return result;
   }
@@ -560,12 +651,31 @@
       const arms=j.approaches.filter(a=>a.level===0&&motorKinds.has(a.kind)).slice().sort((a,b)=>Math.atan2(a.tangent[1],a.tangent[0])-Math.atan2(b.tangent[1],b.tangent[0]));
       for(let i=0;i<arms.length;i++){
         const a=arms[i],b=arms[(i+1)%arms.length],u=a.tangent,v=b.tangent,cross=u[0]*v[1]-u[1]*v[0],dot=u[0]*v[0]+u[1]*v[1];
-        if(cross<.25||dot<-.93)continue;
+        if(cross<.12||dot<-.995)continue;
         const p=[j.point[0]-u[1]*a.width/2,j.point[1]+u[0]*a.width/2],q=[j.point[0]+v[1]*b.width/2,j.point[1]-v[0]*b.width/2];
         const t=((q[0]-p[0])*v[1]-(q[1]-p[1])*v[0])/cross,corner=[p[0]+u[0]*t,p[1]+u[1]*t],radius=Math.min(6,Math.min(a.width,b.width)*.35);
         if(Math.hypot(corner[0]-j.point[0],corner[1]-j.point[1])>65)continue;
-        const angle=Math.acos(Math.max(-1,Math.min(1,dot))),leg=radius/Math.tan(angle/2);
-        const c={corner,radius,from:corner.map((v,k)=>v+u[k]*leg),to:corner.map((n,k)=>n+v[k]*leg),u,v,
+        const angle=Math.acos(Math.max(-1,Math.min(1,dot)));
+        let leg=radius/Math.tan(angle/2),effectiveRadius=radius;
+        // Open the broad sides of an acute crossing, without widening the
+        // whole road. Bound the flare by both approaches' marking clearances.
+        if(dot<-.5){
+          const acute=arms.some((arm,index)=>arms.slice(index+1).some(other=>{
+            const d=arm.tangent[0]*other.tangent[0]+arm.tangent[1]*other.tangent[1];
+            return d>.5&&d<.992;
+          }));
+          if(acute){
+            const extra=Math.min(a.width,b.width)*.25;
+            const desired=extra/(1/Math.sin(angle/2)-1);
+            const alongA=(corner[0]-j.point[0])*u[0]+(corner[1]-j.point[1])*u[1];
+            const alongB=(corner[0]-j.point[0])*v[0]+(corner[1]-j.point[1])*v[1];
+            const room=arm=>{const road=roadMap.get(arm.road);return road?Math.max(0,(arm.direction>0?measure(road.points).length-arm.distance:arm.distance)-8):Infinity;};
+            const limit=Math.min(65,clearDistance(a,arms)-alongA,clearDistance(b,arms)-alongB,room(a)-alongA,room(b)-alongB);
+            leg=Math.max(leg,Math.min(desired/Math.tan(angle/2),limit));
+            effectiveRadius=leg*Math.tan(angle/2);
+          }
+        }
+        const c={corner,radius:effectiveRadius,from:corner.map((v,k)=>v+u[k]*leg),to:corner.map((n,k)=>n+v[k]*leg),u,v,
           road:a.road,nextRoad:b.road,kind:a.kind,nextKind:b.kind,widths:[a.width,b.width],junction:j.point,extensions:[.65,.65]};
         const from=cornerAnchor(roadMap.get(a.road),a,j.point,c.from,1),to=cornerAnchor(roadMap.get(b.road),b,j.point,c.to,-1);
         if(from&&to){
@@ -643,7 +753,7 @@
         if(shape.path)ctx.fill(shape.path);else{line(shape.points);ctx.closePath();ctx.fill();}
       }
       if(scale>=3.5){
-        if(!detail.joints){const count=Math.max(4,Math.round(c.radius*1.35)),inner=cornerOffset(c,roadCrossSection(c.kind).gutter,count),outer=cornerOffset(c,roadCrossSection(c.kind).curb,count);detail.joints=inner.slice(1,-1).map((p,i)=>[p,outer[i+1]]);}
+        if(!detail.joints){const count=Math.max(4,Math.min(48,Math.round(c.radius*1.35))),inner=cornerOffset(c,roadCrossSection(c.kind).gutter,count),outer=cornerOffset(c,roadCrossSection(c.kind).curb,count);detail.joints=inner.slice(1,-1).map((p,i)=>[p,outer[i+1]]);}
         ctx.beginPath();for(const joint of detail.joints){ctx.moveTo(...joint[0]);ctx.lineTo(...joint[1]);}ctx.strokeStyle='#7b81795e';ctx.lineWidth=.045;ctx.stroke();
       }
     }
@@ -917,7 +1027,7 @@
       const visibleRoads=roads.filter(r=>r.level===level&&inView(r.points));
       // Outline every road first, then fill the connected surface. A later
       // road's casing must never draw a barrier across an at-grade junction.
-      if(root.CityScene&&(stage!=='details'||level>0))root.CityScene.roadSurfaces(ctx,visibleRoads.map(r=>surfaceRoad(r,layout)),roadTypes,scale,level);
+      if(root.CityScene&&(stage!=='details'||level>0))root.CityScene.roadSurfaces(ctx,visibleRoads.slice().sort((a,b)=>(a.kind==='path'?0:1)-(b.kind==='path'?0:1)).map(r=>surfaceRoad(r,layout)),roadTypes,scale,level);
       else if(!root.CityScene&&stage!=='details')for(const pass of ['outline','surface'])for(const road of visibleRoads){
         const cfg=roadTypes[road.kind],rail=!motorKinds.has(road.kind)&&road.kind!=='path';
         path(road.points);ctx.setLineDash(level<0?[6/scale,4/scale]:[]);
@@ -955,9 +1065,9 @@
         }
         ctx.setLineDash([]);
       }
-      if(level===0&&scale>=.65){
-        ctx.strokeStyle='#f4f2e0b8';ctx.lineWidth=.13;ctx.setLineDash([2,3.7]);
-        for(const line of plan.guides)if(inView(line.points)){ctx.lineDashOffset=-line.phase;path(projected(line.points,line.road));ctx.stroke();}
+      if(scale>=.65){
+        ctx.strokeStyle='#f4f2e0c9';ctx.lineWidth=.18;ctx.setLineDash([1.5,2]);
+        for(const line of plan.guides)if(line.level===level&&inView(line.points)){ctx.lineDashOffset=-line.phase;path(projected(line.points,line.road));ctx.stroke();}
         ctx.setLineDash([]);ctx.lineDashOffset=0;
       }
       if(scale>=.45){

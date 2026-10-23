@@ -71,7 +71,7 @@ class RoadGradeTests(unittest.TestCase):
         self.assertFalse(LineString(route).intersects(obstacle))
         terrain.valid_link(LineString(route),'street',0)
 
-    def test_auto_route_does_not_rewrite_valid_roads_or_bypass_water(self):
+    def test_auto_route_keeps_valid_roads_and_uses_bridges_for_water(self):
         city = City(hillside())
         cmd = dict(type='road',points=[[500,1000],[500,1500]],autoRoute=True)
         preview = city.preview_road(cmd)
@@ -80,8 +80,9 @@ class RoadGradeTests(unittest.TestCase):
         self.assertEqual(preview['road']['points'],cmd['points'])
         water = City(flat_world(water=True))
         result = water.preview_road(dict(type='road',points=[[1000,1000],[3000,1000]],autoRoute=True))
-        self.assertFalse(result['valid'])
-        self.assertIn('水面',result['reason'])
+        self.assertTrue(result['valid'])
+        self.assertTrue(result['road']['autoBridge'])
+        self.assertEqual([r['level'] for r in result['roads']], [0,1,0])
         self.assertIsNone(route_around_grade(city.terrain,[[500,1000],[800,1000]],'street',max_visits=0))
 
     def test_contour_and_oblique_roads_on_steep_hillside(self):

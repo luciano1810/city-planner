@@ -29,6 +29,25 @@ def sample(seed='naming-test'):
 
 class NamingTests(unittest.TestCase):
 
+    def test_endpoint_extensions_keep_name_after_rebuild_and_restore(self):
+        city = City(flat_world())
+        for points in ([[500,700],[800,700]], [[802,700],[1100,700]],
+                       [[1400,700],[1100,700]]):
+            city.add_road(dict(points=points))
+        expected = city.s['roads'][0]['name']
+        naming.ensure_names(city)
+        self.assertEqual([r['name'] for r in city.s['roads']], [expected] * 3)
+        restored = City.restore(json.loads(json.dumps(city.snapshot())))
+        self.assertEqual([r['name'] for r in restored.s['roads']], [expected] * 3)
+
+    def test_middle_branch_and_explicit_names_do_not_inherit(self):
+        city = City(flat_world())
+        city.add_road(dict(points=[[500,700],[1100,700]], name='原道路'))
+        city.add_road(dict(points=[[800,700],[800,1000]]))
+        city.add_road(dict(points=[[1100,700],[1400,700]], name='指定道路'))
+        self.assertNotEqual(city.s['roads'][1]['name'], '原道路')
+        self.assertEqual(city.s['roads'][2]['name'], '指定道路')
+
     def regional_city(self, world=None):
         city = sample()
         city.terrain = Terrain(world or flat_world())

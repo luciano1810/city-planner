@@ -12,7 +12,7 @@ function canvasContext(onColor=()=>{}){
 }
 
 test('cached Canvas rendering gives the occupied setback walls windows and paints their roof before the upper storey',()=>{
-  const parcel={id:'p-9',center:[14,13],building:{use:'office',status:'active',floors:4,height:13.2,
+  const parcel={id:'p-9',center:[14,13],building:{visualShape:'standard',use:'office',status:'active',floors:4,height:13.2,
     footprint:[[0,0],[28,0],[28,26],[0,26],[0,0]]}};
   const before=JSON.stringify(parcel),massing=geometry.buildingMassing(parcel),painted=[],windowCounts=[];let glassPanes=0;
   assert.equal(massing.volumes.length,2,'fixture has a lower terrace and an upper storey');

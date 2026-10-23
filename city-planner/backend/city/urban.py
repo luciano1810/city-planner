@@ -306,11 +306,10 @@ def clustered_districts(city):
         kind='CBD' if is_center else {'residential':'居住区','commercial':'商业区','office':'办公集聚区','industrial':'工业仓储区','warehouse':'工业仓储区'}[dominant]
         if max(areas.values())/max(1,total)<city.s['policy']['dominantUseShare'] and kind!='CBD':
             kind='混合城区'
-        token=f'{key[0]}:{key[1]}';old=previous.get(token,{})
-        streak=old.get('streak',0)+1 if old.get('pending')==kind else 1
-        label=kind if streak>=city.s['policy']['districtPersistenceMonths'] else old.get('kind','办公集聚区' if kind=='CBD' else kind)
-        previous[token]=dict(kind=label,pending=kind,streak=streak)
-        labels[key]=label
+        # This is an observation of delivered uses, never a development gate.
+        token=f'{key[0]}:{key[1]}'
+        previous[token]=dict(kind=kind)
+        labels[key]=kind
     result=[];visited=set()
     old_districts=city.s['districts']
     for seed in sorted(cells):

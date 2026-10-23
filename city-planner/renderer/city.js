@@ -393,7 +393,7 @@
     el('city-hint').classList.toggle('error',!!roadError);
     const geometry=preview?.valid?preview.road.points:window.CityGeometry.curvePoints(draft,el('city-shape').value==='curve');
     const distance=geometry.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p[0]-geometry[i][0],p[1]-geometry[i][1]),0);
-    el('city-draft-info').textContent=draft.length?`${draft.length} 个控制点 · ${fmt(distance)} m${preview?(preview.valid?` · ${preview.road.terrainAdjusted?'已自动绕坡 · ':''}预计 ${fmt(preview.road.constructionCost+(preview.clearance?.cost||0))} 元 · ${preview.connections} 处连接${preview.clearance&&(preview.clearance.buildings||preview.clearance.facilities)?` · 自动拆除 ${preview.clearance.buildings} 栋建筑 / ${preview.clearance.facilities} 处设施，安置 ${preview.clearance.households} 户`:''}`:` · ${preview.reason}`):draft.length<2?' · 请点击终点':' · 正在检查地形与连接'}${editingRoad?' · 拖动控制点调整':''}`:'靠近道路自动吸附，逐点绘制，Enter 完成，Esc 取消。按住空格拖动地图。';
+    el('city-draft-info').textContent=draft.length?`${draft.length} 个控制点 · ${fmt(distance)} m${preview?(preview.valid?` · ${preview.road.autoBridge?'跨水段自动建桥 · ':''}${preview.road.terrainAdjusted?'已自动绕坡 · ':''}预计 ${fmt(preview.road.constructionCost+(preview.clearance?.cost||0))} 元 · ${preview.connections} 处连接${preview.clearance&&(preview.clearance.buildings||preview.clearance.facilities)?` · 自动拆除 ${preview.clearance.buildings} 栋建筑 / ${preview.clearance.facilities} 处设施，安置 ${preview.clearance.households} 户`:''}`:` · ${preview.reason}`):draft.length<2?' · 请点击终点':' · 正在检查地形与连接'}${editingRoad?' · 拖动控制点调整':''}`:'靠近道路自动吸附，逐点绘制，Enter 完成，Esc 取消。按住空格拖动地图。';
     el('city-draft-info').classList.toggle('error',!!roadError);
     el('city-stop-order').textContent=lineStops.length?lineStops.map((id,i)=>typeof id==='string'?state.stops.find(s=>s.id===id)?.name||id:`第 ${i+1} 站`).join(' → '):'尚未选择站点';
     el('city-create-line').disabled=working||lineStops.length<2;
@@ -480,7 +480,7 @@
     if(layer==='population')html='<span>家庭入住人数 · 浅色少 → 深色多</span>';
     if(layer==='jobs')html='<span>实际设立岗位 · 浅色少 → 深色多</span>';
     if(layer==='pollution')html='<span>环境压力指数 0–1 · 非物理浓度</span>';
-    if(layer==='districts')html='<span>功能城区 · 连通空间聚类 · 标签含三个月惯性</span>';
+    if(layer==='districts')html='<span>功能城区 · 按实际建筑用途、人口与就业识别</span>';
     if(layer==='flows')html='<span>远景汇总通勤 · 近景抽样轨迹 · 虚线为当月迁移（外部采用抽象门户）</span>';
     const legends={slope:'地块平均坡度 · %',cost:'地形工程成本倍数 · 1–3',landscape:'景观品质指数 · 0–1',risk:'低海拔邻水指数 · 非洪水概率',height:'建筑高度 · m',change:'土地月涨跌幅 · %',development:'浅色未开发 · 金色施工 · 绿色使用 · 灰色空置',comparison:'当前方案减对照 · 土地元/m² · 蓝色降低 / 金色升高'};
     if(legends[layer])html='<span>'+legends[layer]+'</span>';
@@ -524,6 +524,10 @@
       const road=state.roads.find(r=>r.id===selected);
       const facility=state.facilities.find(f=>f.id===selected);
       const district=state.districts.find(d=>d.id===selected);
+      const namedObject=p?.building||road||facility||stop||district;
+      const nameArea=(state.namingRegions||[]).find(a=>a.id===namedObject?.nameRegion);
+      const nameDistrict=(state.namingDistricts||[]).find(a=>a.id===namedObject?.nameDistrict);
+      const address=[state.name,nameDistrict?.name,nameArea?.name].filter(Boolean).join(' → ');
       const junction=state.network.junctions.find(j=>j.id===selected);
       if(junction){
         const roads=[...new Set(junction.approaches.map(a=>a.road))].map(id=>state.roads.find(r=>r.id===id)?.name||id);
@@ -536,7 +540,7 @@
         updateTrafficDetails();
       } else if(p) {
         const b=p.building;
-        box.innerHTML=`<h2>${escape(b?.name||(b?b.landmark==='cbd_skyscraper'?'CBD 摩天楼':useNames[b.use]:p.openSpace?'公共配套用地':'待开发地块'))}${close}</h2>
+        box.innerHTML=`<h2>${escape(b?.name||(b?b.landmark==='cbd_skyscraper'?'CBD 摩天楼':useNames[b.use]:p.openSpace?'公共配套用地':'待开发地块'))}${close}</h2><p>${escape(address)}</p>
         ${!b&&!p.openSpace?'<h3>最近日度评估 · 未开发原因</h3>':''}<p>${escape(!b?(p.developmentReason||p.reason||'等待下次日结算评估开发条件'):(p.reason||'等待城市发展'))}</p>${!b&&!p.openSpace?'<p>每日评估新项目，按计划日期逐栋开工；中等坡地优先建设小体量低层建筑，超过 45% 的陡坡不开发。</p>':''}${details([
           ['地块面积',`${fmt(p.area)} m²`],['地形高程',`${fmt(p.terrain?.elevation,1)} m`],['平均坡度',`${fmt((p.terrain?.slope||0)*100,1)}%`],['基础工程成本',`×${fmt(p.terrain?.costFactor,2)}`],['距水体',`${fmt(p.terrain?.waterDistance)} m`],['景观品质指数',fmt(p.terrain?.scenic,2)],['低地邻水指数',fmt(p.terrain?.lowland,2)],['可达空缺岗位',fmt(p.vacantJobs)],['土地单价',`${fmt(p.landValue)} 元/m²`],
           ['租金',`${fmt(p.rent,1)} 元/m²/月`],['网络接入',p.connected?'已接入':'失去接入'],
@@ -582,11 +586,11 @@
         el('line-reorder').onclick=()=>{el('city-mode').value=line.mode;showPanel('transit');setTool('line');editingLine=line.id;lineStops=[];el('city-line-name').value=line.name;el('city-headway').value=line.headway;el('city-capacity').value=line.capacity;el('city-hours').value=line.hours;el('city-mixed').checked=line.mixed;if(el('transit-oneway'))el('transit-oneway').checked=!!line.oneway;scheduleBusPreview();updateHint();status('重新点击站点，再按开通线路保存新顺序');};
         el('line-toggle').onclick=()=>command({type:'line_update',id:line.id,enabled:!line.enabled});
       } else if(stop) {
-        box.innerHTML=`<h2>${escape(stop.name)}${close}</h2>${details([['交通方式',modeNames[stop.mode]],['设施角色',stop.role==='freight'?'铁路货场':'客运站'],['对外联系',stop.external?'区域边界门户':'城市内部'],['步行接入',stop.connected?'可步行到达':'缺少步行接入'],['上车人次',fmt(stop.boardings)],['下车人次',fmt(stop.alightings)]])}<p>运营服务和出入口连接共同决定此站的可达性。</p><button class="city-btn" id="stop-toggle">${stop.enabled===false?'开放站点':'关闭站点'}</button><button class="city-btn danger" id="city-delete-selected">删除站点</button>`;
+        box.innerHTML=`<h2>${escape(stop.name)}${close}</h2><p>${escape(address)}</p>${details([['交通方式',modeNames[stop.mode]],['设施角色',stop.role==='freight'?'铁路货场':'客运站'],['对外联系',stop.external?'区域边界门户':'城市内部'],['步行接入',stop.connected?'可步行到达':'缺少步行接入'],['上车人次',fmt(stop.boardings)],['下车人次',fmt(stop.alightings)]])}<p>运营服务和出入口连接共同决定此站的可达性。</p><button class="city-btn" id="stop-toggle">${stop.enabled===false?'开放站点':'关闭站点'}</button><button class="city-btn danger" id="city-delete-selected">删除站点</button>`;
         el('stop-toggle').onclick=()=>command({type:'stop_update',id:stop.id,enabled:stop.enabled===false});
       } else if(road) {
         const edges=state.network.edges.filter(e=>e.road===road.id),cfg=state.meta.roadTypes[road.kind];
-        box.innerHTML=`<h2>${escape(road.name)}${close}</h2><form id="road-name-form" class="city-fields"><label>道路名称<input class="city-field" id="road-name" maxlength="60" required value="${escape(road.name)}"></label><button class="city-btn" type="submit">保存道路名称</button></form>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 元`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
+        box.innerHTML=`<h2>${escape(road.name)}${close}</h2><p>${escape(address)}</p><form id="road-name-form" class="city-fields"><label>道路名称<input class="city-field" id="road-name" maxlength="60" required value="${escape(road.name)}"></label><button class="city-btn" type="submit">保存道路名称</button></form>${details([['长度',`${fmt(road.length)} m`],['形状',road.shape==='curve'?'曲线':'折线'],['来源',road.generated?'城市自动生成':'手动建设'],['累计爬升',`${fmt(road.profile?.ascent,1)} m`],['工程成本',`${fmt(road.constructionCost)} 元`],['层级',road.level<0?'地下':road.level>0?'高架 / 桥梁':'地面'],['方向',road.oneway?'单向':'双向'],['限速',`${state.meta.roadTypes[road.kind].speed} km/h`],['高峰车流',`${fmt(Math.max(0,...edges.map(e=>e.traffic)))} 辆/h`]])}
         ${roadTrafficDetails(edges,cfg)}
         ${roadKinds.includes(road.kind)?`${details([['道路等级',cfg.name],['道路宽度',cfg.width+' m'],['基准容量',cfg.capacity?fmt(cfg.capacity)+' 辆/h':'仅步行'],['沿街开发',['street','avenue','lane'].includes(road.kind)?'允许':'不直接开发']])}<div class="city-fields"><label>道路等级<select class="city-field" id="road-kind">${roadKinds.map(k=>`<option value="${k}">${state.meta.roadTypes[k].name}</option>`).join('')}</select></label><label><span><input type="checkbox" id="road-oneway"> 单向</span></label></div><button class="city-btn" id="road-update">更新道路</button><p>升级会自动拆除占路建筑并尝试安置住户与企业；没有合适住房的家庭迁出并登记等待迁回。改为快速路或高速公路会取消原有临街直接接入。高架交叉不会自动形成路口，需绘制连接路。</p>`:''}
         <button class="city-btn" id="road-edit-shape">调整道路控制点</button><p>拆除可能使建筑失去接入，或中断运营线路。</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
@@ -601,8 +605,8 @@
         else rows.push(['服务容量',fmt(facility.capacity)],['典型日使用人数',fmt(facility.visits)]);
         if(facility.automaticCategory){rows.push(['选址依据',facility.generationReason],['月维护费',fmt(facility.maintenance)+' 元']);if(facility.capacity)rows.push(['服务容量',fmt(facility.capacity)],['典型日使用人数',fmt(facility.visits)]);if(facility.rooms)rows.push(['客房数',fmt(facility.rooms)]);if(facility.chargingSpaces)rows.push(['充电车位',fmt(facility.chargingSpaces)]);}
         const note=facility.automaticCategory?'自动选址并预留完整场地，数量随人口发展控制。':facility.kind==='train_station'?'已建立铁路客运站点，可在交通面板中加入运营线路。':facility.parkingSpaces?'随城市发展随机生成的停车设施。':transport?'位置与占地已保留，接入周边道路后可继续规划交通。':'公共服务改善可达居民的生活品质，计入城市维护成本。';
-        box.innerHTML=`<h2>${escape(facility.name||facilityNames[facility.kind])}${close}</h2>${details(rows)}<p>${note}</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
-      } else if(district){box.innerHTML=`<h2>${escape(district.name||district.kind)}${close}</h2><p>连通建筑的用途与活动聚类；标签具有历史惯性。</p>${details([['区域类型',district.kind],['夜间人口',fmt(district.population)],['日间人口',fmt(district.dayPopulation)],['岗位',fmt(district.jobs)],['建筑',fmt(district.buildings)],['地价 P10 / 中位 / P90',`${fmt(district.landP10)} / ${fmt(district.landValue)} / ${fmt(district.landP90)}`],['外出 / 流入劳动者',`${fmt(district.outgoing)} / ${fmt(district.incoming)}`],['平均坡度',`${fmt(district.slope*100,1)}%`],['容积率',fmt(district.floorRatio,2)],['发展阶段',district.stage]])}<p>${escape(district.reason)}</p><p>出行主方式：${Object.entries(district.modeShare||{}).map(([k,v])=>modeNames[k]+' '+fmt(v,1)+'%').join('；')}</p>`;} else selected=null;
+        box.innerHTML=`<h2>${escape(facility.name||facilityNames[facility.kind])}${close}</h2><p>${escape(address)}</p>${details(rows)}<p>${note}</p><button class="city-btn danger" id="city-delete-selected">拆除设施</button>`;
+      } else if(district){box.innerHTML=`<h2>${escape(district.name||district.kind)}${close}</h2><p>连通建筑的用途与活动聚类；分类随实际构成更新，名称与地理归属保持稳定。</p>${details([['区域类型',district.kind],['夜间人口',fmt(district.population)],['日间人口',fmt(district.dayPopulation)],['岗位',fmt(district.jobs)],['建筑',fmt(district.buildings)],['地价 P10 / 中位 / P90',`${fmt(district.landP10)} / ${fmt(district.landValue)} / ${fmt(district.landP90)}`],['外出 / 流入劳动者',`${fmt(district.outgoing)} / ${fmt(district.incoming)}`],['平均坡度',`${fmt(district.slope*100,1)}%`],['容积率',fmt(district.floorRatio,2)],['发展阶段',district.stage]])}<p>${escape(district.reason)}</p><p>出行主方式：${Object.entries(district.modeShare||{}).map(([k,v])=>modeNames[k]+' '+fmt(v,1)+'%').join('；')}</p>`;} else selected=null;
       if(selected){
         if(el('city-close-inspector'))el('city-close-inspector').onclick=()=>{selected=null;document.body.classList.remove('show-inspector');renderInspector();workspace.requestDraw();};
         if(el('city-delete-selected'))el('city-delete-selected').onclick=()=>command({type:'delete',id:selected});
@@ -1069,7 +1073,11 @@
     if(layer==='districts'||layer==='use')for(const d of state.districts){
       if(layer==='use'){if(rich&&!window.CityScene.settings.labels||d.buildings<5||scale<(mapView ? .035 : .17)||!visible(d.center))continue;label(d.name||d.kind,d.center,mapView?17:11,mapView?'#646968':'#485d50',mapView?75:40,'center',mapView?{kind:'district',weight:600,id:d.id}:{});continue;}
       for(const polygon of d.polygons||[]){path(polygon,true);ctx.fillStyle='#f7faf040';ctx.fill();ctx.strokeStyle='#658569b0';ctx.lineWidth=1.5/scale;ctx.stroke();}
-      label(d.name||d.kind,d.center,12,'#325542',40,'center');
+      if(layer==='districts')label(d.kind,d.center,12,'#325542',40,'center');
+    }
+    if(layer==='use'||layer==='districts'){
+      for(const d of state.namingDistricts||[])label(d.name,d.center,14,'#325542',55,'center');
+      if(scale>.12)for(const a of state.namingRegions||[])label(a.name,a.center,12,'#536b58',42,'center');
     }
     // Place labels after the physical map, with consistent priority and a small
     // screen-space gutter. Object selection still exposes every hidden name.

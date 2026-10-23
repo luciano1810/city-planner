@@ -47,3 +47,9 @@ class JunctionLayoutTests(unittest.TestCase):
     def test_almost_opposing_arms_do_not_push_stop_line_far_upstream(self):
         arms = [dict(width=14, tangent=[-1,0]), dict(width=14, tangent=[.997, .077]), dict(width=14, tangent=[0,1])]
         self.assertLess(clearance(arms[0], arms), 10)
+
+    def test_near_parallel_crossing_keeps_stop_lines_outside_shared_surface(self):
+        angle = math.radians(2)
+        arms = [dict(width=14, tangent=[1, 0]),
+                dict(width=14, tangent=[math.cos(angle), math.sin(angle)])]
+        self.assertGreater(clearance(arms[0], arms), 390)

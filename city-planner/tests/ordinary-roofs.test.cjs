@@ -60,7 +60,7 @@ test('equipment lid elevation stays in world Y when a roof rotates and its atlas
  }
  const document={createElement(){allocations++;const canvas={width:0,height:0};canvas.getContext=()=>context(canvas);return canvas;}};
  class Image {constructor(){this.width=this.height=1024;this.atlas=true;}set src(_value){this.onload();}}
- const window={CityGeometry:G};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../renderer/ordinary-roofs.js'),'utf8'),{window,document,Image});
+ const window={CityGeometry:G,CityBuildingShapes:require('../renderer/building-shapes.js')};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../renderer/ordinary-roofs.js'),'utf8'),{window,document,Image});
  const api=window.CityOrdinaryRoofs,scene={time:9*3600,lightingAt(){return {azimuth:45,elevation:45,strength:.28};},shadowOffset:h=>[-h,-h],material:()=> '#ddd'};
  for(const angle of [0,.7]){
   const outline=[[0,0],[44,0],[44,32],[0,32],[0,0]].map(([x,y])=>[x*Math.cos(angle)-y*Math.sin(angle),x*Math.sin(angle)+y*Math.cos(angle)]),p=parcel('commercial',4,'projected-'+angle,outline);

@@ -245,6 +245,14 @@ class AutomaticRenewalTests(unittest.TestCase):
         self.assertEqual(project['spent'],0)
         restored=City.restore(c.snapshot());self.assertEqual(restored.s['renewals'],c.s['renewals'])
 
+    def test_disabling_renewal_does_not_demolish_vacant_buildings(self):
+        c=self.c;p=self.plots[0]
+        p['building'].update(age=180,status='vacant',vacantMonths=48,occupied=0)
+        before=copy.deepcopy(p['building'])
+        c.s['settings']['autoRenew']=False
+        c.redevelop()
+        self.assertEqual(p['building'],before)
+
     def test_automatic_project_stays_within_cash_limit(self):
         c=self.c;p=self.plots[0];p['building'].update(age=360,condition=40,occupied=20);p['rent']=26
         c.s['treasury']=100;renewal.automatic(c);self.assertFalse(c.s['renewals'])
@@ -261,7 +269,12 @@ class AutomaticRenewalTests(unittest.TestCase):
         c.s['pendingHousing']=10000
         # Limited additional retail demand makes tall commercial replacements
         # less useful than a block plan dominated by needed housing.
-        c.s['policy']['commercialBaseDemand']=300
+        c.s['policy']['commercialBaseDemand']=100
+        # Existing capacity is 240; the replacement retains 62 commercial units.
+        # Conversion requires surplus in the original use and scarce feasible land.
+        for parcel in c.s['parcels']:
+            if not parcel.get('building'):
+                parcel['use']='protected'
         renewal.automatic(c)
         self.assertEqual(len(c.s['renewals']),1)
         project=c.s['renewals'][0]

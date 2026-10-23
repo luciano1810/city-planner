@@ -311,7 +311,7 @@
         const shape=new Path2D();let count=0;
         for(const volume of [...(m.podium?[m.podium]:[]),...m.volumes]){
           const vertices=volume.points,v=shadowOffset(volume.height,light),shifted=vertices.map(([x,y])=>[x+v[0],y+v[1]]);
-          if(volume.rect){
+          if(volume.rect&&!volume.outline){
             // A convex prism's exact ground silhouette is the hull of its base
             // and translated roof. One small contour replaces overlapping caps
             // and four side polygons; setbacks remain separate real volumes.
@@ -348,7 +348,7 @@
     }return faces;
   }
   function facadeWindows(volume,floors,totalHeight=volume.height,appearance=null){
-    const result=[],top=roofLift(volume.height),bottom=roofLift(volume.base||0),rows=Math.max(1,Math.min(12,Math.round(floors*(volume.height-(volume.base||0))/totalHeight)));
+    const result=[],top=roofLift(volume.height),bottom=roofLift(volume.base||0),rows=Math.max(1,Math.min(64,Math.round(floors*(volume.height-(volume.base||0))/totalHeight)));
     if(top-bottom<1)return result;
     const residential=['house','apartment'].includes(volume.type),office=['office','tower'].includes(volume.type),pitch=appearance?.pitch||(volume.type==='hall'?5.5:residential?3.2:3.5);
     for(const face of facadeFaces(volume)){
@@ -357,6 +357,7 @@
       for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
         const center=margin+(col+.5)*bay,ta=(center-width/2)/length,tb=(center+width/2)/length;
         const lo=bottom+(row+.18)*(top-bottom)/rows,hi=bottom+(row+.79)*(top-bottom)/rows;
+        if(root.CityBuildingAppearance?.highRiseWindowVisible&&!root.CityBuildingAppearance.highRiseWindowVisible({floors,height:totalHeight,use:office?'office':'residential'},volume,lo/.26,hi/.26))continue;
         result.push([[a[0]+dx*ta,a[1]+dy*ta-lo],[a[0]+dx*tb,a[1]+dy*tb-lo],[a[0]+dx*tb,a[1]+dy*tb-hi],[a[0]+dx*ta,a[1]+dy*ta-hi]]);
       }
     }return result;
@@ -366,7 +367,7 @@
     const palette=b.use==='residential'?['#c9b795','#b3b19c','#b5a28a','#a2b0a7']:b.use==='office'?['#b7c1c0','#c0c6bf','#aabbbd','#c5c8bd']:['#bcb59f','#b5beb5','#c3b799','#abb9b5'];
     const appearance=b.landmark?null:root.CityBuildingAppearance?.profile(p);
     const tint=appearance?.tint||palette[(b.roof||0)%4],light=sun(),angle=light.azimuth*Math.PI/180;
-    const texturedFacade=Boolean(appearance&&root.CityBuildingAppearance?.ready);
+    const texturedFacade=Boolean(appearance&&(root.CityBuildingAppearance.facadeAvailable?.(p)??root.CityBuildingAppearance.ready));
     const foundation=points.map(([x,y])=>[x,y-baseLift]);
     path(ctx,foundation);ctx.strokeStyle='#263c4a20';ctx.lineWidth=.9;ctx.stroke();
     path(ctx,foundation);ctx.strokeStyle='#23374450';ctx.lineWidth=.3;ctx.stroke();
@@ -1271,7 +1272,7 @@
       const rng=random(p.id+':windows'),m=root.CityGeometry.buildingMassing(p);
       for(const volume of m.volumes){
         if(volume.type==='terrace')continue;
-        const litWindows=!b.landmark&&root.CityBuildingAppearance?.facadeReady?root.CityBuildingAppearance.windowPanes(p,volume,facadeFaces(volume)):facadeWindows(volume,b.floors||1,b.height||volume.height);
+        const litWindows=!b.landmark&&(root.CityBuildingAppearance?.facadeAvailable?.(p)??root.CityBuildingAppearance?.facadeReady)?root.CityBuildingAppearance.windowPanes(p,volume,facadeFaces(volume)):facadeWindows(volume,b.floors||1,b.height||volume.height);
         for(const window of litWindows){
           const occupied=rng();if(occupied>.58)continue;
           ctx.fillStyle=`rgba(255,${Math.round(186+occupied*62)},139,${night*(.46+occupied*.6)})`;path(ctx,window);ctx.fill();

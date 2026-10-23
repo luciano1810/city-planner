@@ -27,7 +27,7 @@ def anchor(category, obj, parcels):
     return None
 
 
-def build(terrain):
+def build(terrain, reach=REACH_METERS):
     # Bound the work for large maps. Edges also sample the original heightmap,
     # so a river narrower than this analysis grid still blocks connectivity.
     cols = max(1, min(96, math.ceil(terrain.width / 100)))
@@ -73,7 +73,7 @@ def build(terrain):
                        math.dist(points[i], (terrain.width/2, terrain.height/2)), i))
         else:
             seed = max(range(len(points)), key=lambda i: distances[i] if land[i] else -1)
-            if not land[seed] or distances[seed] <= REACH_METERS:
+            if not land[seed] or distances[seed] <= reach:
                 break
         label = len(regions)
         regions.append(dict(id=f'place-region-{seed}', center=list(points[seed]),
@@ -114,3 +114,27 @@ def region_at(city, point):
     y = min(plan['rows'] - 1, max(0, int(point[1] / plan['height'] * plan['rows'])))
     label = plan['nearest'][y * plan['columns'] + x]
     return city.s['namingRegions'][label] if label >= 0 else None
+
+
+def ensure_hierarchy(city):
+    """Stable parent districts; functional clusters never change these identities."""
+    if not hasattr(city.terrain, 'sample'):
+        return
+    if 'namingGeography' not in city.s:
+        city.s['namingGeography'], city.s['namingRegions'] = build(city.terrain)
+    if 'namingDistricts' in city.s:
+        return
+    coarse, districts = build(city.terrain, reach=4800)
+    for district in districts:
+        district['id'] = district['id'].replace('place-region-', 'place-district-')
+        district['regions'] = []
+    for region in city.s['namingRegions']:
+        x, y = region['center']
+        col = min(coarse['columns']-1, max(0, int(x/coarse['width']*coarse['columns'])))
+        row = min(coarse['rows']-1, max(0, int(y/coarse['height']*coarse['rows'])))
+        label = coarse['nearest'][row*coarse['columns']+col]
+        if label >= 0:
+            parent = districts[label]
+            region['district'] = parent['id']
+            parent['regions'].append(region['id'])
+    city.s['namingDistricts'] = [d for d in districts if d['regions']]

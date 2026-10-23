@@ -1,4 +1,4 @@
-// Isolated visual review: existing atlases, six building families, four styles.
+// Isolated visual review: two facade atlases, six building families, four styles.
 const {chromium}=require('playwright'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawn}=require('node:child_process');
 const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'building-appearance-'));
@@ -30,13 +30,20 @@ const output=path.join(root,'output/playwright/building-appearance');fs.mkdirSyn
    window.paintAppearanceSheet=()=>{
     CityScene.commitMaterials();const g=canvas.getContext('2d');g.setTransform(1,0,0,1,0,0);g.fillStyle='#e9e9df';g.fillRect(0,0,1440,1980);
     g.fillStyle='#2c4447';g.font='600 29px sans-serif';g.fillText('建成建筑 · 体量与立面变体',25,43);
-    g.font='15px sans-serif';g.fillStyle='#60736d';g.fillText('同一地块尺寸 · 固定种子 · 复用现有屋面与立面材质',25,70);
+    g.font='15px sans-serif';g.fillStyle='#60736d';g.fillText('同一地块尺寸 · 固定种子 · 32 类立面材质 · 46 套外观组合',25,70);
     for(const {row,col,label,p,style} of appearanceCases){
      const x=col*355+18,y=row*310+110;
      g.setTransform(1,0,0,1,0,0);g.fillStyle='#f5f4ec';g.fillRect(x,y,341,294);
      g.font='600 17px sans-serif';g.fillStyle='#405c59';g.fillText(label,x+13,y+25);
      g.font='12px sans-serif';g.fillStyle='#7b8981';g.fillText(style.name,x+13,y+45);
      g.setTransform(6.5,0,0,6.5,x+64,y+124);CityScene.building(g,p,6.5);
+     // Exercise the real atmosphere/window pass as well as the building cache.
+     // Translate its fixture into positive world space so the sky tint covers
+     // the roof projection above the footprint's northern edge.
+     const shifted=JSON.parse(JSON.stringify(p)),shift=ps=>ps.map(([a,b])=>[a+40,b+40]);
+     shifted.points=shift(p.points);shifted.building.footprint=shift(p.building.footprint);shifted.center=p.center.map(v=>v+40);
+     g.save();g.translate(-40,-40);g.beginPath();g.rect(32,24,48,48);g.clip();
+     CityScene.atmosphere(g,{parcels:[shifted],roads:[],facilities:[],network:{junctions:[]},meta:{width:120,height:120,roadTypes:{}}},{scale:6.5,visible:()=>true});g.restore();
     }
    };paintAppearanceSheet();
   });
@@ -44,12 +51,16 @@ const output=path.join(root,'output/playwright/building-appearance');fs.mkdirSyn
   await page.locator('canvas').last().screenshot({path:path.join(output,'architecture-day.png')});
   const report=await page.evaluate(()=>{
    const previous=CityScene.stats.buildingCache;paintAppearanceSheet();const current=CityScene.stats.buildingCache;
-   return {newMisses:current.misses-previous.misses,cache:current,textureCount:CityBuildingAppearance.textureCount,materials:CityScene.stats.materialPreparation,
+   return {newMisses:current.misses-previous.misses,cache:current,textureCount:CityBuildingAppearance.textureCount,materials:CityScene.stats.materialPreparation,styleCounts:CityBuildingAppearance.styleCounts,
+    newAtlasCases:appearanceCases.filter(({style})=>style.cell>=16).length,
     styles:appearanceCases.map(({label,p,style})=>({use:label,style:style.name,volumes:CityGeometry.buildingMassing(p).volumes.length}))};
   });
   assert.equal(report.newMisses,0);assert(report.cache.bytes<=report.cache.budget);assert.equal(report.materials.errors,0);assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);assert(report.textureCount<=100);
+  assert(report.newAtlasCases>0,'the new material atlas must appear in real building renders');
   await page.evaluate(()=>{CityScene.setTime(17*3600);paintAppearanceSheet();});
   await page.locator('canvas').last().screenshot({path:path.join(output,'architecture-evening.png')});
+  await page.evaluate(()=>{CityScene.setTime(21*3600);paintAppearanceSheet();});
+  await page.locator('canvas').last().screenshot({path:path.join(output,'architecture-night.png')});
   await page.evaluate(()=>{
    CityScene.setTime(9*3600);const canvas=appearanceCanvas;canvas.height=1100;canvas.style.height='1100px';const g=canvas.getContext('2d');
    g.setTransform(1,0,0,1,0,0);g.fillStyle='#e9e9df';g.fillRect(0,0,1440,1100);

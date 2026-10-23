@@ -420,6 +420,61 @@ def validate(city):
         if p.get('renewalProject') and p['renewalProject'] not in ids:raise ValueError('地块缺少更新项目')
 
 
+def conversion_constraint(city, sources, use, units, cost, housing_market, business_market):
+    """Return a reason to retain current uses or develop suitable empty land first."""
+    changing = [p for p in sources if p.get('building') and p['building']['use'] != use]
+    if not changing:
+        return None
+    minimum = city.s['policy']['minimumProjectUnits']
+    def gap(p, target):
+        return housing_market.gap(p) if target == 'residential' else business_market.gap(p, target)
+    for p in changing:
+        b = p['building']
+        used = sum(h['home'] == p['id'] for h in city.s['households']) if b['use'] == 'residential' else b.get('employees', b.get('occupied', 0))
+        if used / max(1, b['capacity']) >= .5 or gap(p, b['use']) >= minimum:
+            return '原用途仍有需求或使用率较高，保留现有用途'
+    if max((gap(p, use) for p in sources), default=0) < minimum:
+        return '目标用途没有可达需求缺口'
+    # Empty land must serve the same catchment, have legal access, fit a
+    # building, and provide comparable capacity at a lower unit cost.
+    paths = [city.distances(p['id'], 'walk')[0] for p in sources]
+    available = 0
+    space = city.s['policy']['householdSpace'] if use == 'residential' else USES[use]['space']
+    for p in sorted(city.s['parcels'], key=lambda p: p['id']):
+        if p.get('building') or p.get('openSpace') or p.get('blockCommon') or not p.get('connected') or locked(city, p):
+            continue
+        if p.get('use') == 'protected' or p.get('use') in USES and p['use'] != use:
+            continue
+        terrain = p['terrain']
+        if terrain.get('maxSlope', terrain.get('slope', 0)) > .45:
+            continue
+        if min((d.get(p['id'], math.inf) for d in paths), default=math.inf) > city.s['policy']['economicCatchmentMinutes']:
+            continue
+        if use in ('industrial', 'warehouse') and (p.get('freightTime') is None or p['freightTime'] >= 120):
+            continue
+        if use == 'residential':
+            from .auto_facilities import sensitive_site_safe
+            if not sensitive_site_safe(city, Polygon(p['points'])):
+                continue
+        demand = gap(p, use)
+        if demand < minimum:
+            continue
+        footprint = building_footprint(p, use)
+        if footprint is None:
+            continue
+        from .development import desired_floors
+        floors = min(terrain['maxFloors'], desired_floors(city, p, use))
+        if terrain.get('slope', 0) > .2:
+            floors = min(floors, 3)
+        capacity = min(demand, int(footprint.area * floors / space))
+        unit_cost = space * USES[use]['cost'] * terrain['costFactor']
+        if capacity >= minimum and unit_cost < cost / max(1, units):
+            available += capacity
+        if available >= units:
+            return '同一服务范围内有更低成本的可达空地，优先新增开发'
+    return None
+
+
 def automatic(city):
     """Bounded periodic investment decisions; never force households out.
 
@@ -434,6 +489,7 @@ def automatic(city):
     budget=max(0,city.s['treasury'])*min(1,policy['renewalBudgetShare'])
     from .housing import HousingMarket
     housing_market=HousingMarket(city)
+    current_market=BusinessMarket(city)
     def eligible(p):
         b=p.get('building')
         if not b or b['status'] in ('planned','construction') or b.get('extensionReady') or not p.get('connected') or p['use']=='protected' or p.get('openSpace') or locked(city,p):return False
@@ -475,12 +531,18 @@ def automatic(city):
             retained_households=sum(h['home'] in plan['sourceIds'] for h in city.s['households'])
             replacement_market=BusinessMarket(city,exclude_parcels=plan['sourceIds'])
             if any(cap>max(0,housing_market.demand_for(sources)+retained_households if u=='residential' else replacement_market.demand_for(sources,u))*1.25 for u,cap in capacities.items()):return
+            for use, capacity in capacities.items():
+                if capacity <= replaced[use]:
+                    continue
+                constraint = conversion_constraint(city, sources, use, capacity, plan['cost']*capacity/max(1,sum(capacities.values())), housing_market, current_market)
+                if constraint:
+                    return
             # Same-use replacements must improve condition or add useful space.
             if len(capacities)==1 and all(p.get('building',{}).get('use') in capacities for p in sources):
                 if sum(capacities.values())<=sum(replaced.values())*1.15 and all(p['building'].get('condition',100)>60 for p in sources if p.get('building')):return
             increment=revenue-retained;score=increment*policy['renewalReturnYears']-plan['cost']
             if increment<=0 or score<plan['cost']*.15:return
-            evidence=f'持续空置或楼龄达到阈值，目标用途需求可消化规划容量；预计增量租金回收期 {plan["cost"]/increment:.1f} 年'
+            evidence=f'持续空置或楼龄达到阈值，原用途存在过剩，目标用途需求可消化规划容量且缺少更优可达空地；预计增量租金回收期 {plan["cost"]/increment:.1f} 年'
         choices.append((score,plan,args,reason+'；'+evidence))
     for p in candidates:
         b=p['building'];condition=b.get('condition',100);occupancy=b.get('occupied',0)/max(1,b['capacity'])

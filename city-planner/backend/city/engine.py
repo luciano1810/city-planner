@@ -196,7 +196,8 @@ class City:
             s['policy']['version']=POLICY['version']
             s['migrationNote']='已迁移到模型 12；保留既有建筑、街区与校准值，施工改为逐日推进，财政与市场改为每日结算'
             s['policy']['version']=POLICY['version']
-        required = set(city.s) - {'calendar','dailyHistory','developmentDemand','railInfrastructure','railRules','railRuntime'}
+        required = set(city.s) - {'calendar','dailyHistory','developmentDemand','railInfrastructure','railRules','railRuntime',
+                                  'namingGeography','namingRegions','namingDistricts'}
         if not required <= set(s) or s['version'] != MODEL_VERSION:
             raise ValueError('存档缺少必要字段')
         if any(not isinstance(s[k], list) for k in ['roads','stops','lines','parcels','households','facilities','events','history']):
@@ -793,9 +794,15 @@ class City:
                     raise ValueError('道路不存在')
                 if road.get('platform'):raise ValueError('站台轨道属于车站，请通过车站编辑调整')
                 self.s['roads'].remove(road)
+                first_new = len(self.s['roads'])
                 clearance=self.add_road(dict(cmd,kind=road['kind'],level=road['level'],oneway=road['oneway'],name=road['name'],railManaged=road.get('railManaged',False)),demolish=True)
-                new=self.s['roads'][-1]
+                new=self.s['roads'][first_new]
+                temporary_id = new['id']
                 new['id']=road['id']
+                for piece in self.s['roads'][first_new:]:
+                    for contact in piece.get('connections', []):
+                        if contact['road'] == temporary_id:
+                            contact['road'] = road['id']
                 for key in ('generated','parent','growthKey','bypassFor'):
                     if key in road: new[key]=road[key]
                 self.rebuild(regenerate=True)
@@ -1071,9 +1078,12 @@ class City:
         shape=LineString(pts)
         if not shape.is_simple or shape.length<20:
             raise ValueError('路线过短或自相交')
+        from .auto_bridges import segments
+        parts = segments(self.terrain, shape) if level == 0 and kind in ROAD_KINDS else [(level, shape)]
         adjusted = False
         try:
-            self.terrain.valid_link(shape,kind,level)
+            for part_level, part_shape in parts:
+                self.terrain.valid_link(part_shape,kind,part_level)
         except RoadConflict as error:
             if error.code!='grade' or not cmd.get('autoRoute') or level!=0:
                 raise
@@ -1091,10 +1101,13 @@ class City:
                 raise RoadConflict('附近未找到可行的绕坡路线，请移动终点、增加中间控制点或使用隧道',error.point,code='grade')
             pts=controls=routed
             shape=LineString(pts);shape_mode='polyline';adjusted=True
+            parts = [(level, shape)]
         for road in self.s['roads']:
-            if road['level']==level and group(road)==group({'kind':kind}):
-                if shape.intersection(LineString(road['points'])).length>2:
-                    raise RoadConflict('路线与已有设施重叠',shape.intersection(LineString(road['points'])).representative_point().coords[0])
+            if group(road)==group({'kind':kind}):
+                for part_level, part in parts:
+                    overlap = part.intersection(LineString(road['points']))
+                    if road['level']==part_level and overlap.length>2:
+                        raise RoadConflict('路线与已有设施重叠',overlap.representative_point().coords[0])
         clearance=road_clearance.clear(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level) if demolish else None
         special_buildings.check_roads(self,shape.buffer(ROAD_TYPES[kind]['width']/2+2),kind,level)
         if level==0:
@@ -1106,7 +1119,7 @@ class City:
                     raise RoadConflict('道路与现有建筑冲突，请移动控制点或先拆除建筑',occupied.intersection(Polygon(parcel['building']['footprint'])).representative_point().coords[0])
                 if (parcel.get('openSpace') or parcel['use']=='protected') and occupied.intersection(Polygon(parcel['points'])).area>1:
                     raise RoadConflict('道路与公共空间或保护用地冲突',occupied.intersection(Polygon(parcel['points'])).representative_point().coords[0])
-        if len(self.s['roads'])>=2000:
+        if len(self.s['roads']) + len(parts) > 2000:
             raise ValueError('已达到本版本 2000 条道路上限')
         if kind in ('metro','train') and cmd.get('railManaged'):
             for a,b,c in zip(pts,pts[1:],pts[2:]):
@@ -1132,7 +1145,8 @@ class City:
                 raise ValueError('地面道路只能接入高架或隧道端点')
             connections.append(dict(road=target['id'],point=point,**({'junction':'branch'} if contact.get('junction')=='branch' else {})))
         profile=self.terrain.profile(shape,kind,level)
-        cost=shape.length*ROAD_TYPES[kind]['cost']*profile['costFactor']
+        cost=sum(part.length*ROAD_TYPES[kind]['cost']*self.terrain.profile(part,kind,part_level)['costFactor']
+                 for part_level,part in parts)
         self.spend(cost,'轨道工程' if kind in ('metro','train','tram') else '道路工程')
         self.s['roads'].append(dict(id=self.uid('r'),kind=kind,level=level,points=pts,
                                    controls=controls,shape=shape_mode,terrainAdjusted=adjusted,profile=profile,constructionCost=round(cost),
@@ -1140,7 +1154,43 @@ class City:
                                    connections=connections,
                                    oneway=bool(cmd.get('oneway',False)),name=text(cmd.get('name') or ROAD_TYPES[kind]['name']),
                                    length=shape.length))
-        naming.name_object(self,'roads',self.s['roads'][-1])
+        new_road = self.s['roads'][-1]
+        if not cmd.get('name') and kind in ROAD_KINDS:
+            # Prefer the drawing start when both ends extend different roads.
+            for endpoint in (pts[0], pts[-1]):
+                candidates = [r for r in self.s['roads'][:-1]
+                              if r['kind'] in ROAD_KINDS and r.get('name')
+                              and min(math.dist(endpoint, r['points'][0]),
+                                      math.dist(endpoint, r['points'][-1])) <= .05]
+                if candidates:
+                    parent = min(candidates, key=lambda r: r['id'])
+                    family = parent.setdefault('nameFamily', parent['id'])
+                    new_road.update(name=parent['name'], nameFamily=family,
+                                    nameSource=parent.get('nameSource', 'custom'),
+                                    nameVersion=parent.get('nameVersion', naming.NAME_VERSION))
+                    break
+        naming.name_object(self,'roads',new_road)
+        if any(part_level != level for part_level, _ in parts):
+            self.s['roads'].pop()
+            family = new_road.setdefault('nameFamily', new_road['id'])
+            built = []
+            for index, (part_level, part) in enumerate(parts):
+                piece = copy.deepcopy(new_road)
+                piece.update(id=new_road['id'] if index == 0 else self.uid('r'),
+                             points=[list(p) for p in part.coords], level=part_level,
+                             length=part.length, shape='polyline', autoBridge=True,
+                             constructionCost=round(part.length*ROAD_TYPES[kind]['cost']*
+                                                    self.terrain.profile(part,kind,part_level)['costFactor']),
+                             profile=self.terrain.profile(part,kind,part_level))
+                piece['controls'] = copy.deepcopy(piece['points'])
+                piece['connections'] = [c for c in connections if min(
+                    math.dist(c['point'], piece['points'][0]),
+                    math.dist(c['point'], piece['points'][-1])) <= .05]
+                if built:
+                    piece['connections'].append(dict(road=built[-1]['id'], point=piece['points'][0]))
+                built.append(piece)
+                self.s['roads'].append(piece)
+                naming.name_object(self, 'roads', piece)
         return clearance
 
     def preview_road(self,cmd):
@@ -1149,11 +1199,17 @@ class City:
             self.s=copy.deepcopy(state)
             if cmd.get('id'):
                 self.s['roads']=[r for r in self.s['roads'] if r['id']!=cmd['id']]
+            previous_ids = {r['id'] for r in self.s['roads']}
             clearance=self.add_road(cmd,demolish=True)
             from .lane_connections import connect_lane_entrances
             connect_lane_entrances(self)
-            road=self.s['roads'][-1]
-            return dict(valid=True,road=road,clearance=road_clearance.summary(clearance),connections=sum(next(road_contacts(road,r),None) is not None for r in self.s['roads'] if r['id']!=road['id']))
+            built = [r for r in self.s['roads'] if r['id'] not in previous_ids]
+            road=copy.deepcopy(built[-1])
+            if len(built) > 1:
+                road.update(points=built[0]['points'] + [p for r in built[1:] for p in r['points'][1:]],
+                            constructionCost=sum(r['constructionCost'] for r in built),
+                            length=sum(r['length'] for r in built), autoBridge=True)
+            return dict(roads=built,valid=True,road=road,clearance=road_clearance.summary(clearance),connections=sum(next(road_contacts(road,r),None) is not None for r in self.s['roads'] if r['id']!=road['id']))
         except ValueError as error:
             return dict(valid=False,reason=str(error),point=getattr(error,'point',None))
         finally:
@@ -1651,14 +1707,10 @@ class City:
             p['reason']='道路未接入' if not p['connected'] else '保护用地' if p['use']=='protected' else f"30 分钟内可达 {jobs} 个岗位；坡度 {terrain['slope']*100:.1f}%；工程成本 ×{terrain['costFactor']:.2f}；土地估值 {p['landValue']:.0f} 元/m²"
 
     def redevelop(self):
-        if self.s['settings'].get('autoRenew',True):return
-        # Legacy fallback when explicit automatic project assessment is disabled.
-        # A vacant building can be replaced without erasing residents or employees.
-        for p in self.s['parcels']:
-            b=p.get('building')
-            if b and not renewal.locked(self,p) and b['status']=='vacant' and b.get('vacantMonths',0)>=self.s['policy']['redevelopVacancyMonths'] and not b.get('occupied'):
-                p['building']=None
-                self.event('更新',f"{USES[b['use']]['name']}持续空置，进入重新开发")
+        # Conversion is assessed by renewal.automatic with demand, alternative
+        # land, budget and relocation checks. Disabling automatic renewal must
+        # not enable the former vacancy-only demolition fallback.
+        return
 
     def develop(self):
         # Date-less extensions can arrive from legacy tools or saves.

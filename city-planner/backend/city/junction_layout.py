@@ -13,7 +13,7 @@ def clearance(arm, approaches):
             continue
         bx, by = other['tangent']
         cross = abs(ax*by-ay*bx)
-        if cross > .05:
+        if cross > .001:
             distance = max(distance, (other['width']/2+arm['width']/2*(ax*bx+ay*by))/cross)
     return distance
 

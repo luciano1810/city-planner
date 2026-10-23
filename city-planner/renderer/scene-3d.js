@@ -210,7 +210,23 @@
     let volumes=layout.volumes;
     if(layout.podium)batch.polygon(layout.podium.points,0,.22,material('curb',0),material('paving',1));
     for(const v of volumes){
-      if(!v.rect){batch.polygon(v.points,v.base||0,v.height-(v.base||0),sides,roof);continue;}
+      if(!v.rect||v.outline){
+        const base=v.base||0,h=v.height;
+        batch.polygon(v.points,base,h-base,sides,roof);
+        if(v.outline&&detailLevel>0)for(let i=0;i<v.points.length-1;i++){
+          const a=v.points[i],b=v.points[i+1],dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy);
+          if(len<.8)continue;
+          const nx=dy/len,ny=-dx/len,columns=Math.max(1,Math.floor(len/3.1)),floors=Math.max(1,Math.round((h-base)/3.3));
+          const pt=(t,z)=>[a[0]+dx*t+nx*.025,-a[1]-dy*t-ny*.025,z];
+          for(let f=0;f<floors;f++)for(let col=0;col<columns;col++){
+            const t0=(col+.18)/columns,t1=(col+.82)/columns,z0=base+f*(h-base)/floors+.85,z1=Math.min(h-.45,z0+1.55);
+            if(z1<=z0)continue;
+            batch.quad(glass,[pt(t0,z0),pt(t1,z0),pt(t1,z1),pt(t0,z1)],len*(t1-t0),z1-z0,[nx,-ny,0]);
+            batch.quad(frame,[pt(t0,z0-.09),pt(t1,z0-.09),pt(t1,z0),pt(t0,z0)],len*(t1-t0),.09,[nx,-ny,0]);
+          }
+        }
+        continue;
+      }
       const [x0,y0,x1,y1]=v.rect,w=x1-x0,d=y1-y0,h=v.height,angle=v.angle,origin=v.origin;
       const pt=(x,y,z)=>{const a=local(origin,angle,x,y);return [a[0],-a[1],z];};
       const at=local(origin,angle,(x0+x1)/2,(y0+y1)/2),base=layout.podium&&v.base===layout.podium.height?0:v.base||0;

@@ -129,7 +129,7 @@ test('massing is stable through rotation and reload and does not modify saved ge
   const p={id:'occupied-court',center:points[0],building:{footprint:points,center:points[0],use:'residential',floors:6,height:19.8,capacity:80,floorArea:6000}};
   const before=JSON.stringify(p),layout=buildingMassing(p);
   assert.equal(JSON.stringify(p),before);assert.deepEqual(layout,buildingMassing(JSON.parse(before)));
-  assert(layout.podium);assert(layout.podium.height<layout.volumes[0].height);
+  assert(layout.podium||layout.volumes[0].outline);if(layout.podium)assert(layout.podium.height<layout.volumes[0].height);
   for(const volume of layout.volumes){assert(volume.points.every(pt=>containsPoint(pt,points)));assert(polygonArea(volume.points)>50);}
  }
 });

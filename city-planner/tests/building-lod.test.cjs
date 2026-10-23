@@ -24,7 +24,7 @@ function containsOrTouches(ring,point){
 function fixture(id='p-9'){
   return {id,center:[14,13],frontage:[14,-9],entrance:[14,0],
     points:[[-10,-10],[40,-10],[40,38],[-10,38],[-10,-10]],
-    building:{use:'office',status:'active',floors:4,height:13.2,
+    building:{visualShape:'standard',use:'office',status:'active',floors:4,height:13.2,
       footprint:[[0,0],[28,0],[28,26],[0,26],[0,0]]}};
 }
 

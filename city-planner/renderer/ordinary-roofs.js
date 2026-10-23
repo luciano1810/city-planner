@@ -3,6 +3,7 @@
   'use strict';
   const G=typeof module!=='undefined'&&module.exports?require('./city-geometry.js'):root.CityGeometry,cache=new WeakMap();
   const appearance=typeof module!=='undefined'&&module.exports?require('./building-appearance.js'):root.CityBuildingAppearance;
+  const shapes=typeof module!=='undefined'&&module.exports?require('./building-shapes.js'):root.CityBuildingShapes;
   const equipmentCells=new Map(),equipmentTypes={chiller:0,duct:1,access:2,skylight:3};
   const equipmentHeights={crown:4,access:2.06,chiller:1.05,duct:1.25,chimney:1.65,solar:.55,skylight:.45,garden:1.05,pergola:2.24,terrace:.85};
   // The source atlas includes a front face. Use its lid for horizontal units;
@@ -37,10 +38,11 @@
       const [x0,y0,x1,y1]=v.rect,w=x1-x0,d=y1-y0,h=v.height,angle=v.angle,c=Math.cos(angle),s=Math.sin(angle);
       const world=([x,y,z])=>[v.origin[0]+x*c-y*s,v.origin[1]+x*s+y*c,z];
       const choices=v.type==='house'?['hip','gable','gable','mono','flat']:v.type==='hall'?['sawtooth','barrel','gable','sawtooth','flat']:['flat'];
-      const shape=entry.shape=choices[seed%choices.length],rise=Math.min(v.type==='hall'?5:3.8,d*.24),mid=(y0+y1)/2;
+      const shape=entry.shape=v.outline?'flat':choices[seed%choices.length],rise=Math.min(v.type==='hall'?5:3.8,d*.24),mid=(y0+y1)/2;
       const skin=shape==='flat'?(v.type==='terrace'?'paving':seed%3===0?'gravel':'roof'):v.type==='house'?'roofTiles':'metal';
       const colors=skin==='roofTiles'?['#b27a56','#a4937b','#75878a','#af9476']:skin==='metal'?['#aebbb7','#a7b8be','#c4c6b8','#a5b5b5']:skin==='paving'?['#d9d4c5','#d2d3c7','#dcd6c7','#cfd3c9']:['#e6e3d9','#dfe3dc','#e8e3d7','#dce1dd'];
-      const roofColor=colors[(seed>>>4)%4],uvScale=5+random()*6,phase=[random()*20,random()*20],turn=(seed>>>8)%4*Math.PI/2;
+      const flatColors={residential:['#bab5a5','#b4bcb0','#b9b7ad','#9baba3'],office:['#929c9c','#bbbdb2','#c6c4b8','#9fa9a5'],commercial:['#beb8a5','#a2aaa2','#c1c2b6','#adb4ad'],industrial:['#9da7a5','#b3b6ad','#bdbaa8','#8d9d9f'],warehouse:['#a6afb0','#c1bdac','#a5b1aa','#909da0']};
+      const finish=appearance?.profile(parcel),roofColor=shape==='flat'&&v.type!=='terrace'?(flatColors[b.use]||flatColors.commercial)[finish?.roofTone??((seed>>>4)%4)]:colors[(seed>>>4)%4],uvScale=5+random()*6,phase=[random()*20,random()*20],turn=(seed>>>8)%4*Math.PI/2;
       let unitType=null;
       function tri(points,material,color,roof=false){const ps=points.map(world);meshes.push({points:ps,material,color,variant:(seed>>>12)%4,roof,unitType,uv:points.map(([x,y])=>[(x*Math.cos(turn)-y*Math.sin(turn))/uvScale+phase[0],(x*Math.sin(turn)+y*Math.cos(turn))/uvScale+phase[1]])});}
       function quad(ps,material,color,roof=false){tri([ps[0],ps[1],ps[2]],material,color,roof);tri([ps[0],ps[2],ps[3]],material,color,roof);}
@@ -64,7 +66,9 @@
         return h+.08;
       }
       // Roof facets have real height; raised edges are closed by matching fascia.
-      if(shape==='sawtooth'){
+      if(v.outline){
+        for(const t of shapes.triangulate(v.outline))tri(t.map(p=>[...p,h+.08]),skin,roofColor,true);
+      }else if(shape==='sawtooth'){
         const count=Math.max(2,Math.round(d/7)),pitch=d/count,rr=Math.min(2.5,rise);
         for(let i=0;i<count;i++){const ya=y0+i*pitch,yb=ya+pitch;
           quad([[x0,ya,h+.08],[x1,ya,h+.08],[x1,yb,h+rr],[x0,yb,h+rr]],skin,roofColor,true);
@@ -83,15 +87,22 @@
       if(shape==='gable'||shape==='hip'){const hip=shape==='hip'?Math.min(w*.22,d*.5):.15;box((x0+x1)/2,mid,h+.08+rise,w-hip*2,.18,.14,'#ccb99e','metal');}
       function fits(x,y,ww,dd){
         const r=[x-ww/2,y-dd/2,x+ww/2,y+dd/2];
+        if(v.outline&&!shapes.fits(r,v.outline,.65))return false;
         if(r[0]<x0+.8||r[1]<y0+.8||r[2]>x1-.8||r[3]>y1-.8)return false;
         if(entry.zones?.some(u=>r[0]<u.x+u.w/2+.65&&r[2]>u.x-u.w/2-.65&&r[1]<u.y+u.d/2+.65&&r[3]>u.y-u.d/2-.65))return false;
         if(units.some(u=>r[0]<u.x+u.w/2+.65&&r[2]>u.x-u.w/2-.65&&r[1]<u.y+u.d/2+.65&&r[3]>u.y-u.d/2-.65))return false;
         return !masses.some(q=>q!==v&&q.rect&&q.height>h+.1&&q.base<=h+.1&&r[0]<q.rect[2]+.5&&r[2]>q.rect[0]-.5&&r[1]<q.rect[3]+.5&&r[3]>q.rect[1]-.5);
       }
       // Crown treatments are reserved for tall office roofs, with finite setbacks.
-      if(shape==='flat'&&v.type==='tower'&&h>35&&seed%3!==0&&w>9&&d>9){
-        const x=(x0+x1)/2,y=(y0+y1)/2,ww=Math.min(5,w*.3),dd=Math.min(5,d*.3);
-        if(fits(x,y,ww,dd)){units.push({type:'crown',x,y,w:ww,d:dd,z:h+.12});box(x,y,h+.12,ww,dd,2.4,'#8aa6aa','glass');box(x,y,h+2.52,ww*.7,dd*.7,1.1,'#abbdb8');box(x,y,h+3.62,.16,.16,3.4,'#bec9c6');}
+      if(shape==='flat'&&v.type==='tower'&&h>35&&Math.abs(h-(b.height||b.floors*3.3))<.1&&seed%3!==0&&w>9&&d>9){
+        const x=(x0+x1)/2,y=(y0+y1)/2,ww=Math.min(12,w*.54),dd=Math.min(10,d*.48);
+        if(fits(x,y,ww,dd)){
+          units.push({type:'crown',x,y,w:ww,d:dd,z:h+.12});
+          const variant=(seed>>>5)%3;box(x,y,h+.12,ww,dd,2.4,variant===1?'#697d83':'#8aa6aa',variant===1?'metal':'glass');
+          if(variant===0){box(x,y,h+2.52,ww*.7,dd*.7,1.1,'#abbdb8');box(x,y,h+3.62,.16,.16,3.4,'#bec9c6');}
+          else if(variant===1){for(let level=0;level<4;level++)box(x,y,h+.4+level*.55,ww+.1,dd+.1,.12,'#c7d1c9');}
+          else for(const side of [-1,1])box(x+side*ww*.42,y,h+2.52,.2,dd,1.35,'#c6d5d0');
+        }
       }
       entry.zones=appearance?.roofZones(parcel,v,masses,shape,units)||[];
       const residentialDeck=b.use==='residential'&&(seed%3===0||v.type==='terrace');
@@ -208,7 +219,7 @@
     for(const m of meshes)if(m.roof)paint(m);
     appearance?.drawRoofZones(ctx,parcel,volume,scene,e.zones);
     ctx.save();trace(roof);ctx.clip();
-    if(e.shape==='flat'){
+    if(e.shape==='flat'&&!volume.outline){
       // Broad membrane panels and two drain sumps are sufficient to explain
       // the roof surface. Fine texture already comes from the cached material.
       const panelX=Math.max(9,w/48),panelY=Math.max(9,d/48);
@@ -229,6 +240,10 @@
       }
       ctx.fillStyle=`rgba(42,53,49,${light.strength*.68})`;ctx.fill();ctx.restore();
     }
+    if(volume.outline){
+      trace(roof);ctx.strokeStyle='#697c7380';ctx.lineWidth=.65;ctx.stroke();
+      trace(roof);ctx.strokeStyle='#e2e4d5';ctx.lineWidth=.24;ctx.stroke();
+    }
     // Contact patches and connected short cast shadows belong to the baked
     // building image, so no live geometry, canvas or blur is added per frame.
     for(const u of e.units){
@@ -239,7 +254,7 @@
     }
     ctx.restore();
     for(const m of meshes)if(!m.roof&&!(equipmentAtlas&&equipmentTypes[m.unitType]!==undefined))paint(m);
-    if(e.shape==='flat'){
+    if(e.shape==='flat'&&!volume.outline){
       // Four small solid walls replace nested perimeter strokes. Their inner
       // faces, outer faces and cap share the building's height projection.
       const bottom=rect(cx,cy,w-.12,d-.12,roofZ);

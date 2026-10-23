@@ -2,11 +2,15 @@
  * capacities are changed. Near detail is baked into the scene's building LRU. */
 (function(root){
   'use strict';
-  let atlas=null,roofAtlas=null,assetVersion=0;
+  const shapes=typeof module!=='undefined'&&module.exports?require('./building-shapes.js'):root.CityBuildingShapes;
+  let atlas=null,materialAtlas=null,roofAtlas=null,assetVersion=0;
+  const facadeCacheLimit=96;
   const facadeTiles=new Map(),roofTiles=new Map();
   if(typeof Image!=='undefined'){
     const image=new Image();image.onload=()=>{atlas=image;assetVersion++;facadeTiles.clear();root.MapWorkspace?.requestDraw();};
     image.src='assets/architecture-facades-atlas.png';
+    const materialImage=new Image();materialImage.onload=()=>{materialAtlas=materialImage;assetVersion++;facadeTiles.clear();root.MapWorkspace?.requestDraw();};
+    materialImage.src='assets/architecture-materials-v2.png';
     const roofImage=new Image();roofImage.onload=()=>{roofAtlas=roofImage;assetVersion++;roofTiles.clear();root.MapWorkspace?.requestDraw();};
     roofImage.src='assets/architecture-roof-zones.png';
   }
@@ -35,45 +39,108 @@
     industrial:[['sawtooth-works','#b2bcb6',10,'#d4d9ca','#647f80',5.5,2.7],['brick-works','#b49b87',4,'#d8c8ae','#786552',5,2.3],['panel-works','#aab8b4',11,'#d6dfd3','#648a8e',6,3]],
     warehouse:[['steel-depot','#adbcb9',10,'#d7ded1','#637f89',6,2.3],['warm-depot','#c2b9a1',6,'#dedac5','#917852',5.5,2.2],['slate-depot','#9daeb2',11,'#ccd9d5','#526e7f',6,2.6]]
   };
+  // Extra entries carry an explicit cell in the second atlas. Material style
+  // is independent of the original massing index, so adding finishes does not
+  // reshape a saved neighbourhood or change its occupied floor area.
+  const additionalStyles={
+    residential:[
+      ['heritage-red-brick','#b08b75',4,'#ded6c4','#775448',3.2,1.6,16],
+      ['sandstone-court','#c5b18d',2,'#e4d6b8','#80745d',3.5,1.75,17],
+      ['limewash-shutters','#d8d5c4',0,'#e9e4d5','#71816c',3.4,1.7,18],
+      ['slate-apartments','#929da1',9,'#c7cdca','#58636d',3.3,1.65,19],
+      ['timber-housing','#c4bdab',6,'#e3dfd0','#827b6b',3.2,1.6,20],
+      ['terracotta-balconies','#bf937c',5,'#e1d0bc','#785c4e',3.5,1.75,21],
+      ['concrete-loggias','#bebfb6',3,'#dedfd5','#72817f',3.6,1.8,22],
+      ['sage-tile-homes','#abb9a0',8,'#e0dfca','#6f806a',3.2,1.6,23]
+    ],
+    office:[
+      ['bronze-office','#9b9589',9,'#c5c3b7','#605d54',3.4,1.7,24],
+      ['copper-patina','#91aaa0',8,'#c1c8b7','#546f67',3.3,1.65,25],
+      ['travertine-office','#cec4aa',2,'#e3dcc8','#7a827d',3.6,1.8,26],
+      ['granite-office','#939d9c',9,'#c8ceca','#50626b',3.4,1.7,27],
+      ['ceramic-office','#d5d9d1',0,'#eaede1','#7e9da0',3.5,1.75,31],
+      ['terracotta-office','#bc9e88',5,'#dccab4','#775f4f',3.6,1.8,21]
+    ],
+    commercial:[
+      ['brick-high-street','#b99880',4,'#e1d5be','#87584c',3.5,1.75,16],
+      ['sandstone-market','#c9b697',2,'#e6d8bd','#797c66',4,2,17],
+      ['copper-retail','#9cb1a2',8,'#cdd5c2','#597b70',3.6,1.8,25],
+      ['terracotta-shops','#c09b82',5,'#e4cfb3','#805e4f',3.5,1.75,21],
+      ['granite-retail','#9da6a3',9,'#d5d9ce','#58717b',3.8,1.9,27]
+    ],
+    industrial:[
+      ['blue-steel-works','#8ba7b8',10,'#cbd5d6','#4e6c81',5.8,3,28],
+      ['heritage-factory','#a68b73',4,'#cbbb9e','#6d5e4c',4.6,2.3,29],
+      ['cream-metal-works','#c7c5b3',10,'#e1dfcf','#8a8975',5.6,2.8,30],
+      ['precast-factory','#b6bbb5',3,'#d2d7cc','#70817d',5.2,2.6,22]
+    ],
+    warehouse:[
+      ['blue-logistics','#90a9b7',10,'#cdd7d6','#52758a',6,3,28],
+      ['cream-logistics','#c6c4b1',6,'#dedbc7','#8f8b72',6,3,30],
+      ['brick-depot','#b09c83',4,'#d7c7ad','#7b6a53',5.2,2.6,29]
+    ]
+  };
+  const finishesByUse=Object.fromEntries(Object.keys(styles).map(use=>[use,[...styles[use],...additionalStyles[use]]]));
   function profile(parcel){
     const b=parcel.building||{},seed=hash(parcel.id+':architecture-v1'),choices=styles[b.use]||styles.commercial,index=seed%choices.length;
-    const [name,tint,facade,trim,accent,pitch,windowWidth]=choices[index];
-    const cell=({residential:[0,1,2,3,4,5],office:[8,9,10,11],commercial:[7,6,10,4],industrial:[13,12,14],warehouse:[15,13,14]}[b.use]||[6,7,10,4])[index];
+    const finishes=finishesByUse[b.use]||finishesByUse.commercial;
+    const finishIndex=hash(parcel.id+':material-v2')%finishes.length;
+    const [name,tint,facade,trim,accent,pitch,windowWidth,extraCell]=finishes[finishIndex];
+    const cell=extraCell??({residential:[0,1,2,3,4,5],office:[8,9,10,11],commercial:[7,6,10,4],industrial:[13,12,14],warehouse:[15,13,14]}[b.use]||[6,7,10,4])[finishIndex];
     return {seed,index,name,tint,facade,cell,trim,accent,pitch,windowWidth,
-      windowRatio:b.use==='office'&&index%2===0?.78:.61,
-      balconies:b.use==='residential'&&[1,3,5].includes(index),
-      fins:b.use==='office'&&index===0,
+      tone:(seed>>>18)%3,finishIndex,
+      windowRatio:cell>=16?([28,30].includes(cell)?.65:.5):b.use==='office'&&finishIndex%2===0?.78:.61,
+      balconies:b.use==='residential'&&([1,3,5].includes(finishIndex)||[21,22].includes(cell)),
+      fins:b.use==='office'&&(finishIndex===0||cell===24),
+      roofTone:(seed>>>22)%4,
       roofProgram:seed>>>7&3,wear:.025+(seed>>>12&3)*.012};
   }
-  function facadeTile(cell,size){
-    const key=cell+':'+size;if(facadeTiles.has(key))return facadeTiles.get(key);
+  function facadeTile(cell,size,tone=0){
+    const source=cell>=16?materialAtlas:atlas;if(!source)return null;
+    const key=cell+':'+size+':'+tone;
+    if(facadeTiles.has(key)){const tile=facadeTiles.get(key);facadeTiles.delete(key);facadeTiles.set(key,tile);return tile;}
     const tile=document.createElement('canvas');tile.width=tile.height=size;
-    const g=tile.getContext('2d'),q=atlas.width/4;g.imageSmoothingQuality='high';
-    if(size<256)g.drawImage(facadeTile(cell,size*2),0,0,size,size);
-    else g.drawImage(atlas,cell%4*q+1,Math.floor(cell/4)*q+1,q-2,q-2,0,0,size,size);
-    facadeTiles.set(key,tile);return tile;
+    const g=tile.getContext('2d'),q=source.width/4,h=source.height/4,local=cell%16;g.imageSmoothingQuality='high';
+    if(size<256)g.drawImage(facadeTile(cell,size*2,tone),0,0,size,size);
+    else{
+      g.drawImage(source,local%4*q+1,Math.floor(local/4)*h+1,q-2,h-2,0,0,size,size);
+      if(tone){g.globalCompositeOperation='multiply';g.globalAlpha=.16;g.fillStyle=tone===1?'#d8c3a5':'#aebec8';g.fillRect(0,0,size,size);g.globalAlpha=1;g.globalCompositeOperation='source-over';}
+    }
+    facadeTiles.set(key,tile);
+    while(facadeTiles.size>facadeCacheLimit)facadeTiles.delete(facadeTiles.keys().next().value);
+    return tile;
   }
   function drawWall(ctx,p,v,face){
-    if(!atlas)return false;
     const a=profile(p),base=v.base||0,top=Math.min(85,v.height*.26),bottom=Math.min(85,base*.26),height=top-bottom;
-    if(height<=0)return false;
+    if(height<=0||!(a.cell>=16?materialAtlas:atlas)||face.length<=0)return false;
     const floorCount=Math.max(1,Math.round((v.height-base)/(p.building.height/p.building.floors||3.3))),floorHeight=height/floorCount;
     const cols=Math.max(1,Math.round(face.length/a.pitch)),bay=face.length/cols,transform=ctx.getTransform();
     const pixels=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d));
-    const size=2**Math.max(3,Math.min(8,Math.ceil(Math.log2(Math.max(1,bay*2*pixels))))),tile=facadeTile(a.cell,size);
+    const size=2**Math.max(3,Math.min(8,Math.ceil(Math.log2(Math.max(1,bay*2*pixels))))),tile=facadeTile(a.cell,size,a.tone);
     ctx.save();path(ctx,[face.a,face.z,[face.z[0],face.z[1]-top],[face.a[0],face.a[1]-top]]);ctx.clip();
     ctx.transform(face.dx/face.length,face.dy/face.length,0,1,face.a[0],face.a[1]-top);
     const pattern=ctx.createPattern(tile,'repeat');pattern.setTransform(new DOMMatrix().scale(bay*2/size,floorHeight*2/size));
     ctx.fillStyle=pattern;ctx.fillRect(0,0,face.length,height);ctx.restore();return true;
+  }
+  function highRiseWindowVisible(b,v,lo,hi){
+    if(b.floors<12)return true;
+    const base=v.base||0,height=v.height-base,storey=b.height/b.floors||3.3;
+    if(hi>v.height-Math.min(1.25,height*.1))return false;
+    if(base<.1&&lo<Math.min(5.4,height*.6)+.38)return false;
+    if(b.use==='office')for(let z=Math.ceil((base+.1)/(storey*10))*storey*10;z<v.height-storey;z+=storey*10){
+      if(lo<z+storey*.62&&hi>z)return false;
+    }
+    return true;
   }
   function windowPanes(p,v,faces){
     const a=profile(p),top=Math.min(85,v.height*.26),bottom=Math.min(85,(v.base||0)*.26),height=top-bottom;
     const rows=Math.max(1,Math.round((v.height-(v.base||0))/(p.building.height/p.building.floors||3.3))),result=[];
     if(height<=0)return result;
     for(const f of faces){
-      const cols=Math.max(1,Math.round(f.length/a.pitch)),bay=f.length/cols,ratio=a.cell>=8&&a.cell<=11?.75:.50;
+      const cols=Math.max(1,Math.round(f.length/a.pitch)),bay=f.length/cols,ratio=a.cell>=16?a.windowRatio:a.cell>=8&&a.cell<=11?.75:.50;
       for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
         const left=(col+.5-ratio/2)/cols,right=(col+.5+ratio/2)/cols,lo=top-(row+.79)*height/rows,hi=top-(row+.22)*height/rows;
+        if(!highRiseWindowVisible(p.building,v,lo/.26,hi/.26))continue;
         result.push([[f.a[0]+f.dx*left,f.a[1]+f.dy*left-lo],[f.a[0]+f.dx*right,f.a[1]+f.dy*right-lo],[f.a[0]+f.dx*right,f.a[1]+f.dy*right-hi],[f.a[0]+f.dx*left,f.a[1]+f.dy*left-hi]]);
       }
     }return result;
@@ -90,7 +157,7 @@
     return fallback;
   }
   function roofZones(parcel,v,masses,shape,units=[]){
-    if(shape!=='flat'||!v.rect)return [];
+    if(shape!=='flat'||!v.rect||v.outline)return [];
     const a=profile(parcel),[x0,y0,x1,y1]=v.rect,w=x1-x0,d=y1-y0,result=[];
     if(w<7||d<6)return result;
     const use=parcel.building.use,choices=use==='residential'?[0,3]:use==='commercial'?[1,0]:use==='office'?[a.index%2?1:2,3]:[2,3];
@@ -133,6 +200,7 @@
     }ctx.restore();
   }
   function massing(parcel,layout){
+    const shaped=shapes?.massing(parcel,layout);if(shaped)return shaped;
     const b=parcel.building,style=profile(parcel);
     if(!b.landmark&&!layout.podium&&layout.volumes.length<=2&&parcel.id!=null&&((b.use==='office'&&b.floors>=7)||(b.use==='commercial'&&b.floors>=3))){
       const v=layout.volumes[0];if(!v.rect)return layout;
@@ -177,7 +245,7 @@
   }
   function path(ctx,ps){ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();}
   function drawFacade(ctx,p,v,scene){
-    const b=p.building;if(['planned','construction'].includes(b.status)||b.landmark)return;
+    const b=p.building;if(['planned','construction'].includes(b.status)||(b.landmark&&b.landmark!=='cbd_skyscraper'))return;
     const a=profile(p),base=v.base||0,height=v.height-base,top=Math.min(85,v.height*.26),bottom=Math.min(85,base*.26);
     if(top-bottom<.6)return;
     for(const face of scene.facadeFaces(v)){
@@ -187,8 +255,45 @@
       function panel(x,y,w,h,color){path(ctx,[pt(x,y),pt(x+w,y),pt(x+w,y+h),pt(x,y+h)]);ctx.fillStyle=color;ctx.fill();}
       function stroke(ps,color,width){ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
       ctx.save();path(ctx,wall);ctx.clip();
+      // Tall buildings read as an inhabited base, a structured shaft and a
+      // finished crown. All additions remain clipped to the occupied wall.
+      const highRise=b.floors>=12,office=b.use==='office',residential=b.use==='residential';
+      if(highRise&&length>2){
+        const storey=b.height/b.floors||3.3,bays=Math.max(1,Math.min(32,Math.round(length/(office?3.2:4.6)))),bay=length/bays;
+        if(office){
+          // Broad reflection strips and paired mullions break up the atlas
+          // repetition without replacing its floor-aligned window openings.
+          for(let col=0;col<bays;col++){
+            if((col+a.index)%4===0)panel(col*bay+.18,base,Math.max(.1,bay-.36),height,'#a4c6ce24');
+            panel(col*bay,base,.12,height,'#d3ded8b0');
+            panel(col*bay+.12,base,.09,height,'#344e5970');
+          }
+          for(let z=Math.ceil((base+.1)/(storey*10))*storey*10;z<v.height-storey;z+=storey*10){
+            panel(.15,z,length-.3,storey*.62,'#405863');
+            for(let n=1;n<=3;n++)stroke([pt(.15,z+n*storey*.14),pt(length-.15,z+n*storey*.14)],'#9aaead',.045);
+          }
+        }else if(residential){
+          // Vertical service cores and recessed loggia stacks give apartment
+          // towers a different rhythm from office curtain walls.
+          for(let col=1;col<bays;col+=3){
+            panel(col*bay-.32,base,.64,height,a.trim);
+            panel(col*bay+.32,base,.12,height,'#354b4655');
+          }
+        }
+        if(base<.1){
+          const lobby=Math.min(5.4,height*.6);
+          panel(.3,.2,length-.6,lobby,office?'#385966':'#657a76');
+          for(let col=0;col<=bays;col++)panel(col*bay,.2,.22,lobby,a.trim);
+          panel(0,lobby,length,.38,a.trim);
+          stroke([pt(0,lobby+.38),pt(length,lobby+.38)],'#edf0dc',.09);
+        }
+        const crown=Math.min(1.25,height*.1);
+        panel(0,v.height-crown,length,crown,office?'#8fa9af':a.trim);
+        stroke([pt(0,v.height-crown),pt(length,v.height-crown)],'#334e5e99',.13);
+        stroke([pt(0,v.height-.15),pt(length,v.height-.15)],'#eef0e1',.09);
+      }
       // Narrow corner piers and sparse rain streaks give material depth.
-      for(const x of [0,length-.25])panel(x,base,.25,height,a.trim);
+      for(const x of v.smooth?[]:[0,length-.25])panel(x,base,.25,height,a.trim);
       const streaks=Math.min(10,Math.floor(length/4));
       for(let i=0;i<streaks;i++){
         const n=hash(a.seed+':'+i),x=.6+(n%1000)/1000*Math.max(0,length-1.2);
@@ -226,8 +331,8 @@
         }
       }
       ctx.restore();
-      if(a.balconies&&a.cell!==5&&height>5){
-        const floors=Math.min(10,Math.max(1,Math.round((top-bottom)/.858))),cols=Math.min(12,Math.max(1,Math.floor((length-1.1)/a.pitch))),margin=Math.min(.7,length*.12),bay=(length-margin*2)/cols;
+      if((a.balconies||highRise&&residential)&&a.cell!==5&&height>5){
+        const floors=Math.min(60,Math.max(1,Math.round(height/(b.height/b.floors||3.3)))),cols=Math.min(12,Math.max(1,Math.floor((length-1.1)/a.pitch))),margin=Math.min(.7,length*.12),bay=(length-margin*2)/cols;
         // Recessed balcony bays stay within the wall; no encroachment on roads.
         ctx.save();path(ctx,wall);ctx.clip();
         for(let row=1;row<floors;row++)for(let col=0;col<cols;col++){
@@ -241,6 +346,9 @@
       }
     }
   }
-  const api={profile,massing,roofPrograms,roofZones,drawRoofZones,drawFacade,drawWall,windowPanes,get ready(){return Boolean(atlas&&roofAtlas);},get facadeReady(){return Boolean(atlas);},get assetVersion(){return assetVersion;},get textureCount(){return facadeTiles.size+roofTiles.size;}};
+  const api={highRiseWindowVisible,profile,massing,roofPrograms,roofZones,drawRoofZones,drawFacade,drawWall,windowPanes,
+    facadeAvailable:p=>Boolean(profile(p).cell>=16?materialAtlas:atlas),
+    get ready(){return Boolean(atlas&&materialAtlas&&roofAtlas);},get facadeReady(){return Boolean(atlas&&materialAtlas);},get assetVersion(){return assetVersion;},get textureCount(){return facadeTiles.size+roofTiles.size;},
+    get styleCounts(){return Object.fromEntries(Object.keys(styles).map(use=>[use,styles[use].length+additionalStyles[use].length]));}};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.CityBuildingAppearance=api;
 })(typeof window==='undefined'?{}:window);

@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><base href="../../../renderer/"><link rel="icon" href="data:,"><title>道路交汇样式验收</title>
+<style>body{background:#eef1e8;font:15px sans-serif;margin:20px}main{display:grid;grid-template-columns:repeat(4,360px);gap:14px}figure{margin:0}canvas{background:#b6c7a4}figcaption{padding:7px;line-height:1.5}h1{font-size:24px}</style>
+<h1></h1><p>实际道路渲染器；标注为箭头 / 斑马线 / 停止线 / 机动车信号灯数量。箭头包含路段箭头。</p><main></main>
+<script src="material-catalog.js"></script><script src="surface-variation.js"></script><script src="material-preparation.js"></script><script src="raster-cache.js"></script><script src="building-stages.js"></script><script src="scene-renderer.js"></script><script src="road-renderer.js"></script>
+<script>
+(async()=>{
+const q=new URLSearchParams(location.search),angle=Number(q.get('angle')||90),shape=q.get('shape')||'X',rotation=Number(q.get('rotation')||0),zoom=Number(q.get('zoom')||2.5);
+const all=(await(await fetch('../output/playwright/road-angles/fixtures.jsonl')).text()).trim().split('\n').map(JSON.parse);
+let cases=q.has('id')?all.filter(c=>c.id===q.get('id')):all.filter(c=>c.level===0&&c.shape===shape&&c.angle===angle&&(shape==='T'||c.kinds[0]<=c.kinds[1]));
+if(q.has('page'))cases=cases.slice(Number(q.get('page'))*20,(Number(q.get('page'))+1)*20);
+document.querySelector('h1').textContent=`${shape} 路口 · 夹角 ${angle}° · 整体旋转 ${rotation}° · ${cases.length} 个组合`;
+for(const c of cases){
+ if(rotation){const a=rotation*Math.PI/180,turn=([x,y])=>[x*Math.cos(a)-y*Math.sin(a),x*Math.sin(a)+y*Math.cos(a)],point=p=>turn(p.map(v=>v-2000)).map(v=>v+2000);for(const r of c.roads)r.points=r.points.map(point);for(const j of c.network.junctions){j.point=point(j.point);for(const arm of j.approaches)arm.tangent=turn(arm.tangent);}}
+ const plan=RoadRenderer.buildPlan(c.roads,c.network,c.roadTypes),f=document.createElement('figure'),v=document.createElement('canvas');v.width=v.height=q.has('id')?900:360;f.append(v);
+ const label=document.createElement('figcaption');label.textContent=c.kinds.map(k=>c.roadTypes[k].name).join(' × ')+` · ${plan.arrows.length} / ${plan.crosswalks.length} / ${plan.stopLines.length} / ${plan.signals.length}`;f.append(label);document.querySelector('main').append(f);
+ const ctx=v.getContext('2d');ctx.translate(v.width/2,v.height/2);ctx.scale(zoom,zoom);ctx.translate(-2000,-2000);RoadRenderer.paint(ctx,c,{scale:zoom,vehicles:false});
+}
+document.body.dataset.ready='true';
+})();
+</script>

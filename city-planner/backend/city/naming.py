@@ -4,6 +4,7 @@ import random
 import re
 
 from . import place_regions
+from .name_context import Context
 
 NAME_VERSION = 3
 COMPACT_NAME_VERSION = 4
@@ -61,11 +62,7 @@ def distinct_stem(rng, category, obj, root, attempt):
     # list of almost identical region+suffix names before trying other stems.
     word = rng.choice(words) if attempt < 24 and rng.random() < .5 else rng.choice(FIRST) + rng.choice(SECOND)
     if root:
-        style = rng.randrange(4)
-        if style == 0:
-            word = root + word
-        elif style == 1:
-            word = rng.choice(root) + word
+        word = root if attempt == 0 and rng.random() < .6 else root + word
     if attempt >= 32:
         word += rng.choice(SECOND)
     if attempt >= 128:
@@ -93,7 +90,7 @@ def generic(obj):
 
 
 def objects(city):
-    for collection in ('roads', 'facilities', 'stops', 'lines', 'regionalServices', 'blockLayouts', 'districts', 'namingRegions'):
+    for collection in ('roads', 'facilities', 'stops', 'lines', 'regionalServices', 'blockLayouts', 'districts', 'namingDistricts', 'namingRegions'):
         for obj in city.s.get(collection, []):
             yield collection, obj['id'], obj
     for parcel in city.s.get('parcels', []):
@@ -112,6 +109,8 @@ def suffixes(category, obj):
         return BUILDING_SUFFIXES.get(obj.get('use'), ('大楼',))
     if category == 'blockLayouts':
         return ('街坊', '街区', '坊', '里')
+    if category == 'namingDistricts':
+        return ('城区',)
     if category == 'namingRegions':
         return ('片区',)
     if category == 'districts':
@@ -126,11 +125,16 @@ def suffixes(category, obj):
 class NameBook:
     def __init__(self, city):
         self.city = city
+        self.context = Context(city)
         self.registry = city.s.setdefault('placeNames', {})
         self.parcels = {p['id']: p for p in city.s.get('parcels', [])}
         self.regions_ready = False
         self.owners = {}
         self.shared = {}
+        self.road_families = {}
+        for road in city.s.get('roads', []):
+            if road.get('nameFamily'):
+                self.road_families.setdefault(road['nameFamily'], set()).add('roads:' + road['id'])
         for facility in city.s.get('facilities', []):
             if facility.get('ownsStop') and facility.get('stop'):
                 a, b = 'facilities:' + facility['id'], 'stops:' + facility['stop']
@@ -139,6 +143,7 @@ class NameBook:
             if not generic(obj):
                 self.owners.setdefault(obj['name'], set()).add(category + ':' + identifier)
         self.used = set(self.registry.values())
+        self.used.add(city.s.get('name', ''))
         self.used.update(obj['name'] for _, _, obj in objects(city) if not generic(obj))
 
     def regional_root(self, category, identifier, obj):
@@ -152,12 +157,23 @@ class NameBook:
         # Name all regions in terrain order before naming any child. Even the
         # first road is therefore independent of construction/enumeration order.
         if not self.regions_ready:
+            for area in self.city.s.get('namingDistricts', []):
+                if generic(area):
+                    self.assign('namingDistricts', area['id'], area)
             for area in self.city.s['namingRegions']:
                 if generic(area):
                     self.assign('namingRegions', area['id'], area)
             self.regions_ready = True
         obj['nameRegion'] = region['id']
-        return region['name'][:-2]  # region suffix is always 片区
+        obj['nameDistrict'] = region.get('district')
+        if category in COMPACT_CATEGORIES:
+            return region['name'][:-2]
+        seed = str(self.city.terrain.data['config']['seed']) + ':name-context:' + category + ':' + identifier
+        rng = random.Random(hashlib.sha256(seed.encode()).digest())
+        root, level = self.context.choose(rng, category, obj, region, point)
+        if generic(obj):
+            obj['nameBasis'] = level
+        return root
 
     def assign(self, category, identifier, obj):
         key = category + ':' + identifier
@@ -165,8 +181,9 @@ class NameBook:
         # Keep region/district identity, but upgrade the former repetitive
         # child names once. Custom names always take precedence.
         generated = obj.get('nameSource') == 'generated'
+        family = self.road_families.get(obj.get('nameFamily'), set()) if category == 'roads' else set()
         duplicate = (generated and bool(self.owners.get(obj.get('name'), set()) -
-                     {key, self.shared.get(key)}))
+                     ({key, self.shared.get(key)} | family)))
         target_version = COMPACT_NAME_VERSION if category in COMPACT_CATEGORIES else NAME_VERSION
         endings = suffixes(category, obj)
         old_name = obj.get('name', '') or self.registry.get(key, '')
@@ -179,7 +196,7 @@ class NameBook:
             # Remove the accidentally appended word while retaining the old
             # district's identity, even if its centre has since moved regions.
             root = old_stem[:2]
-        upgrade = compact_upgrade or (category in REGIONAL_CATEGORIES - {'districts'}
+        upgrade = compact_upgrade or duplicate or (category in REGIONAL_CATEGORIES - {'districts'}
                    and (generated or generic(obj) and key in self.registry)
                    and (obj.get('nameVersion', 0) < NAME_VERSION or duplicate))
         if upgrade:
@@ -210,7 +227,7 @@ class NameBook:
                         if attempt >= 64:
                             stem += rng.choice(SECOND)
                     ending = endings[(offset + attempt) % len(endings)]
-                elif category == 'namingRegions':
+                elif category in ('namingRegions', 'namingDistricts'):
                     # Preserve the established seed-to-region naming scheme.
                     stem = rng.choice(FIRST) + rng.choice(SECOND)
                     if attempt >= 32:
@@ -219,6 +236,13 @@ class NameBook:
                 else:
                     stem = distinct_stem(rng, category, obj, root, attempt)
                     ending = rng.choice(endings)
+                if attempt >= 256 and category in COMPACT_CATEGORIES | {'namingRegions', 'namingDistricts'}:
+                    index = attempt - 256
+                    while True:
+                        stem += SECOND[index % len(SECOND)]
+                        index = index // len(SECOND) - 1
+                        if index < 0:
+                            break
                 name = stem + ending
                 if name not in self.used:
                     break
@@ -239,7 +263,8 @@ def name_object(city, category, obj):
 
 def ensure_names(city):
     book = NameBook(city)
-    for category, identifier, obj in sorted(objects(city), key=lambda item: (item[0], item[1])):
+    order = {'namingDistricts': 0, 'namingRegions': 1}
+    for category, identifier, obj in sorted(objects(city), key=lambda item: (order.get(item[0], 2), item[0], item[1])):
         book.assign(category, identifier, obj)
     # A manually placed station and the passenger stop it creates share a name.
     stops = {s['id']: s for s in city.s.get('stops', [])}
@@ -263,8 +288,13 @@ def name_districts(city, previous):
         if not generic(old):
             book.assign('districts', old['id'], old)
     remaining = {d['id']: d for d in previous if not generic(d)}
-    districts = sorted(city.s['districts'], key=lambda d: (-len(d.get('parcels', [])), d['id']))
+    def overlap(d):
+        members = set(d.get('parcels', []))
+        return max((len(members.intersection(old.get('parcels', []))) for old in previous), default=0)
+    districts = sorted(city.s['districts'], key=lambda d: (-overlap(d), -len(d.get('parcels', [])), d['id']))
     claimed = set()
+    for old in previous:
+        book.owners.get(old.get('name'), set()).discard('districts:' + old['id'])
     for district in districts:
         key = 'districts:' + district['id']
         if key in book.registry and book.registry[key] not in claimed:
@@ -276,7 +306,7 @@ def name_districts(city, previous):
             candidates.sort(key=lambda item: (-item[0], item[1]))
             if candidates and candidates[0][0] > 0:
                 _, identifier, old = candidates[0]
-                district.update(name=old['name'], nameSource=old.get('nameSource', 'custom'))
+                district.update(name=old['name'], nameSource=old.get('nameSource', 'custom'), nameVersion=old.get('nameVersion', COMPACT_NAME_VERSION))
                 remaining.pop(identifier)
             elif key in book.registry:
                 # A former boundary can reappear after a split, but one active

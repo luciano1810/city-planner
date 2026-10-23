@@ -204,16 +204,17 @@ class AutonomousCityTests(unittest.TestCase):
         city.command(dict(type='stop_update',id=city.s['stops'][0]['id'],enabled=False))
         self.assertFalse(city.s['lines'][0]['valid']);self.assertTrue(city.s['lines'][0]['breakPoints'])
 
-    def test_centers_need_sustained_jobs_and_can_have_subcenter(self):
+    def test_centers_reflect_delivered_activity_and_can_have_subcenter(self):
         city=block_city()
         for p in city.s['parcels']:
             if p['center'][0]<850 or p['center'][0]>1550:
                 p['building']=dict(use='office',status='active',floorArea=5000,age=30,positions=200,employees=150)
                 p['accessJobs']=600
-        for month in (1,2):
-            city.s['month']=month;clustered_districts(city)
-            self.assertFalse(any(d['kind']=='CBD' for d in city.s['districts']))
-        city.s['month']=3;clustered_districts(city)
+        clustered_districts(city)
+        first=copy.deepcopy(city.s['districts'])
+        clustered_districts(city)
+        self.assertEqual([(d['id'],d['kind'],d['name']) for d in first],
+                         [(d['id'],d['kind'],d['name']) for d in city.s['districts']])
         centers=[d for d in city.s['districts'] if d['kind']=='CBD']
         self.assertGreaterEqual(len(centers),2)
         self.assertTrue(any(d.get('centerRank',0)>1 for d in centers))
